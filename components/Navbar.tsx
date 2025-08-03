@@ -3,10 +3,9 @@ import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { Button } from './ui/button';
-import { Moon, Sun, Menu, User } from 'lucide-react';
+import { Moon, Sun, Menu } from 'lucide-react';
 import { useRouter } from 'next/router';
 import { supabase } from '../utils/supabaseClient';
-import { ThemeToggle } from './ThemeToggle';
 
 interface NavbarProps {
   className?: string;
@@ -35,51 +34,48 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
   };
 
   return (
-    <nav className={`bg-background border-b border-border py-3 ${className}`}>
-      <div className="container mx-auto px-4 flex justify-between items-center">
-        <Link href="/" className="text-foreground text-xl font-bold">
-          AttendanceTracker
+    <nav className={`bg-background border-b border-border py-2 ${className}`}>
+      <div className="container mx-auto px-3 flex justify-between items-center">
+        <Link href="/" className="text-foreground text-lg font-bold whitespace-nowrap">
+          DAR-E-ARQAM SCHOOL
         </Link>
-        <div className="hidden md:flex space-x-4 items-center">
-          <NavLink href="/">Home</NavLink>
-          <NavLink href="/docs">Docs</NavLink>
+
+        {/* Desktop Menu */}
+        <div className="hidden md:flex space-x-3 items-center text-sm">
+          <NavLink href="/dashboard">Dashboard</NavLink>
+          <NavLink href="/marks">Marks</NavLink>
+          <NavLink href="/result/class">Class Results</NavLink>
+          <NavLink href="/result/report-card">Report Card</NavLink>
+
           {user ? (
-            <>
-              <NavLink href="/dashboard">Dashboard</NavLink>
-              <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-secondary/50">
-                  <span className="text-1xl font-medium bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-gradient bg-300%">
-                    Hi, {user.email?.split('@')[0] || 'User'}
-                  </span>
-                </div>
-                <Button onClick={handleSignOut} variant="outline">
-                  Sign Out
-                </Button>
-              </div>
-            </>
+            <Button onClick={handleSignOut} variant="outline" size="sm">
+              Sign Out
+            </Button>
           ) : (
-            <Button onClick={() => router.push('/login')} variant="outline">
+            <Button onClick={() => router.push('/login')} variant="outline" size="sm">
               Login
             </Button>
           )}
+
           {mounted && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="ml-2"
             >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           )}
         </div>
+
+        {/* Mobile Menu */}
         <div className="md:hidden flex items-center">
           {mounted && (
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="mr-2"
+              className="mr-1"
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
@@ -91,24 +87,19 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
               </Button>
             </SheetTrigger>
             <SheetContent>
-              <div className="flex flex-col space-y-4 mt-4">
-                <NavLink href="/">Home</NavLink>
-                <NavLink href="/docs">Docs</NavLink>
+              <div className="flex flex-col space-y-3 mt-4 text-sm">
+                <NavLink href="/dashboard">Dashboard</NavLink>
+                <NavLink href="/marks">Marks</NavLink>
+                <NavLink href="/marks/new-test">New Test</NavLink>
+                <NavLink href="/result/class">Class Results</NavLink>
+                <NavLink href="/result/report-card">Report Card</NavLink>
+
                 {user ? (
-                  <>
-                    <NavLink href="/dashboard">Dashboard</NavLink>
-                    <div className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-secondary/50">
-                      <User className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-500 to-red-500 animate-gradient bg-300%">
-                        {user.email?.split('@')[0] || 'User'}
-                      </span>
-                    </div>
-                    <Button onClick={handleSignOut} variant="outline">
-                      Sign Out
-                    </Button>
-                  </>
+                  <Button onClick={handleSignOut} variant="outline" size="sm">
+                    Sign Out
+                  </Button>
                 ) : (
-                  <Button onClick={() => router.push('/login')} variant="outline">
+                  <Button onClick={() => router.push('/login')} variant="outline" size="sm">
                     Login
                   </Button>
                 )}
@@ -124,11 +115,10 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
 const NavLink: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => (
   <Link
     href={href}
-    className="text-foreground hover:text-primary transition duration-300 font-semibold"
+    className="text-foreground hover:text-primary transition duration-300 font-medium"
   >
     {children}
   </Link>
 );
 
 export default Navbar;
-

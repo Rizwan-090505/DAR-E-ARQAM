@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import Navbar from '../../components/Navbar'
 import Loader from '../../components/Loader'
-import { Plus, Edit, Trash2, Calendar, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog'
 import { useToast } from "../../hooks/use-toast"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns'
@@ -23,39 +23,36 @@ interface Class {
 }
 
 interface Student {
-    id: string
+    studentid: string
     name: string
-    email: string
+    fathername?: string
+    mobilenumber?: string
 }
 
 interface Attendance {
     id: string
-    student_id: string
+    studentid: string
     date: string
-    status: boolean | null  // Changed to allow null for unmarked
+    status: 'Present' | 'Absent' | null
 }
 
-interface UpdatedAttendance {
-    id: string;
-    student_id: string;
-    date: string;
-    status: boolean | null;
-}
+interface UpdatedAttendance extends Attendance {}
 
 export default function ClassPage() {
     const [classData, setClassData] = useState<Class | null>(null)
     const [students, setStudents] = useState<Student[]>([])
+    const [newstudentid, setNewstudentid] = useState('')
     const [newStudentName, setNewStudentName] = useState('')
-    const [newStudentEmail, setNewStudentEmail] = useState('')
+    const [newfathername, setNewfathername] = useState('')
+    const [newmobilenumber, setNewmobilenumber] = useState('')
     const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [selectedDate, setSelectedDate] = useState(new Date())
     const [attendanceData, setAttendanceData] = useState<Attendance[]>([])
-    const [isAttendanceDialogOpen, setIsAttendanceDialogOpen] = useState(false)
     const router = useRouter()
     const { id } = router.query
     const { toast } = useToast()
-    const [deleteStudentId, setDeleteStudentId] = useState<string | null>(null)
+    const [deletestudentid, setDeletestudentid] = useState<string | null>(null)
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
     useEffect(() => {
@@ -79,11 +76,7 @@ export default function ClassPage() {
             .eq('id', id)
             .single()
         if (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to fetch class data. Please try again.",
-            })
+            toast({ variant: "destructive", title: "Error", description: "Failed to fetch class data." })
         } else {
             setClassData(data)
         }
@@ -94,14 +87,10 @@ export default function ClassPage() {
         setIsLoading(true)
         const { data, error } = await supabase
             .from('students')
-            .select('*')
+            .select('studentid, name, fathername, mobilenumber')
             .eq('class_id', id)
         if (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to fetch students. Please try again.",
-            })
+            toast({ variant: "destructive", title: "Error", description: "Failed to fetch students." })
         } else {
             setStudents(data || [])
         }
@@ -111,48 +100,40 @@ export default function ClassPage() {
     const addStudent = async () => {
         const { data, error } = await supabase
             .from('students')
-            .insert([{ name: newStudentName, email: newStudentEmail, class_id: id }])
+            .insert([{
+                studentid: newstudentid,
+                name: newStudentName,
+                fathername: newfathername,
+                mobilenumber: newmobilenumber,
+                class_id: id
+            }])
             .select()
         if (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to add student. Please try again.",
-            })
+            toast({ variant: "destructive", title: "Error", description: "Failed to add student." })
         } else {
             setStudents([...students, data[0]])
+            setNewstudentid('')
             setNewStudentName('')
-            setNewStudentEmail('')
+            setNewfathername('')
+            setNewmobilenumber('')
             setIsAddStudentDialogOpen(false)
-            toast({
-                variant: "success",
-                title: "Success",
-                description: "Student added successfully.",
-            })
+            toast({ variant: "success", title: "Success", description: "Student added successfully." })
         }
     }
 
     const deleteStudent = async () => {
-        if (!deleteStudentId) return
+        if (!deletestudentid) return
         const { error } = await supabase
             .from('students')
             .delete()
-            .eq('id', deleteStudentId)
+            .eq('studentid', deletestudentid)
         if (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to delete student. Please try again.",
-            })
+            toast({ variant: "destructive", title: "Error", description: "Failed to delete student." })
         } else {
-            setStudents(students.filter(s => s.id !== deleteStudentId))
-            toast({
-                variant: "success",
-                title: "Success",
-                description: "Student deleted successfully.",
-            })
+            setStudents(students.filter(s => s.studentid !== deletestudentid))
+            toast({ variant: "success", title: "Success", description: "Student deleted successfully." })
         }
-        setDeleteStudentId(null)
+        setDeletestudentid(null)
         setIsDeleteDialogOpen(false)
     }
 
@@ -164,96 +145,58 @@ export default function ClassPage() {
             .eq('date', format(selectedDate, 'yyyy-MM-dd'))
 
         if (error) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to fetch attendance data. Please try again.",
-            })
+            toast({ variant: "destructive", title: "Error", description: "Failed to fetch attendance." })
         } else {
-            // Initialize attendance data for all students, with no status set
             const fullAttendanceData = students.map(student => ({
                 id: '',
-                student_id: student.id,
+                studentid: student.studentid,
                 date: format(selectedDate, 'yyyy-MM-dd'),
-                status: null // Use null to represent unmarked attendance
+                status: null
             }))
-
-            // Update with existing attendance data
             data.forEach(record => {
-                const index = fullAttendanceData.findIndex(a => a.student_id === record.student_id)
+                const index = fullAttendanceData.findIndex(a => a.studentid === record.studentid)
                 if (index !== -1) {
                     fullAttendanceData[index] = record
                 }
             })
-
             setAttendanceData(fullAttendanceData)
         }
     }
 
-    const toggleAttendance = async (studentId: string, status: boolean | null) => {
-        const existingRecord = attendanceData.find(a => a.student_id === studentId)
-        
+    const toggleAttendance = async (studentid: string, status: 'Present' | 'Absent' | null) => {
+        const existingRecord = attendanceData.find(a => a.studentid === studentid)
         try {
-            let updatedRecord: UpdatedAttendance | null = null;
+            let updatedRecord: UpdatedAttendance | null = null
             if (existingRecord && existingRecord.id) {
-                // Update existing record
                 if (status === null) {
-                    // If setting to null (unmarked), delete the record
-                    const { error } = await supabase
-                        .from('attendance')
-                        .delete()
-                        .eq('id', existingRecord.id)
-
-                    if (error) throw error
+                    await supabase.from('attendance').delete().eq('id', existingRecord.id)
                 } else {
-                    // Update the status
-                    const { data, error } = await supabase
+                    const { data } = await supabase
                         .from('attendance')
-                        .update({ status: status })
+                        .update({ status })
                         .eq('id', existingRecord.id)
                         .select()
-
-                    if (error) throw error
-                    if (data) {
-                        updatedRecord = data[0] as UpdatedAttendance;
-                    }
+                    if (data) updatedRecord = data[0]
                 }
             } else if (status !== null) {
-                // Create new record only if status is not null
-                const { data, error } = await supabase
+                const { data } = await supabase
                     .from('attendance')
                     .insert({
                         class_id: id,
-                        student_id: studentId,
+                        studentid,
                         date: format(selectedDate, 'yyyy-MM-dd'),
-                        status: status
+                        status
                     })
                     .select()
-
-                if (error) throw error
-                if (data) {
-                    updatedRecord = data[0] as UpdatedAttendance;
-                }
+                if (data) updatedRecord = data[0]
             }
-
-            // Update local state immediately
-            setAttendanceData(prevData => {
-                if (updatedRecord === null) {
-                    return prevData.filter(a => a.student_id !== studentId);
-                } else {
-                    return prevData.map(a => 
-                        a.student_id === studentId ? { ...a, ...updatedRecord } : a
-                    );
-                }
-            });
-
-        } catch (error) {
-            console.error('Error updating attendance:', error)
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to update attendance. Please try again.",
-            })
+            setAttendanceData(prev =>
+                updatedRecord === null
+                    ? prev.filter(a => a.studentid !== studentid)
+                    : prev.map(a => a.studentid === studentid ? { ...a, ...updatedRecord } : a)
+            )
+        } catch {
+            toast({ variant: "destructive", title: "Error", description: "Failed to update attendance." })
         }
     }
 
@@ -261,17 +204,14 @@ export default function ClassPage() {
         const start = startOfMonth(selectedDate)
         const end = endOfMonth(selectedDate)
         const days = eachDayOfInterval({ start, end })
-
         return (
             <div className="w-full max-w-sm mx-auto">
                 <div className="mb-4 text-lg font-semibold text-center">
                     {format(selectedDate, 'MMMM yyyy')}
                 </div>
                 <div className="grid grid-cols-7 gap-1 mb-2">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                        <div key={day} className="text-center text-sm font-medium text-gray-500">
-                            {day}
-                        </div>
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <div key={day} className="text-center text-sm text-gray-500">{day}</div>
                     ))}
                 </div>
                 <div className="grid grid-cols-7 gap-1">
@@ -290,54 +230,47 @@ export default function ClassPage() {
         )
     }
 
-    const renderAttendanceList = () => {
-        const isAnyAttendanceMarked = attendanceData.some(a => a.status !== null)
-
-        return (
-            <div className="space-y-4 overflow-y-auto max-h-[400px]">
-                {students.map((student) => {
-                    const attendance = attendanceData.find(a => a.student_id === student.id)
-                    return (
-                        <div key={student.id} className="flex items-center justify-between p-4 bg-card rounded-md">
-                            <span className="font-medium">{student.name}</span>
-                            <RadioGroup
-                                onValueChange={(value) => {
-                                    if (value === 'unmarked') {
-                                        toggleAttendance(student.id, null)
-                                    } else {
-                                        toggleAttendance(student.id, value === 'present')
-                                    }
-                                }}
-                                value={attendance?.status === null ? 'unmarked' : (attendance?.status ? 'present' : 'absent')}
-                                className="flex space-x-4"
-                            >
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="present" id={`present-${student.id}`} />
-                                    <Label htmlFor={`present-${student.id}`}>Present</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="absent" id={`absent-${student.id}`} />
-                                    <Label htmlFor={`absent-${student.id}`}>Absent</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="unmarked" id={`unmarked-${student.id}`} />
-                                    <Label htmlFor={`unmarked-${student.id}`}>Unmarked</Label>
-                                </div>
-                            </RadioGroup>
-                        </div>
-                    )
-                })}
-                {!isAnyAttendanceMarked && (
-                    <p className="text-center text-muted-foreground mt-4">
-                        No attendance marked yet. Mark attendance to count this as a class day.
-                    </p>
-                )}
-            </div>
-        )
-    }
+    const renderAttendanceList = () => (
+        <div className="space-y-4 overflow-y-auto max-h-[400px]">
+            {students.map(student => {
+                const attendance = attendanceData.find(a => a.studentid === student.studentid)
+                return (
+                    <div key={student.studentid} className="flex items-center justify-between p-4 bg-card rounded-md">
+                        <span className="font-medium">{student.name} - {student.fathername} ({student.mobilenumber})</span>
+                        <RadioGroup
+                            value={
+                                attendance?.status === null
+                                    ? 'unmarked'
+                                    : attendance?.status === 'Present'
+                                    ? 'present'
+                                    : 'absent'
+                            }
+                            onValueChange={value => {
+                                if (value === 'unmarked') toggleAttendance(student.studentid, null)
+                                else toggleAttendance(student.studentid, value === 'present' ? 'Present' : 'Absent')
+                            }}
+                            className="flex space-x-4"
+                        >
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="present" id={`present-${student.studentid}`} />
+                                <Label htmlFor={`present-${student.studentid}`}>Present</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="absent" id={`absent-${student.studentid}`} />
+                                <Label htmlFor={`absent-${student.studentid}`}>Absent</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="unmarked" id={`unmarked-${student.studentid}`} />
+                                <Label htmlFor={`unmarked-${student.studentid}`}>Unmarked</Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+                )
+            })}
+        </div>
+    )
 
     if (isLoading) return <Loader />
-
     if (!classData) return <div>No class data found.</div>
 
     return (
@@ -348,31 +281,17 @@ export default function ClassPage() {
                     { label: 'Dashboard', href: '/dashboard' },
                     { label: classData?.name || 'Class', href: `/class/${id}` }
                 ]} />
-                <Button 
-                    variant="outline" 
-                    onClick={() => router.back()} 
-                    className="mb-4"
-                >
-                    <ArrowLeft className="w-4 h-4 mr-2" />
-                    Back
+                <Button variant="outline" onClick={() => router.back()} className="mb-4">
+                    <ArrowLeft className="w-4 h-4 mr-2" /> Back
                 </Button>
-                <h1 className="text-4xl font-bold mb-4 text-primary">{classData?.name}</h1>
-                <p className="text-xl text-muted-foreground mb-8">{classData?.description}</p>
-                <Card className="bg-card text-card-foreground mb-8">
-                    <CardHeader>
-                        <CardTitle className="text-primary">Attendance</CardTitle>
-                    </CardHeader>
+                <h1 className="text-4xl font-bold mb-4">{classData?.name}</h1>
+                <p className="text-xl mb-8">{classData?.description}</p>
+                <Card className="mb-8">
+                    <CardHeader><CardTitle>Attendance</CardTitle></CardHeader>
                     <CardContent>
                         <div className="flex flex-col lg:flex-row gap-8">
-                            <div className="w-full lg:w-1/3">
-                                {renderCalendar()}
-                            </div>
-                            <div className="w-full lg:w-2/3">
-                                <h3 className="text-lg font-semibold mb-4">
-                                    Attendance for {format(selectedDate, 'MMMM d, yyyy')}
-                                </h3>
-                                {renderAttendanceList()}
-                            </div>
+                            <div className="w-full lg:w-1/3">{renderCalendar()}</div>
+                            <div className="w-full lg:w-2/3">{renderAttendanceList()}</div>
                         </div>
                         <div className="mt-8">
                             <Link href={`/attendance-record/${id}`}>
@@ -381,46 +300,30 @@ export default function ClassPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                <Card className="bg-card text-card-foreground mb-8">
-                    <CardHeader>
-                        <CardTitle className="text-primary">Today's Attendance Record</CardTitle>
-                    </CardHeader>
+                <Card className="mb-8">
+                    <CardHeader><CardTitle>Today's Attendance Record</CardTitle></CardHeader>
                     <CardContent>
-                        <AttendanceRecord 
-                            classId={id as string} 
-                            date={format(selectedDate, 'yyyy-MM-dd')} 
-                            attendanceData={attendanceData.map(a => ({ ...a, status: a.status || false }))}
+                        <AttendanceRecord
+                            classId={id as string}
+                            date={format(selectedDate, 'yyyy-MM-dd')}
+                            attendanceData={attendanceData.map(a => ({ ...a, status: a.status || 'Absent' }))}
                         />
                     </CardContent>
                 </Card>
-
-                <Card className="bg-card text-card-foreground">
-                    <CardHeader>
-                        <CardTitle className="text-primary">Students</CardTitle>
-                    </CardHeader>
+                <Card>
+                    <CardHeader><CardTitle>Students</CardTitle></CardHeader>
                     <CardContent>
                         <Dialog open={isAddStudentDialogOpen} onOpenChange={setIsAddStudentDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button className="mb-4">
-                                    <Plus className="w-4 h-4 mr-2" /> Add Student
-                                </Button>
+                                <Button className="mb-4"><Plus className="w-4 h-4 mr-2" /> Add Student</Button>
                             </DialogTrigger>
                             <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Add New Student</DialogTitle>
-                                </DialogHeader>
+                                <DialogHeader><DialogTitle>Add New Student</DialogTitle></DialogHeader>
                                 <div className="space-y-4 mt-4">
-                                    <Input
-                                        placeholder="Student Name"
-                                        value={newStudentName}
-                                        onChange={(e) => setNewStudentName(e.target.value)}
-                                    />
-                                    <Input
-                                        placeholder="Student Email"
-                                        value={newStudentEmail}
-                                        onChange={(e) => setNewStudentEmail(e.target.value)}
-                                    />
+                                    <Input placeholder="Student ID" value={newstudentid} onChange={e => setNewstudentid(e.target.value)} />
+                                    <Input placeholder="Name" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
+                                    <Input placeholder="Father Name" value={newfathername} onChange={e => setNewfathername(e.target.value)} />
+                                    <Input placeholder="Mobile Number" value={newmobilenumber} onChange={e => setNewmobilenumber(e.target.value)} />
                                     <Button onClick={addStudent}>Add Student</Button>
                                 </div>
                             </DialogContent>
@@ -428,26 +331,24 @@ export default function ClassPage() {
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead>
-                                    <tr className="border-b border-primary/20">
-                                        <th className="text-left py-2 px-4 text-primary">Name</th>
-                                        <th className="text-left py-2 px-4 text-primary">Email</th>
-                                        <th className="text-right py-2 px-4 text-primary">Actions</th>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Father Name</th>
+                                        <th>Mobile Number</th>
+                                        <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {students.map((student) => (
-                                        <tr key={student.id} className="border-b border-primary/10">
-                                            <td className="py-2 px-4">{student.name}</td>
-                                            <td className="py-2 px-4">{student.email}</td>
-                                            <td className="text-right py-2 px-4">
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="icon" 
-                                                    onClick={() => {
-                                                        setDeleteStudentId(student.id)
-                                                        setIsDeleteDialogOpen(true)
-                                                    }}
-                                                >
+                                    {students.map(student => (
+                                        <tr key={student.studentid}>
+                                            <td>{student.name}</td>
+                                            <td>{student.fathername}</td>
+                                            <td>{student.mobilenumber}</td>
+                                            <td className="text-right">
+                                                <Button variant="outline" size="icon" onClick={() => {
+                                                    setDeletestudentid(student.studentid)
+                                                    setIsDeleteDialogOpen(true)
+                                                }}>
                                                     <Trash2 className="w-4 h-4" />
                                                 </Button>
                                             </td>
@@ -461,10 +362,8 @@ export default function ClassPage() {
             </div>
             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Confirm Deletion</DialogTitle>
-                    </DialogHeader>
-                    <p>Are you sure you want to delete this student? This action cannot be undone.</p>
+                    <DialogHeader><DialogTitle>Confirm Deletion</DialogTitle></DialogHeader>
+                    <p>Are you sure you want to delete this student?</p>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
                         <Button variant="destructive" onClick={deleteStudent}>Delete</Button>
