@@ -307,7 +307,6 @@ export default function AttendanceRecordPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Father Name</TableHead>
-              <TableHead>Mobile Number</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -316,7 +315,7 @@ export default function AttendanceRecordPage() {
               <TableRow key={attendance.studentid}>
                 <TableCell>{attendance.student.name}</TableCell>
                 <TableCell>{attendance.student.fathername}</TableCell>
-                <TableCell>{attendance.student.mobilenumber}</TableCell>
+                
                 <TableCell>
                   <Badge variant={attendance.status === 'Present' ? 'success' : 'destructive'}>
                     {attendance.status}
