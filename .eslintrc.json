@@ -6,6 +6,7 @@
       {
         "ignoreAtRules": ["tailwind", "apply", "variants", "responsive", "screen"]
       }
-    ]
+    ],
+    "react/no-unescaped-entities": "off"
   }
 }
