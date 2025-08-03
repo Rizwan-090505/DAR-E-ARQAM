@@ -19,9 +19,12 @@ interface StudentData {
 
 interface MarkRecord {
   studentid: string
-  subject: string
   total_marks: number
   obtained_marks: number
+  tests: {
+    subject: string
+    date: string
+  }
 }
 
 export default function ClassResultsPage() {
@@ -45,14 +48,16 @@ export default function ClassResultsPage() {
   }
 
   useEffect(() => {
-    supabase.from('classes').select('id, name').then(({ data }) => setClasses(data || []))
+    supabase
+      .from('classes')
+      .select('id, name')
+      .then(({ data }) => setClasses(data || []))
   }, [])
 
   const fetchClassResults = async () => {
     if (!selectedClass || !startDate || !endDate) return
     setLoading(true)
 
-    // Get students in the class
     const { data: studentList } = await supabase
       .from('students')
       .select('studentid, name, fathername')
@@ -60,7 +65,6 @@ export default function ClassResultsPage() {
 
     setStudents(studentList || [])
 
-    // Get marks for all students in date range
     const { data: marks } = await supabase
       .from('marks')
       .select(`
@@ -73,7 +77,7 @@ export default function ClassResultsPage() {
       .gte('tests.date', startDate)
       .lte('tests.date', endDate)
 
-    setMarksData(marks || [])
+    setMarksData((marks as MarkRecord[]) || [])
     setGenerated(true)
 
     setTimeout(() => {
