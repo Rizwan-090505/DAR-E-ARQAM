@@ -334,7 +334,6 @@ export default function ClassPage() {
                                     <tr>
                                         <th>Name</th>
                                         <th>Father Name</th>
-                                        <th>Mobile Number</th>
                                         <th className="text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -343,7 +342,6 @@ export default function ClassPage() {
                                         <tr key={student.studentid}>
                                             <td>{student.name}</td>
                                             <td>{student.fathername}</td>
-                                            <td>{student.mobilenumber}</td>
                                             <td className="text-right">
                                                 <Button variant="outline" size="icon" onClick={() => {
                                                     setDeletestudentid(student.studentid)
