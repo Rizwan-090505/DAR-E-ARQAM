@@ -93,8 +93,7 @@ export default function Dashboard() {
             .from('classes')
             .insert([{
                 name: newClassName,
-                description: newClassDescription,
-                teacher_id: user.id
+                description: newClassDescription
             }])
             .select()
         if (error) {
