@@ -65,7 +65,7 @@ export default function ClassResultsPage() {
 
     setStudents(studentList || [])
 
-    const { data: marks } = await supabase
+    const { data: marks, error } = await supabase
       .from('marks')
       .select(`
         studentid,
@@ -77,7 +77,23 @@ export default function ClassResultsPage() {
       .gte('tests.date', startDate)
       .lte('tests.date', endDate)
 
-    setMarksData((marks as MarkRecord[]) || [])
+    if (error) {
+      console.error(error)
+      setLoading(false)
+      return
+    }
+
+    const formattedMarks: MarkRecord[] = (marks || []).map((m: any) => ({
+      studentid: m.studentid,
+      total_marks: m.total_marks,
+      obtained_marks: m.obtained_marks,
+      tests: {
+        subject: m.tests?.subject || '',
+        date: m.tests?.date || ''
+      }
+    }))
+
+    setMarksData(formattedMarks)
     setGenerated(true)
 
     setTimeout(() => {
