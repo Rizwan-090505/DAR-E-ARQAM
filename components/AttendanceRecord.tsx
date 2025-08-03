@@ -1,39 +1,43 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Badge } from './ui/badge';
 import React from 'react';
-import { format } from 'date-fns';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-
 interface AttendanceRecordProps {
-    classId: string;
+  classId: string;
+  date: string;
+  attendanceData: {
+    id: string;
+    studentid: string;
     date: string;
-    attendanceData: {
-        status: boolean;
-    }[];
+    status: 'Present' | 'Absent';
+  }[];
 }
 
-const AttendanceRecord: React.FC<AttendanceRecordProps> = ({ classId, date, attendanceData }) => {
-    const present = attendanceData.filter(record => record.status).length;
-    const absent = attendanceData.length - present;
-
-    return (
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Present</TableHead>
-                    <TableHead>Absent</TableHead>
-                    <TableHead>Total</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                <TableRow>
-                    <TableCell>{format(new Date(date), 'MMMM d, yyyy')}</TableCell>
-                    <TableCell>{present}</TableCell>
-                    <TableCell>{absent}</TableCell>
-                    <TableCell>{attendanceData.length}</TableCell>
-                </TableRow>
-            </TableBody>
-        </Table>
-    );
-};
-
-export default AttendanceRecord;
+export default function AttendanceRecord({ classId, date, attendanceData }: AttendanceRecordProps) {
+  return (
+    <div>
+      <h3 className="text-lg font-semibold mb-4">
+        Attendance Record for {date}
+      </h3>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Student ID</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {attendanceData.map((a) => (
+            <TableRow key={a.studentid}>
+              <TableCell>{a.studentid}</TableCell>
+              <TableCell>
+                <Badge variant={a.status === 'Present' ? 'success' : 'destructive'}>
+                  {a.status}
+                </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
