@@ -23,6 +23,19 @@ interface StudentData {
   fathername: string
 }
 
+interface SupabaseMark {
+  total_marks: number
+  obtained_marks: number
+  tests: {
+    subject: string
+    date: string
+  }
+  students: {
+    name: string
+    fathername: string
+  }
+}
+
 export default function ReportCardPage() {
   const [classes, setClasses] = useState<ClassData[]>([])
   const [students, setStudents] = useState<StudentData[]>([])
@@ -53,7 +66,8 @@ export default function ReportCardPage() {
 
   const fetchStudents = async (classId: string) => {
     setSelectedStudent('')
-    const { data } = await supabase.from('students')
+    const { data } = await supabase
+      .from('students')
       .select('studentid, name, fathername')
       .eq('class_id', classId)
     setStudents(data || [])
@@ -83,13 +97,18 @@ export default function ReportCardPage() {
     }
 
     if (marks && marks.length > 0) {
-      setStudentName(marks[0].students.name)
-      setFatherName(marks[0].students.fathername)
-      setMarksData(marks.map((m: any) => ({
-        subject: m.tests.subject,
-        total_marks: m.total_marks,
-        obtained_marks: m.obtained_marks
-      })))
+      const firstMark = marks[0] as SupabaseMark
+      setStudentName(firstMark.students.name)
+      setFatherName(firstMark.students.fathername)
+
+      setMarksData(
+        (marks as SupabaseMark[]).map((m) => ({
+          subject: m.tests.subject,
+          total_marks: m.total_marks,
+          obtained_marks: m.obtained_marks
+        }))
+      )
+
       setGenerated(true)
 
       // Generate PDF after DOM updates
@@ -114,7 +133,6 @@ export default function ReportCardPage() {
     const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
 
-    // Open in a new browser tab
     const pdfBlob = pdf.output('blob')
     const url = URL.createObjectURL(pdfBlob)
     window.open(url, '_blank')
