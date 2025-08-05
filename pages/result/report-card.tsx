@@ -27,13 +27,13 @@ interface SupabaseMark {
   total_marks: number
   obtained_marks: number
   tests: {
-    subject: string
+    test_name: string
     date: string
-  }[]
+  }
   students: {
     name: string
     fathername: string
-  }[]
+  }
 }
 
 export default function ReportCardPage() {
@@ -83,7 +83,7 @@ export default function ReportCardPage() {
       .select(`
         total_marks,
         obtained_marks,
-        tests(subject, date),
+        tests(test_name, date),
         students(name, fathername)
       `)
       .eq('studentid', sid)
@@ -96,14 +96,16 @@ export default function ReportCardPage() {
       return
     }
 
+    console.log(marks)
+
     if (marks && marks.length > 0) {
       const firstMark = marks[0] as SupabaseMark
-      setStudentName(firstMark.students[0]?.name || '')
-      setFatherName(firstMark.students[0]?.fathername || '')
+      setStudentName(firstMark.students.name || 'Unknown')
+      setFatherName(firstMark.students.fathername || 'Unknown')
 
       setMarksData(
         (marks as SupabaseMark[]).map((m) => ({
-          subject: m.tests[0]?.subject || '',
+          subject: m.tests.test_name || '',
           total_marks: m.total_marks,
           obtained_marks: m.obtained_marks
         }))
@@ -111,7 +113,6 @@ export default function ReportCardPage() {
 
       setGenerated(true)
 
-      // Generate PDF after DOM updates
       setTimeout(() => {
         generatePDFInNewTab()
       }, 500)

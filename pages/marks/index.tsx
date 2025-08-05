@@ -18,7 +18,7 @@ interface Test {
   test_type: string
   subject: string
   date: string
-  classes?: ClassData[] // updated to match Supabase's array format
+  class_name: string
 }
 
 export default function MarksDashboard() {
@@ -29,7 +29,10 @@ export default function MarksDashboard() {
   const [selectedType, setSelectedType] = useState<string>('')
 
   const fetchClasses = async () => {
-    const { data, error } = await supabase.from('classes').select('id, name').order('name')
+    const { data, error } = await supabase
+      .from('classes')
+      .select('id, name')
+      .order('name')
     if (!error && data) setClasses(data)
   }
 
@@ -37,7 +40,7 @@ export default function MarksDashboard() {
     setLoading(true)
     let query = supabase
       .from('tests')
-      .select('id, test_name, test_type, subject, date, classes(id, name)')
+      .select('id, test_name, test_type, subject, date, class_name, class_id')
       .order('date', { ascending: false })
 
     if (selectedClass) query = query.eq('class_id', selectedClass)
@@ -130,7 +133,7 @@ export default function MarksDashboard() {
                       <td>{t.test_name}</td>
                       <td>{t.test_type}</td>
                       <td>{t.subject}</td>
-                      <td>{t.classes && t.classes.length > 0 ? t.classes[0].name : 'N/A'}</td>
+                      <td>{t.class_name || 'N/A'}</td>
                       <td>{t.date}</td>
                       <td>
                         <Link href={`/marks/${t.id}`}>

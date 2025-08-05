@@ -17,7 +17,7 @@ interface Diary {
   id: number;
   class_id: number;
   diary: string;
-  date: string;
+  created_at: string;
 }
 
 export default function DiaryPage() {
@@ -31,7 +31,7 @@ export default function DiaryPage() {
 
   useEffect(() => {
     fetchClasses();
-    fetchDiaries();
+    fetchTodayDiaries();
   }, []);
 
   const fetchClasses = async () => {
@@ -45,12 +45,17 @@ export default function DiaryPage() {
     setLoading(false);
   };
 
-  const fetchDiaries = async () => {
+  const fetchTodayDiaries = async () => {
     setLoading(true);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const { data, error } = await supabase
       .from('diary')
       .select('*')
-      .order('date', { ascending: false });
+      .gte('created_at', today.toISOString()) // only today
+      .order('created_at', { ascending: false });
+
     if (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch diaries' });
     } else {
@@ -107,21 +112,14 @@ export default function DiaryPage() {
     setDiary('');
     setDate('');
     setClassId('');
-    fetchDiaries();
+    fetchTodayDiaries();
     setLoading(false);
   };
 
-  const deleteDiary = async (id: number) => {
-    const { error } = await supabase.from('diary').delete().eq('id', id);
-    if (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to delete diary' });
-    } else {
-      toast({ variant: 'success', title: 'Deleted', description: 'Diary deleted successfully' });
-      fetchDiaries();
-    }
-  };
-
   if (loading) return <Loader />;
+
+  // For quick lookup of which classes have diaries today
+  const diaryClassIds = new Set(diaries.map(d => d.class_id));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -151,21 +149,21 @@ export default function DiaryPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          {diaries.map(d => (
-            <Card key={d.id}>
-              <CardHeader className="flex justify-between items-center">
-                <CardTitle>
-                  {classes.find(c => c.id === d.class_id)?.name || 'Unknown Class'} - {d.date}
-                </CardTitle>
-                <Button variant="destructive" size="sm" onClick={() => deleteDiary(d.id)}>Delete</Button>
-              </CardHeader>
-              <CardContent>
-                <p>{d.diary}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <CardHeader><CardTitle>Today's Diary Status</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {classes.map(c => (
+              <div
+                key={c.id}
+                className={`font-semibold ${
+                  diaryClassIds.has(c.id) ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {c.name}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
