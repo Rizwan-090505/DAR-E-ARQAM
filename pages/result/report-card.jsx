@@ -6,51 +6,21 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '.
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 
-interface MarkRecord {
-  subject: string
-  total_marks: number
-  obtained_marks: number
-}
-
-interface ClassData {
-  id: number
-  name: string
-}
-
-interface StudentData {
-  studentid: string
-  name: string
-  fathername: string
-}
-
-interface SupabaseMark {
-  total_marks: number
-  obtained_marks: number
-  tests: {
-    test_name: string
-    date: string
-  }
-  students: {
-    name: string
-    fathername: string
-  }
-}
-
 export default function ReportCardPage() {
-  const [classes, setClasses] = useState<ClassData[]>([])
-  const [students, setStudents] = useState<StudentData[]>([])
-  const [selectedClass, setSelectedClass] = useState<string>('')
-  const [selectedStudent, setSelectedStudent] = useState<string>('')
-  const [dasNumber, setDasNumber] = useState<string>('')
+  const [classes, setClasses] = useState([])
+  const [students, setStudents] = useState([])
+  const [selectedClass, setSelectedClass] = useState('')
+  const [selectedStudent, setSelectedStudent] = useState('')
+  const [dasNumber, setDasNumber] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [marksData, setMarksData] = useState<MarkRecord[]>([])
+  const [marksData, setMarksData] = useState([])
   const [studentName, setStudentName] = useState('')
   const [fatherName, setFatherName] = useState('')
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
 
-  const gradeFromPercent = (percent: number) => {
+  const gradeFromPercent = (percent) => {
     if (percent >= 90) return 'A+'
     if (percent >= 80) return 'A'
     if (percent >= 70) return 'B'
@@ -64,7 +34,7 @@ export default function ReportCardPage() {
     supabase.from('classes').select('id, name').then(({ data }) => setClasses(data || []))
   }, [])
 
-  const fetchStudents = async (classId: string) => {
+  const fetchStudents = async (classId) => {
     setSelectedStudent('')
     const { data } = await supabase
       .from('students')
@@ -83,8 +53,8 @@ export default function ReportCardPage() {
       .select(`
         total_marks,
         obtained_marks,
-        tests(test_name, date),
-        students(name, fathername)
+        tests:test_id(test_name, date),
+        students:studentid(name, fathername)
       `)
       .eq('studentid', sid)
       .gte('tests.date', startDate)
@@ -96,16 +66,14 @@ export default function ReportCardPage() {
       return
     }
 
-    console.log(marks)
-
     if (marks && marks.length > 0) {
-      const firstMark = marks[0] as SupabaseMark
-      setStudentName(firstMark.students.name || 'Unknown')
-      setFatherName(firstMark.students.fathername || 'Unknown')
+      const firstMark = marks[0]
+      setStudentName(firstMark.students?.name || 'Unknown')
+      setFatherName(firstMark.students?.fathername || 'Unknown')
 
       setMarksData(
-        (marks as SupabaseMark[]).map((m) => ({
-          subject: m.tests.test_name || '',
+        marks.map((m) => ({
+          subject: m.tests?.test_name || '',
           total_marks: m.total_marks,
           obtained_marks: m.obtained_marks
         }))
@@ -146,11 +114,6 @@ export default function ReportCardPage() {
 
   return (
     <div className="p-8 max-w-3xl mx-auto font-sans">
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Revue&display=swap');
-        .revue-font { font-family: 'Revue', serif; }
-      `}</style>
-
       {!generated && (
         <div className="space-y-4 mb-8">
           <h1 className="text-2xl font-bold text-center mb-4">Generate Report Card</h1>
@@ -201,7 +164,7 @@ export default function ReportCardPage() {
 
       {generated && marksData.length > 0 && (
         <div id="report-card" className="bg-white text-black p-8 border rounded shadow-lg" style={{ minHeight: '29.7cm', width: '21cm', margin: '0 auto' }}>
-          <h2 className="text-3xl font-bold text-center mb-1 revue-font">DAR-E-ARQAM SCHOOL</h2>
+          <h2 className="text-3xl font-bold text-center mb-1">DAR-E-ARQAM SCHOOL</h2>
           <p className="text-center mb-6">Report Card</p>
 
           <div className="mb-4">
