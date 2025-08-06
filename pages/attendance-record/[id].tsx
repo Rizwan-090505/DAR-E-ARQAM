@@ -188,7 +188,7 @@ export default function AttendanceRecordPage() {
           student_id: a.studentid,
           class_id: id,
           number: a.student.mobilenumber || '',
-          text: `Respected Parents,\nKindly be informed that your child ${a.student.name} is absent on ${format(selectedDate, 'dd-MM-yyyy')}`
+          text: `*Mr./Mrs. ${a.student.fathername}*,\n\nKindly be informed that your child *${a.student.name}* is absent on *${format(selectedDate, 'dd-MM-yyyy')}* \n*Best Regards,*\nManagement\nDAR-E-ARQAM SCHOOL `
         }));
 
       console.log("📤 Messages to insert:", absentMessages);
