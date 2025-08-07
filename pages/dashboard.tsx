@@ -18,6 +18,7 @@ interface Class {
     description: string
     studentCount: number
     totalClassDays: number
+    attendanceMarkedToday: boolean
 }
 
 export default function Dashboard() {
@@ -39,6 +40,8 @@ export default function Dashboard() {
 
     const fetchClasses = async () => {
         setIsLoading(true)
+        const today = new Date().toISOString().split('T')[0]
+
         const { data: classesData, error: classesError } = await supabase
             .from('classes')
             .select('*')
@@ -61,16 +64,22 @@ export default function Dashboard() {
                     .select('date')
                     .eq('class_id', cls.id)
 
+                const attendanceMarkedToday = attendanceData?.some(record => record.date === today)
+
                 if (attendanceError) {
                     console.error('Error fetching attendance dates:', attendanceError)
-                    return { ...cls, studentCount: studentCount || 0, totalClassDays: 0 }
+                    return { ...cls, studentCount: studentCount || 0, totalClassDays: 0, attendanceMarkedToday: false }
                 }
 
-                // Count unique dates
                 const uniqueDates = new Set(attendanceData.map(record => record.date))
                 const totalClassDays = uniqueDates.size
 
-                return { ...cls, studentCount: studentCount || 0, totalClassDays }
+                return {
+                    ...cls,
+                    studentCount: studentCount || 0,
+                    totalClassDays,
+                    attendanceMarkedToday
+                }
             }))
 
             setClasses(classesWithDetails)
@@ -104,10 +113,15 @@ export default function Dashboard() {
                 description: `Failed to create class: ${error.message}`,
             })
         } else {
-            setClasses([...classes, data[0]])
+            setClasses([...classes, {
+                ...data[0],
+                studentCount: 0,
+                totalClassDays: 0,
+                attendanceMarkedToday: false
+            }])
             setNewClassName('')
             setNewClassDescription('')
-            setIsCreateDialogOpen(false)  // Close the dialog
+            setIsCreateDialogOpen(false)
             toast({
                 variant: "success",
                 title: "Success",
@@ -130,11 +144,15 @@ export default function Dashboard() {
                 description: "Failed to update class. Please try again.",
             })
         } else {
-            setClasses(classes.map(c => c.id === editingClass.id ? { ...c, name: newClassName, description: newClassDescription } : c))
+            setClasses(classes.map(c => c.id === editingClass.id ? {
+                ...c,
+                name: newClassName,
+                description: newClassDescription
+            } : c))
             setEditingClass(null)
             setNewClassName('')
             setNewClassDescription('')
-            setIsEditDialogOpen(false)  // Close the dialog
+            setIsEditDialogOpen(false)
             toast({
                 variant: "success",
                 title: "Success",
@@ -204,6 +222,7 @@ export default function Dashboard() {
                         </DialogContent>
                     </Dialog>
                 </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {classes.map((cls, index) => (
                         <motion.div
@@ -214,7 +233,9 @@ export default function Dashboard() {
                         >
                             <Card className="hover:shadow-lg transition-all duration-300 bg-card border border-primary/20">
                                 <CardHeader>
-                                    <CardTitle className="text-primary">{cls.name}</CardTitle>
+                                    <CardTitle className={cls.attendanceMarkedToday ? 'text-green-600' : 'text-red-600'}>
+                                        {cls.name}
+                                    </CardTitle>
                                     <CardDescription>{cls.description}</CardDescription>
                                 </CardHeader>
                                 <CardContent>
@@ -280,6 +301,7 @@ export default function Dashboard() {
                     ))}
                 </div>
             </div>
+
             <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                 <DialogContent>
                     <DialogHeader>

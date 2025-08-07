@@ -240,28 +240,39 @@ export default function AttendanceRecordPage() {
 
     return (
       <div className="w-full max-w-sm mx-auto mb-6">
-        <div className="mb-2 text-lg font-semibold text-center">{format(selectedDate, 'MMMM yyyy')}</div>
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="text-center text-sm font-medium text-gray-500">{day}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {days.map((day, index) => (
-            <Button
-              key={day.toString()}
-              variant={isSameDay(day, selectedDate) ? 'default' : 'outline'}
-              className={`h-8 w-8 p-0 ${index === 0 && `col-start-${day.getDay() + 1}`}`}
-              onClick={() => {
-                console.log("📅 Date selected:", day);
-                setSelectedDate(day);
-              }}
-            >
-              {format(day, 'd')}
-            </Button>
-          ))}
-        </div>
-      </div>
+  <div className="mb-2 text-lg font-semibold text-center">
+    {format(selectedDate, 'MMMM yyyy')}
+  </div>
+  <div className="grid grid-cols-7 gap-1 mb-2">
+    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+      <div key={day} className="text-center text-sm font-medium text-gray-500">{day}</div>
+    ))}
+  </div>
+  <div className="grid grid-cols-7 gap-1">
+    {days.map((day, index) => {
+      const isSelected = isSameDay(day, selectedDate);
+      const isFirstDay = index === 0;
+      const dayOfWeek = day.getDay(); // 0 (Sun) to 6 (Sat)
+
+      const colStartClass = isFirstDay ? `col-start-${dayOfWeek + 1}` : '';
+
+      return (
+        <Button
+          key={day.toString()}
+          variant={isSelected ? 'default' : 'outline'}
+          className={`h-8 w-8 p-0 ${colStartClass}`}
+          onClick={() => {
+            console.log("📅 Date selected:", day);
+            setSelectedDate(day);
+          }}
+        >
+          {format(day, 'd')}
+        </Button>
+      );
+    })}
+  </div>
+</div>
+
     );
   };
 
