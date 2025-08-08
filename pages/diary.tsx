@@ -103,7 +103,7 @@ export default function DiaryPage() {
         {
           class_id: classId,
           diary,
-          created_at: isoDate, // store diary created_at as selected date
+          date: isoDate, // store diary created_at as selected date
         },
       ])
       .select();
