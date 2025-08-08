@@ -33,6 +33,7 @@ export default function AttendanceRecordPage() {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting,setIsSubmitting]=useState(false);
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
@@ -152,6 +153,7 @@ export default function AttendanceRecordPage() {
 
   const saveAttendance = async () => {
     try {
+      setIsSubmitting(true);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       console.log("💾 Saving attendance for date:", dateStr);
       console.log("📤 Attendance data to save:", attendanceData);
@@ -332,7 +334,7 @@ export default function AttendanceRecordPage() {
               </TableBody>
             </Table>
             <div className="mt-4 flex justify-end">
-              <Button onClick={saveAttendance}>Save Attendance</Button>
+              {isSubmitting?<p>Submitting</p>:<Button onClick={saveAttendance}>Save Attendance</Button>}
             </div>
           </CardContent>
         </Card>
