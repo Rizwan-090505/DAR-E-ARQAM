@@ -9,311 +9,208 @@ import Loader from '../components/Loader'
 import { Plus, Edit, Trash2, Users, Calendar } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../components/ui/dialog"
 import { useToast } from "../hooks/use-toast"
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 interface Class {
-    id: string
-    name: string
-    description: string
-    studentCount: number
-    totalClassDays: number
-    attendanceMarkedToday: boolean
+  id: string
+  name: string
+  description: string
+  studentCount: number
+  totalClassDays: number
+  attendanceMarkedToday: boolean
 }
 
 export default function Dashboard() {
-    const [classes, setClasses] = useState<Class[]>([])
-    const [newClassName, setNewClassName] = useState('')
-    const [newClassDescription, setNewClassDescription] = useState('')
-    const [editingClass, setEditingClass] = useState<Class | null>(null)
-    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-    const [isLoading, setIsLoading] = useState(true)
-    const [deleteClassId, setDeleteClassId] = useState<string | null>(null)
-    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-    const router = useRouter()
-    const { toast } = useToast()
+  const [classes, setClasses] = useState<Class[]>([])
+  const [newClassName, setNewClassName] = useState('')
+  const [newClassDescription, setNewClassDescription] = useState('')
+  const [editingClass, setEditingClass] = useState<Class | null>(null)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [deleteClassId, setDeleteClassId] = useState<string | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const router = useRouter()
+  const { toast } = useToast()
 
-    useEffect(() => {
-        fetchClasses()
-    }, [])
+  useEffect(() => { fetchClasses() }, [])
 
-    const fetchClasses = async () => {
-        setIsLoading(true)
-        const today = new Date().toISOString().split('T')[0]
+  const fetchClasses = async () => {
+    setIsLoading(true)
+    const today = new Date().toISOString().split('T')[0]
 
-        const { data: classesData, error: classesError } = await supabase
-            .from('classes')
-            .select('*')
+    const { data: classesData, error: classesError } = await supabase.from('classes').select('*')
+    if (classesError) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to fetch classes." })
+    } else {
+      const classesWithDetails = await Promise.all(classesData.map(async (cls) => {
+        const { count: studentCount } = await supabase
+          .from('students')
+          .select('id', { count: 'exact', head: true })
+          .eq('class_id', cls.id)
 
-        if (classesError) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to fetch classes. Please try again.",
-            })
-        } else {
-            const classesWithDetails = await Promise.all(classesData.map(async (cls) => {
-                const { count: studentCount } = await supabase
-                    .from('students')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('class_id', cls.id)
+        const { data: attendanceData } = await supabase
+          .from('attendance')
+          .select('date')
+          .eq('class_id', cls.id)
 
-                const { data: attendanceData, error: attendanceError } = await supabase
-                    .from('attendance')
-                    .select('date')
-                    .eq('class_id', cls.id)
-
-                const attendanceMarkedToday = attendanceData?.some(record => record.date === today)
-
-                if (attendanceError) {
-                    console.error('Error fetching attendance dates:', attendanceError)
-                    return { ...cls, studentCount: studentCount || 0, totalClassDays: 0, attendanceMarkedToday: false }
-                }
-
-                const uniqueDates = new Set(attendanceData.map(record => record.date))
-                const totalClassDays = uniqueDates.size
-
-                return {
-                    ...cls,
-                    studentCount: studentCount || 0,
-                    totalClassDays,
-                    attendanceMarkedToday
-                }
-            }))
-
-            setClasses(classesWithDetails)
-        }
-        setIsLoading(false)
+        const attendanceMarkedToday = attendanceData?.some(record => record.date === today)
+        const uniqueDates = new Set(attendanceData?.map(record => record.date) || [])
+        return { ...cls, studentCount: studentCount || 0, totalClassDays: uniqueDates.size, attendanceMarkedToday }
+      }))
+      setClasses(classesWithDetails)
     }
+    setIsLoading(false)
+  }
 
-    const createClass = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "You must be logged in to create a class.",
-            })
-            return
-        }
+  const createClass = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return toast({ variant: "destructive", title: "Error", description: "Login required." })
 
-        const { data, error } = await supabase
-            .from('classes')
-            .insert([{
-                name: newClassName,
-                description: newClassDescription
-            }])
-            .select()
-        if (error) {
-            console.error('Error creating class:', error)
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: `Failed to create class: ${error.message}`,
-            })
-        } else {
-            setClasses([...classes, {
-                ...data[0],
-                studentCount: 0,
-                totalClassDays: 0,
-                attendanceMarkedToday: false
-            }])
-            setNewClassName('')
-            setNewClassDescription('')
-            setIsCreateDialogOpen(false)
-            toast({
-                variant: "success",
-                title: "Success",
-                description: "Class created successfully.",
-            })
-        }
+    const { data, error } = await supabase.from('classes').insert([{ name: newClassName, description: newClassDescription }]).select()
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: error.message })
+    } else {
+      setClasses([...classes, { ...data[0], studentCount: 0, totalClassDays: 0, attendanceMarkedToday: false }])
+      setNewClassName('')
+      setNewClassDescription('')
+      setIsCreateDialogOpen(false)
+      toast({ variant: "success", title: "Class created!" })
     }
+  }
 
-    const updateClass = async () => {
-        if (!editingClass) return
-        const { error } = await supabase
-            .from('classes')
-            .update({ name: newClassName, description: newClassDescription })
-            .eq('id', editingClass.id)
-        if (error) {
-            console.error('Error updating class:', error)
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to update class. Please try again.",
-            })
-        } else {
-            setClasses(classes.map(c => c.id === editingClass.id ? {
-                ...c,
-                name: newClassName,
-                description: newClassDescription
-            } : c))
-            setEditingClass(null)
-            setNewClassName('')
-            setNewClassDescription('')
-            setIsEditDialogOpen(false)
-            toast({
-                variant: "success",
-                title: "Success",
-                description: "Class updated successfully.",
-            })
-        }
+  const updateClass = async () => {
+    if (!editingClass) return
+    const { error } = await supabase.from('classes').update({ name: newClassName, description: newClassDescription }).eq('id', editingClass.id)
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: "Update failed." })
+    } else {
+      setClasses(classes.map(c => c.id === editingClass.id ? { ...c, name: newClassName, description: newClassDescription } : c))
+      setEditingClass(null)
+      setNewClassName('')
+      setNewClassDescription('')
+      setIsEditDialogOpen(false)
+      toast({ variant: "success", title: "Class updated!" })
     }
+  }
 
-    const deleteClass = async () => {
-        if (!deleteClassId) return
-        const { error } = await supabase
-            .from('classes')
-            .delete()
-            .eq('id', deleteClassId)
-        if (error) {
-            console.error('Error deleting class:', error)
-            toast({
-                variant: "destructive",
-                title: "Error",
-                description: "Failed to delete class. Please try again.",
-            })
-        } else {
-            setClasses(classes.filter(c => c.id !== deleteClassId))
-            toast({
-                variant: "success",
-                title: "Success",
-                description: "Class deleted successfully.",
-            })
-        }
-        setDeleteClassId(null)
-        setIsDeleteDialogOpen(false)
+  const deleteClass = async () => {
+    if (!deleteClassId) return
+    const { error } = await supabase.from('classes').delete().eq('id', deleteClassId)
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: "Deletion failed." })
+    } else {
+      setClasses(classes.filter(c => c.id !== deleteClassId))
+      toast({ variant: "success", title: "Class deleted." })
     }
+    setDeleteClassId(null)
+    setIsDeleteDialogOpen(false)
+  }
 
-    if (isLoading) return <Loader />
+  if (isLoading) return <Loader />
 
-    return (
-        <div className="min-h-screen bg-background text-foreground">
-            <Navbar />
-            <div className="container mx-auto p-8">
-                <Breadcrumbs items={[{ label: 'Dashboard', href: '/dashboard' }]} />
-                <div className="flex justify-between items-center mb-8">
-                    <h1 className="text-4xl font-bold text-primary">Your Classes</h1>
-                    <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Navbar />
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <Breadcrumbs items={[{ label: 'Dashboard', href: '/dashboard' }]} />
+        <div className="flex justify-between items-center mb-10">
+          <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-transparent bg-clip-text">
+            CLASSES
+          </h1>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transition">
+                <Plus className="w-4 h-4 mr-2" /> New Class
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-2xl shadow-lg">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold">Create New Class</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-4">
+                <Input placeholder="Class Name" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
+                <Input placeholder="Class Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} />
+                <Button className="w-full bg-gradient-to-r from-green-400 to-blue-500" onClick={createClass}>Create Class</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {classes.map((cls, index) => (
+              <motion.div key={cls.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3, delay: index * 0.05 }}>
+                <Card className="group rounded-2xl overflow-hidden border border-border/50 bg-gradient-to-br from-card/90 via-card/70 to-card/50 backdrop-blur shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all">
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-lg font-semibold">{cls.name}</CardTitle>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${cls.attendanceMarkedToday ? 'bg-gradient-to-r from-green-400 to-green-600' : 'bg-gradient-to-r from-red-400 to-red-600'}`}>
+                        {cls.attendanceMarkedToday ? 'Today Marked' : 'Pending'}
+                      </span>
+                    </div>
+                    <CardDescription className="mt-1 text-muted-foreground">{cls.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" /> {cls.studentCount} Students
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4" /> {cls.totalClassDays} Days
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button className="bg-gradient-to-r from-blue-400 to-blue-600 text-white" size="sm" onClick={() => router.push(`/class/${cls.id}`)}>View</Button>
+                      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button size="sm" className="flex items-center">
-                                <Plus className="w-4 h-4 mr-2" />
-                                Create New Class
-                            </Button>
+                          <Button variant="outline" size="icon" onClick={() => {
+                            setEditingClass(cls)
+                            setNewClassName(cls.name)
+                            setNewClassDescription(cls.description)
+                          }}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
                         </DialogTrigger>
                         <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Create New Class</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 mt-4">
-                                <Input
-                                    placeholder="Class Name"
-                                    value={newClassName}
-                                    onChange={(e) => setNewClassName(e.target.value)}
-                                />
-                                <Input
-                                    placeholder="Class Description"
-                                    value={newClassDescription}
-                                    onChange={(e) => setNewClassDescription(e.target.value)}
-                                />
-                                <Button onClick={createClass}>Create Class</Button>
-                            </div>
+                          <DialogHeader>
+                            <DialogTitle>Edit Class</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 mt-4">
+                            <Input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} />
+                            <Input value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} />
+                            <Button className="bg-gradient-to-r from-yellow-400 to-orange-500" onClick={updateClass}>Update Class</Button>
+                          </div>
                         </DialogContent>
-                    </Dialog>
-                </div>
+                      </Dialog>
+                      <Button variant="destructive" size="icon" onClick={() => {
+                        setDeleteClassId(cls.id)
+                        setIsDeleteDialogOpen(true)
+                      }}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      </main>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {classes.map((cls, index) => (
-                        <motion.div
-                            key={cls.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: index * 0.1 }}
-                        >
-                            <Card className="hover:shadow-lg transition-all duration-300 bg-card border border-primary/20">
-                                <CardHeader>
-                                    <CardTitle className={cls.attendanceMarkedToday ? 'text-green-600' : 'text-red-600'}>
-                                        {cls.name}
-                                    </CardTitle>
-                                    <CardDescription>{cls.description}</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center text-muted-foreground">
-                                            <Users className="w-4 h-4 mr-2" />
-                                            <span>{cls.studentCount} Students</span>
-                                        </div>
-                                        <div className="flex items-center text-muted-foreground">
-                                            <Calendar className="w-4 h-4 mr-2" />
-                                            <span>{cls.totalClassDays} Class Days</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <Button variant="outline" onClick={() => router.push(`/class/${cls.id}`)}>
-                                            View Class
-                                        </Button>
-                                        <div className="space-x-2">
-                                            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                                                <DialogTrigger asChild>
-                                                    <Button variant="outline" size="icon" onClick={() => {
-                                                        setEditingClass(cls)
-                                                        setNewClassName(cls.name)
-                                                        setNewClassDescription(cls.description)
-                                                    }}>
-                                                        <Edit className="w-4 h-4" />
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent>
-                                                    <DialogHeader>
-                                                        <DialogTitle>Edit Class</DialogTitle>
-                                                    </DialogHeader>
-                                                    <div className="space-y-4 mt-4">
-                                                        <Input
-                                                            placeholder="Class Name"
-                                                            value={newClassName}
-                                                            onChange={(e) => setNewClassName(e.target.value)}
-                                                        />
-                                                        <Input
-                                                            placeholder="Class Description"
-                                                            value={newClassDescription}
-                                                            onChange={(e) => setNewClassDescription(e.target.value)}
-                                                        />
-                                                        <Button onClick={updateClass}>Update Class</Button>
-                                                    </div>
-                                                </DialogContent>
-                                            </Dialog>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                onClick={() => {
-                                                    setDeleteClassId(cls.id)
-                                                    setIsDeleteDialogOpen(true)
-                                                }}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    ))}
-                </div>
-            </div>
-
-            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Confirm Deletion</DialogTitle>
-                    </DialogHeader>
-                    <p>Are you sure you want to delete this class? This action cannot be undone.</p>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-                        <Button variant="destructive" onClick={deleteClass}>Delete</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>
-    )
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+          </DialogHeader>
+          <p>Are you sure you want to delete this class? This action cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={deleteClass}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }
