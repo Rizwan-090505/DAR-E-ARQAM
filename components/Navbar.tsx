@@ -44,6 +44,7 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
         <div className="hidden md:flex space-x-3 items-center text-sm">
           <NavLink href="/marks">Tests</NavLink>
           <NavLink href="/result/report-card">Results</NavLink>
+          <NavLink href="/notice">Add Notice</NavLink>
           <NavLink href="/diary">Diary</NavLink>
           <NavLink href="/dashboard">Dashboard</NavLink>
 
@@ -89,10 +90,10 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
             <SheetContent>
               <div className="flex flex-col space-y-3 mt-4 text-sm">
                 <NavLink href="/marks">Tests</NavLink>
-                <NavLink href="/result/report-card">Results</NavLink>
+                <NavLink href="/notice">Add Notice</NavLink>
                 <NavLink href="/diary">Diary</NavLink>
                 <NavLink href="/dashboard">Dashboard</NavLink>
-
+                
                 {user ? (
                   <Button onClick={handleSignOut} variant="outline" size="sm">
                     Sign Out
