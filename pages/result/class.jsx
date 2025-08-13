@@ -62,7 +62,7 @@ export default function ClassResultPage() {
         .select(`
           total_marks,
           obtained_marks,
-          tests:test_id(test_name, date)
+          tests!inner(test_name, date)
         `)
         .eq('studentid', student.studentid)
         .gte('tests.date', startDate)
@@ -95,134 +95,179 @@ export default function ClassResultPage() {
   return (
     <>
       <style>{`
-        @page {
-          size: A4 portrait;
-          margin: 5mm !important;
-        }
-        html, body {
-          margin: 0; padding: 0; height: 100%; background: white;
-          -webkit-print-color-adjust: exact; print-color-adjust: exact;
-          font-family: 'Inter', sans-serif;
-          color: black;
-          text-align: center;
-          line-height: 1.25;
-        }
-        #container {
-          max-width: 190mm;
-          margin: auto;
-          padding: 10mm 15mm 8mm 15mm;
-          box-sizing: border-box;
-        }
-        .controls {
-          max-width: 600px;
-          margin: 0 auto 20px auto;
-          text-align: left;
-        }
-        label {
-          font-weight: 600;
-          font-size: 14px;
-          display: block;
-          margin-top: 10px;
-          margin-bottom: 4px;
-        }
-        button {
-          margin-top: 15px;
-          display: block;
-        }
-        .report-card {
-          width: 100%;
-          max-height: 277mm;
-          margin: auto;
-          padding: 10mm 15mm 8mm 15mm;
-          box-sizing: border-box;
-          background: white;
-          color: black;
-          page-break-after: always;
-          border: 1px solid #bbb;
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-start;
-          break-inside: avoid;
-        }
-        .logo-container {
-          text-align: center;
-          margin-bottom: 4px;
-          page-break-inside: avoid;
-          page-break-after: avoid;
-        }
-        .logo-container img {
-          width: 180px;
-          height: auto;
-          margin: 0 auto;
-          display: block;
-        }
-        .title {
-          font-size: 26px;
-          font-weight: 900;
-          margin: 4px 0 10px 0;
-          letter-spacing: 1.2px;
-          color: #222;
-          page-break-after: avoid;
-        }
-        .info-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 6px 16px;
-          font-size: 13px;
-          margin-bottom: 12px;
-          font-weight: 600;
-          color: #333;
-          text-align: center;
-        }
-        table {
-          border-collapse: collapse;
-          width: 100%;
-          font-size: 12.5px;
-          margin: 0 auto 6px auto;
-          page-break-inside: avoid;
-          text-align: center;
-        }
-        th, td {
-          border: 1px solid #666;
-          padding: 5px 6px;
-          vertical-align: middle;
-          font-weight: 600;
-          color: #111827;
-        }
-        th {
-          background: #1e40af;
-          color: white;
-          font-weight: 700;
-          font-size: 13px;
-        }
-        td:first-child {
-          font-weight: 700;
-          color: #1e40af;
-        }
-        tr:last-child td {
-          font-weight: 800;
-          background: #bfdbfe;
-          font-size: 13px;
-          color: #1e3a8a;
-        }
-        .footer-text {
-          font-size: 11px;
-          color: #666;
-          margin-top: 12px;
-          font-weight: 500;
-          letter-spacing: 0.6px;
-        }
-        /* Hide inputs and buttons on print */
-        @media print {
-          .controls, button, input, select, label {
-            display: none !important;
-          }
-          .report-card {
-            page-break-after: always;
-          }
-        }
-      `}</style>
+  @page {
+    size: A4 portrait;
+    margin: 12mm !important;
+  }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: #111;
+  }
+
+  #report-wrapper {
+    padding: 18px 0;
+  }
+
+  #report-card {
+    width: 100%;
+    max-width: 180mm;
+    margin: 0 auto;
+    padding: 18mm;
+    box-sizing: border-box;
+    background: #ffffff;
+    color: #111;
+    border: 1px solid #cfcfcf;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    min-height: 245mm;
+    page-break-inside: avoid;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 12px;
+    page-break-inside: avoid;
+  }
+  .logo-container {
+    display: block;
+    margin: 0 auto 8px auto;
+  }
+  .logo-container img {
+    width: 270px; /* 1.5x original ~180px */
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+  .school-name {
+    font-size: 26px;
+    font-weight: 900;
+    margin: 4px 0;
+    color: #0b2a66;
+  }
+  .school-sub {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 10px;
+  }
+
+  .title {
+    font-size: 30px;
+    font-weight: 900;
+    margin: 10px 0 14px;
+    color: #111827;
+    text-align: center;
+    page-break-after: avoid;
+  }
+
+  /* Info grid (student details) */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+    font-size: 16px;
+    margin-bottom: 18px;
+    font-weight: 700;
+    color: #222;
+    page-break-inside: avoid;
+    justify-items: start;
+  }
+  .info-grid p {
+    margin: 0;
+  }
+  .info-grid p strong {
+    display: inline-block;
+    width: 120px;
+    font-weight: 800;
+    color: #0b2a66;
+  }
+
+  .date-range { display: none !important; } /* Hide date range completely */
+
+  /* Table styling */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 16px;
+    margin: 8px 0 14px;
+    page-break-inside: avoid;
+    text-align: center;
+  }
+  thead th {
+    background: #1e40af;
+    color: #fff;
+    padding: 10px 8px;
+    font-weight: 800;
+    font-size: 16px;
+    border: 1px solid #1541a1;
+  }
+  tbody td {
+    border: 1px solid #c4c4c4;
+    padding: 10px 8px;
+    font-weight: 700;
+    color: #111827;
+  }
+  tbody tr:nth-child(even) td { background: #fbfdff; }
+  tbody tr:last-child td {
+    background: #dbeafe;
+    font-weight: 900;
+    color: #0b3a8a;
+  }
+
+  /* Remarks */
+  .remarks-box {
+    width: 100%;
+    min-height: 64px;
+    border-radius: 8px;
+    border: 1px dashed #cfcfcf;
+    padding: 12px;
+    margin-top: 14px;
+    text-align: left;
+    font-size: 15px;
+    color: #222;
+    page-break-inside: avoid;
+  }
+  .remarks-title { font-weight: 800; margin-bottom: 6px; }
+
+  /* Footer */
+  .footer-row {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    page-break-inside: avoid;
+    font-size: 15px;
+  }
+  .printed-on { color: #444; font-weight: 600; }
+  .footer-text { color: #666; font-weight: 600; text-align: right; }
+
+  /* Small screen adjustments */
+  @media (max-width: 900px) {
+    #report-card { padding: 16px; min-height: auto; }
+    .info-grid { grid-template-columns: 1fr; }
+    .footer-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+  }
+
+  /* Print view */
+  @media print {
+    button, input, select, label {
+      display: none !important;
+    }
+    body { background: #fff; }
+    #report-card { box-shadow: none; border-radius: 0; margin: 0; padding: 14mm; }
+  }
+`}</style>
+
+
+
 
       <div id="container">
         <div className="controls">
@@ -302,7 +347,7 @@ export default function ClassResultPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {marksData.slice(0,8).map((m, i) => {
+                      {marksData.map((m, i) => {
                         const percent = (m.obtained_marks / m.total_marks) * 100
                         return (
                           <tr key={i}>

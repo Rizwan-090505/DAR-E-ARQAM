@@ -11,11 +11,13 @@ interface Student {
   studentid: string
   name: string
   fathername: string
+  mobilenumber?: string
 }
 interface Test {
   id: number
   class_id: number
   test_name: string
+  date?: string
 }
 type MarkState = Record<string, { obtained: string; markId?: number }>
 
@@ -30,8 +32,8 @@ export default function MarksEntryPage() {
   const [totalMarks, setTotalMarks] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [sendToParents, setSendToParents] = useState(false)
 
-  // computed helpers
   const parsedTotal = useMemo(() => {
     const n = Number(totalMarks)
     return Number.isFinite(n) && n >= 0 ? n : NaN
@@ -43,7 +45,7 @@ export default function MarksEntryPage() {
       try {
         setLoading(true)
 
-        // 1) Test
+        // Load Test
         const { data: testData, error: testErr } = await supabase
           .from('tests')
           .select('*')
@@ -52,24 +54,24 @@ export default function MarksEntryPage() {
         if (testErr) throw testErr
         setTest(testData)
 
-        // 2) Students of that class
+        // Load Students (with mobilenumber)
         const { data: studentData, error: stuErr } = await supabase
           .from('students')
-          .select('studentid, name, fathername')
+          .select('studentid, name, fathername, mobilenumber')
           .eq('class_id', testData.class_id)
           .order('studentid', { ascending: true })
         if (stuErr) throw stuErr
 
-        // 3) Existing marks for this test
+        // Load Marks
         const { data: marksData, error: marksErr } = await supabase
           .from('marks')
           .select('*')
           .eq('test_id', Number(testId))
         if (marksErr) throw marksErr
 
-        // map into state
+        // Map marks to state
         const mm: MarkState = {}
-        for (const s of (studentData || [])) {
+        for (const s of studentData || []) {
           const existing = marksData?.find(m => m.studentid === s.studentid)
           mm[s.studentid] = existing
             ? { obtained: String(existing.obtained_marks ?? 0), markId: existing.id }
@@ -78,8 +80,7 @@ export default function MarksEntryPage() {
         setStudents(studentData || [])
         setMarks(mm)
 
-        // pick a total if present
-        if (marksData && marksData.length > 0 && marksData[0].total_marks != null) {
+        if (marksData?.length > 0 && marksData[0].total_marks != null) {
           setTotalMarks(String(marksData[0].total_marks))
         }
       } catch (err) {
@@ -92,11 +93,10 @@ export default function MarksEntryPage() {
     loadData()
   }, [testId, toast])
 
-  // Clamp & sanitize a single obtained value (0..total)
   const sanitizeObtained = (val: string) => {
     let n = Number(val)
     if (!Number.isFinite(n)) n = 0
-    if (parsedTotal === parsedTotal) { // not NaN
+    if (parsedTotal === parsedTotal) {
       if (n < 0) n = 0
       if (n > parsedTotal) n = parsedTotal
     } else if (n < 0) n = 0
@@ -115,7 +115,6 @@ export default function MarksEntryPage() {
     try {
       const tid = Number(testId)
 
-      // 0) Optional: quick client-side normalization (clamp to 0..total)
       const normalizedPayload = Object.entries(marks).map(([studentid, { obtained }]) => ({
         test_id: tid,
         studentid,
@@ -123,16 +122,32 @@ export default function MarksEntryPage() {
         obtained_marks: Number(sanitizeObtained(obtained))
       }))
 
-      // 1) Hard cleanup inside DB for this test (keep MIN(id) per student)
-      //    This prevents historical multi-saves from lingering.
+      // Ensure no duplicate marks
       await supabase.rpc('remove_duplicates_for_test', { testid_param: tid })
 
-      // 2) Upsert so repeated clicks / multi-saves only update
-      //    NOTE: Requires a UNIQUE constraint on (test_id, studentid)
       const { error: upsertErr } = await supabase
         .from('marks')
         .upsert(normalizedPayload, { onConflict: 'test_id,studentid' })
       if (upsertErr) throw upsertErr
+
+      // Send to parents if enabled
+      if (sendToParents) {
+        const testDate = test?.date ? new Date(test.date).toLocaleDateString('en-GB') : ''
+        const messagesPayload = students.map((s) => {
+          const obtained = Number(sanitizeObtained(marks[s.studentid]?.obtained || '0'))
+          const percentage = parsedTotal ? ((obtained / parsedTotal) * 100).toFixed(1) : '0'
+          return {
+            student_id: s.studentid,
+            class_id: test?.class_id || null,
+            number: s.mobilenumber || null,
+            text: `Respected Parents,\n\n${s.name}'s marks in ${test?.test_name} held on ${testDate} are ${obtained}/${parsedTotal} (Percentage: ${percentage}%).\n\nRegards,\nManagement\nDAR-E-ARQAM SCHOOL`,
+            created_at: new Date().toISOString(),
+            sent: false
+          }
+        })
+        const { error: msgErr } = await supabase.from('messages').insert(messagesPayload)
+        if (msgErr) throw msgErr
+      }
 
       toast({ variant: 'success', title: 'Saved', description: 'Marks updated successfully.' })
       router.push('/marks')
@@ -157,58 +172,52 @@ export default function MarksEntryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-black to-slate-900">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-100 to-gray-300 dark:from-slate-900 dark:to-black">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-600 dark:text-slate-300" />
       </div>
     )
   }
-  if (!test) return <div className="p-6 text-slate-200">No test found.</div>
+  if (!test) return <div className="p-6 text-gray-800 dark:text-slate-200">No test found.</div>
 
   return (
-    <div className="min-h-screen text-slate-100 bg-[radial-gradient(70%_60%_at_50%_0%,#0b1220_0%,#05070c_100%)]">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
       <div className="container mx-auto p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {test.test_name}
-            </h1>
-            <p className="text-sm text-slate-400">Marks Entry</p>
+            <h1 className="text-3xl font-semibold tracking-tight">{test.test_name}</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400">Marks Entry</p>
           </div>
           <Button
             variant="destructive"
             onClick={deleteTest}
-            className="rounded-full bg-red-600 hover:bg-red-700 shadow-[0_0_0_0_rgba(0,0,0,0)] hover:shadow-[0_0_24px_0_rgba(220,38,38,0.35)] transition-all"
+            className="rounded-full bg-red-600 hover:bg-red-700 shadow hover:shadow-red-500/20 transition-all"
           >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Test
+            <Trash2 className="w-4 h-4 mr-2" /> Delete Test
           </Button>
         </div>
 
         {/* Total marks card */}
-        <div className="mb-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-xl">
+        <div className="mb-6 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 backdrop-blur-xl shadow-sm dark:shadow-xl">
           <div className="p-6">
-            <label className="block text-sm font-medium text-slate-300 mb-2">Total Marks</label>
-            <div className="flex items-center gap-3">
-              <Input
-                type="number"
-                value={totalMarks}
-                onChange={(e) => setTotalMarks(e.target.value)}
-                placeholder="e.g., 100"
-                disabled={saving}
-                className="bg-transparent border-slate-600 focus:border-slate-300 text-slate-100"
-              />
-              
-            </div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Total Marks</label>
+            <Input
+              type="number"
+              value={totalMarks}
+              onChange={(e) => setTotalMarks(e.target.value)}
+              placeholder="e.g., 100"
+              disabled={saving}
+              className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100"
+            />
           </div>
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-xl">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] backdrop-blur-xl shadow-sm dark:shadow-xl">
           <table className="w-full text-sm">
-            <thead className="text-left">
-              <tr className="text-slate-300 border-b border-white/10">
+            <thead>
+              <tr className="text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-white/10">
                 <th className="p-3 font-medium">Student ID</th>
                 <th className="p-3 font-medium">Name</th>
                 <th className="p-3 font-medium">Father Name</th>
@@ -219,11 +228,11 @@ export default function MarksEntryPage() {
               {students.map((s, idx) => (
                 <tr
                   key={s.studentid}
-                  className={`${idx % 2 ? 'bg-white/0' : 'bg-white/[0.03]'} transition-colors`}
+                  className={`${idx % 2 ? 'bg-gray-50 dark:bg-white/0' : 'bg-gray-100 dark:bg-white/[0.03]'} transition-colors`}
                 >
-                  <td className="p-3 text-slate-300">{s.studentid}</td>
+                  <td className="p-3">{s.studentid}</td>
                   <td className="p-3">{s.name}</td>
-                  <td className="p-3 text-slate-300">{s.fathername}</td>
+                  <td className="p-3">{s.fathername}</td>
                   <td className="p-3">
                     <Input
                       type="number"
@@ -248,7 +257,7 @@ export default function MarksEntryPage() {
                           }
                         }))
                       }
-                      className="bg-transparent border-slate-600 focus:border-slate-300 text-slate-100"
+                      className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100"
                     />
                   </td>
                 </tr>
@@ -258,11 +267,21 @@ export default function MarksEntryPage() {
         </div>
 
         {/* Actions */}
-        <div className="mt-6 flex items-center justify-end">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={sendToParents}
+              onChange={(e) => setSendToParents(e.target.checked)}
+              disabled={saving}
+              className="w-4 h-4 accent-green-600"
+            />
+            Send marks to parents
+          </label>
           <Button
             onClick={saveMarks}
             disabled={saving}
-            className="rounded-full px-6 py-2 font-medium bg-slate-200 text-slate-900 hover:bg-white transition-all shadow-[0_0_0_0_rgba(0,0,0,0)] hover:shadow-[0_0_28px_0_rgba(255,255,255,0.15)]"
+            className="rounded-full px-6 py-2 font-medium bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white transition-all shadow hover:shadow-lg"
           >
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             {saving ? 'Saving…' : 'Save Marks'}
