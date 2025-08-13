@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../utils/supabaseClient'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
+import Image from 'next/image'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../../components/ui/select'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
+import logo from "../../public/logo-1.png"
 
 export default function ReportCardPage() {
   const [classes, setClasses] = useState([])
@@ -80,31 +80,11 @@ export default function ReportCardPage() {
       )
 
       setGenerated(true)
-
-      setTimeout(() => {
-        generatePDFInNewTab()
-      }, 500)
     } else {
       setMarksData([])
     }
 
     setLoading(false)
-  }
-
-  const generatePDFInNewTab = async () => {
-    const element = document.getElementById('report-card')
-    if (!element) return
-    const canvas = await html2canvas(element, { scale: 2 })
-    const imgData = canvas.toDataURL('image/png')
-    const pdf = new jsPDF('p', 'mm', 'a4')
-    const imgProps = pdf.getImageProperties(imgData)
-    const pdfWidth = pdf.internal.pageSize.getWidth()
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
-
-    const pdfBlob = pdf.output('blob')
-    const url = URL.createObjectURL(pdfBlob)
-    window.open(url, '_blank')
   }
 
   const totalObtained = marksData.reduce((acc, m) => acc + m.obtained_marks, 0)
@@ -113,106 +93,222 @@ export default function ReportCardPage() {
   const overallGrade = gradeFromPercent(overallPercent)
 
   return (
-    <div className="p-8 max-w-3xl mx-auto font-sans">
-      {!generated && (
-        <div className="space-y-4 mb-8">
-          <h1 className="text-2xl font-bold text-center mb-4">Generate Report Card</h1>
+    <>
+      <style>{`
+        @page {
+          size: A4 portrait;
+          margin: 5mm !important;
+        }
+        html, body {
+          margin: 0; padding: 0; height: 100%; background: white;
+          -webkit-print-color-adjust: exact; print-color-adjust: exact;
+          font-family: 'Inter', sans-serif;
+          color: black;
+          text-align: center;
+          line-height: 1.25;
+        }
+        #report-card {
+          width: 190mm;
+          max-height: 277mm;
+          margin: auto;
+          padding: 10mm 15mm 8mm 15mm;
+          box-sizing: border-box;
+          background: white;
+          color: black;
+          page-break-inside: avoid;
+          border: 1px solid #bbb;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+        }
+        .logo-container {
+          text-align: center;
+          margin-bottom: 4px;
+          page-break-inside: avoid;
+          page-break-after: avoid;
+        }
+        .logo-container img {
+          width: 180px;
+          height: auto;
+          margin: 0 auto;
+          display: block;
+        }
+        .title {
+          font-size: 26px;
+          font-weight: 900;
+          margin: 4px 0 10px 0;
+          letter-spacing: 1.2px;
+          color: #222;
+          page-break-after: avoid;
+        }
+        .info-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 6px 16px;
+          font-size: 13px;
+          margin-bottom: 12px;
+          font-weight: 600;
+          color: #333;
+          text-align: center;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          font-size: 12.5px;
+          margin: 0 auto 6px auto;
+          page-break-inside: avoid;
+          text-align: center;
+        }
+        th, td {
+          border: 1px solid #666;
+          padding: 5px 6px;
+          vertical-align: middle;
+          font-weight: 600;
+          color: #111827;
+        }
+        th {
+          background: #1e40af;
+          color: white;
+          font-weight: 700;
+          font-size: 13px;
+        }
+        td:first-child {
+          font-weight: 700;
+          color: #1e40af;
+        }
+        tr:last-child td {
+          font-weight: 800;
+          background: #bfdbfe;
+          font-size: 13px;
+          color: #1e3a8a;
+        }
+        .footer-text {
+          font-size: 11px;
+          color: #666;
+          margin-top: 12px;
+          font-weight: 500;
+          letter-spacing: 0.6px;
+        }
+        /* Hide inputs and buttons on print */
+        @media print {
+          button, input, select, label {
+            display: none !important;
+          }
+        }
+      `}</style>
 
-          <div>
-            <label className="block mb-1 font-medium">DAS Number (Optional)</label>
-            <Input placeholder="Enter DAS Number" value={dasNumber} onChange={e => setDasNumber(e.target.value)} />
-          </div>
+      <div className="p-8 max-w-4xl mx-auto font-sans">
+        {!generated && (
+          <div className="space-y-4 mb-8">
+            <h1 className="text-3xl font-bold text-center mb-4">Generate Report Card</h1>
 
-          <div>
-            <label className="block mb-1 font-medium">Select Class</label>
-            <Select onValueChange={(val) => { setSelectedClass(val); fetchStudents(val) }}>
-              <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
-              <SelectContent>
-                {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {students.length > 0 && (
             <div>
-              <label className="block mb-1 font-medium">Select Student</label>
-              <Select onValueChange={(val) => setSelectedStudent(val)}>
-                <SelectTrigger><SelectValue placeholder="Select Student" /></SelectTrigger>
+              <label className="block mb-1 font-medium">DAS Number (Optional)</label>
+              <Input
+                placeholder="Enter DAS Number"
+                value={dasNumber}
+                onChange={e => setDasNumber(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1 font-medium">Select Class</label>
+              <Select onValueChange={(val) => { setSelectedClass(val); fetchStudents(val) }}>
+                <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
                 <SelectContent>
-                  {students.map(s => (
-                    <SelectItem key={s.studentid} value={s.studentid}>{s.name}</SelectItem>
-                  ))}
+                  {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-          )}
 
-          <div>
-            <label>Start Date</label>
-            <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            {students.length > 0 && (
+              <div>
+                <label className="block mb-1 font-medium">Select Student</label>
+                <Select onValueChange={(val) => setSelectedStudent(val)}>
+                  <SelectTrigger><SelectValue placeholder="Select Student" /></SelectTrigger>
+                  <SelectContent>
+                    {students.map(s => (
+                      <SelectItem key={s.studentid} value={s.studentid}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div>
+              <label>Start Date</label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
+            <div>
+              <label>End Date</label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
+
+            <Button onClick={fetchReport} disabled={loading}>
+              {loading ? 'Loading...' : 'Generate'}
+            </Button>
           </div>
-          <div>
-            <label>End Date</label>
-            <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
+        )}
 
-          <Button onClick={fetchReport} disabled={loading}>
-            {loading ? 'Loading...' : 'Generate'}
-          </Button>
-        </div>
-      )}
+        {generated && marksData.length > 0 && (
+          <section id="report-card" role="region" aria-label="Student Report Card">
+            <div className="logo-container">
+              <Image src={logo} alt="DAR-E-ARQAM Logo" />
+            </div>
 
-      {generated && marksData.length > 0 && (
-        <div id="report-card" className="bg-white text-black p-8 border rounded shadow-lg" style={{ minHeight: '29.7cm', width: '21cm', margin: '0 auto' }}>
-          <h2 className="text-3xl font-bold text-center mb-1">DAR-E-ARQAM SCHOOL</h2>
-          <p className="text-center mb-6">Report Card</p>
+            <p className="title">Report Card</p>
 
-          <div className="mb-4">
-            <p><strong>Name:</strong> {studentName}</p>
-            <p><strong>Father Name:</strong> {fatherName}</p>
-            <p><strong>DAS Number:</strong> {dasNumber || selectedStudent}</p>
-            <p><strong>Date Range:</strong> {startDate} to {endDate}</p>
-          </div>
+            <div className="info-grid">
+              <p><strong>Name:</strong> {studentName}</p>
+              <p><strong>Father Name:</strong> {fatherName}</p>
+              <p><strong>DAS Number:</strong> {dasNumber || selectedStudent}</p>
+              <p><strong>Date Range:</strong> {startDate} to {endDate}</p>
+            </div>
 
-          <table className="w-full border mb-6">
-            <thead>
-              <tr>
-                <th className="border p-2">Subject</th>
-                <th className="border p-2">Total Marks</th>
-                <th className="border p-2">Obtained Marks</th>
-                <th className="border p-2">Percentage</th>
-                <th className="border p-2">Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              {marksData.map((m, i) => {
-                const percent = (m.obtained_marks / m.total_marks) * 100
-                return (
-                  <tr key={i}>
-                    <td className="border p-2">{m.subject}</td>
-                    <td className="border p-2">{m.total_marks}</td>
-                    <td className="border p-2">{m.obtained_marks}</td>
-                    <td className="border p-2">{percent.toFixed(2)}%</td>
-                    <td className="border p-2">{gradeFromPercent(percent)}</td>
-                  </tr>
-                )
-              })}
-              <tr className="font-bold">
-                <td className="border p-2">Overall</td>
-                <td className="border p-2">{totalMax}</td>
-                <td className="border p-2">{totalObtained}</td>
-                <td className="border p-2">{overallPercent.toFixed(2)}%</td>
-                <td className="border p-2">{overallGrade}</td>
-              </tr>
-            </tbody>
-          </table>
+            <table aria-describedby="report-summary" role="table">
+              <thead>
+                <tr>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Total Marks</th>
+                  <th scope="col">Obtained Marks</th>
+                  <th scope="col">Percentage</th>
+                  <th scope="col">Grade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {marksData.slice(0, 8).map((m, i) => { /* limit to 8 rows */
+                  const percent = (m.obtained_marks / m.total_marks) * 100
+                  return (
+                    <tr key={i}>
+                      <td>{m.subject}</td>
+                      <td>{m.total_marks}</td>
+                      <td>{m.obtained_marks}</td>
+                      <td>{percent.toFixed(2)}%</td>
+                      <td>{gradeFromPercent(percent)}</td>
+                    </tr>
+                  )
+                })}
+                <tr>
+                  <td>Overall</td>
+                  <td>{totalMax}</td>
+                  <td>{totalObtained}</td>
+                  <td>{overallPercent.toFixed(2)}%</td>
+                  <td>{overallGrade}</td>
+                </tr>
+              </tbody>
+            </table>
 
-          <div className="mt-10 text-sm text-center">
-            <p>This is a software-generated report card and does not require a signature.</p>
-            <p>© DAR-E-ARQAM</p>
-          </div>
-        </div>
-      )}
-    </div>
+            <div
+              className="footer-text"
+              id="report-summary"
+            >
+              <p>This is a software-generated report card and does not require a signature.</p>
+              <p>© DAR-E-ARQAM</p>
+            </div>
+          </section>
+        )}
+      </div>
+    </>
   )
 }

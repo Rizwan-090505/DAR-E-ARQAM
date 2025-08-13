@@ -75,6 +75,45 @@
   }
 }
 
+/* Add this in your global CSS file */
+.report-card-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px; /* print-safe margin */
+}
+
+.report-card-table {
+  border-collapse: collapse;
+  font-size: 1.1rem; /* slightly larger text */
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  width: auto;
+  background: white;
+  box-shadow: 0 0 15px rgba(0,0,0,0.05);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.report-card-table th,
+.report-card-table td {
+  padding: 14px 22px;
+  text-align: center;
+}
+
+.report-card-table thead {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.report-card-table tbody tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.report-card-table tbody tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+
 @keyframes slideOutToTop {
   0% {
     transform: translateY(0);
