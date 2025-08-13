@@ -46,6 +46,7 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
           <NavLink href="/result/report-card">Results</NavLink>
           <NavLink href="/notice">Add Notice</NavLink>
           <NavLink href="/diary">Diary</NavLink>
+          <NavLink href="/advance">Advance</NavLink>
           <NavLink href="/dashboard">Dashboard</NavLink>
 
           {user ? (
@@ -92,6 +93,7 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
                 <NavLink href="/marks">Tests</NavLink>
                 <NavLink href="/notice">Add Notice</NavLink>
                 <NavLink href="/diary">Diary</NavLink>
+                <NavLink href="/advance">Advance</NavLink>
                 <NavLink href="/dashboard">Dashboard</NavLink>
                 
                 {user ? (
