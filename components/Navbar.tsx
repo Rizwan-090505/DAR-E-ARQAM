@@ -41,23 +41,17 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
         </Link>
 
         {/* Desktop Menu */}
-        <div className="hidden md:flex space-x-3 items-center text-sm">
+        <div className="hidden md:flex space-x-3 items-center text-xs">
           <NavLink href="/marks">Tests</NavLink>
           <NavLink href="/result/report-card">Results</NavLink>
           <NavLink href="/notice">Add Notice</NavLink>
           <NavLink href="/diary">Diary</NavLink>
           <NavLink href="/advance">Advance</NavLink>
+          <NavLink href="/activities">Add Activities</NavLink>
+          <NavLink href="/syllabus">Syllabus</NavLink>
           <NavLink href="/dashboard">Dashboard</NavLink>
 
-          {user ? (
-            <Button onClick={handleSignOut} variant="outline" size="sm">
-              Sign Out
-            </Button>
-          ) : (
-            <Button onClick={() => router.push('/login')} variant="outline" size="sm">
-              Login
-            </Button>
-          )}
+         
 
           {mounted && (
             <Button
@@ -96,7 +90,7 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
                 <NavLink href="/diary">Diary</NavLink>
                 <NavLink href="/advance">Advance</NavLink>
                 <NavLink href="/dashboard">Dashboard</NavLink>
-                
+                <NavLink href="/activities">Add Activities</NavLink>
                 {user ? (
                   <Button onClick={handleSignOut} variant="outline" size="sm">
                     Sign Out
