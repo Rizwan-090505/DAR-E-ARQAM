@@ -92,6 +92,7 @@ const Navbar: React.FC<NavbarProps> = ({ className }) => {
               <div className="flex flex-col space-y-3 mt-4 text-sm">
                 <NavLink href="/marks">Tests</NavLink>
                 <NavLink href="/notice">Add Notice</NavLink>
+                <NavLink href="/syllabus">Add Syllabus</NavLink>
                 <NavLink href="/diary">Diary</NavLink>
                 <NavLink href="/advance">Advance</NavLink>
                 <NavLink href="/dashboard">Dashboard</NavLink>
