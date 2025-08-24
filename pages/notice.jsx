@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '.
 export default function BulkMessagePage() {
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
-  const [students, setStudents] = useState([]) // { studentid, name, fathername, mobilenumber }
+  const [students, setStudents] = useState([]) // { studentid, name, fathername, class_id, mobilenumber, class }
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
   const [message, setMessage] = useState('')
@@ -39,7 +39,7 @@ export default function BulkMessagePage() {
     setLoading(true)
     supabase
       .from('students')
-      .select('studentid, name, fathername, class_id, mobilenumber')
+      .select('studentid, name, fathername, class_id, mobilenumber, classes(name)')
       .eq('class_id', selectedClass)
       .order('name', { ascending: true })
       .then(({ data, error }) => {
@@ -48,7 +48,12 @@ export default function BulkMessagePage() {
           console.error('Students fetch error', error)
           setStudents([])
         } else {
-          setStudents(data || [])
+          // flatten class name
+          const withClass = (data || []).map(s => ({
+            ...s,
+            class: s.classes?.name || ''
+          }))
+          setStudents(withClass)
           setSelectedIds(new Set())
           setSelectAll(false)
         }
@@ -63,7 +68,8 @@ export default function BulkMessagePage() {
       (s.name || '').toLowerCase().includes(q) ||
       (s.fathername || '').toLowerCase().includes(q) ||
       String(s.studentid).toLowerCase().includes(q) ||
-      (s.mobilenumber || '').toLowerCase().includes(q)
+      (s.mobilenumber || '').toLowerCase().includes(q) ||
+      (s.class || '').toLowerCase().includes(q)
     )
   }, [students, query])
 
@@ -121,20 +127,30 @@ export default function BulkMessagePage() {
       return
     }
 
+    const today = new Date().toLocaleDateString()
+
     setSaving(true)
     try {
       const payload = selectedArray.map(studentid => {
         const student = students.find(s => s.studentid === studentid)
+
+        // replace placeholders
+        let customizedMessage = message
+          .replace(/{{name}}/g, student?.name || '')
+          .replace(/{{fathername}}/g, student?.fathername || '')
+          .replace(/{{class}}/g, student?.class || '')
+          .replace(/{{date}}/g, today)
+
         return {
           student_id: studentid,
           number: student?.mobilenumber || '',
           sent: false,
-          text: message.trim(),
+          text: customizedMessage.trim(),
           created_at: new Date().toISOString()
         }
       })
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('messages')
         .insert(payload)
 
@@ -142,7 +158,7 @@ export default function BulkMessagePage() {
         console.error('Save error', error)
         alert('Failed to save messages. Check console for details.')
       } else {
-        alert(`Saved message for ${payload.length} student(s).`)
+        alert(`Saved personalized message for ${payload.length} student(s).`)
         setMessage('')
         setSelectedIds(new Set())
         setSelectAll(false)
@@ -165,7 +181,9 @@ export default function BulkMessagePage() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-4">
             <div>
               <h1 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">Send Message (bulk)</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">Select students and save message to <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">messages</code> table</p>
+              <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">
+                Use placeholders: <code>{`{{name}}`}</code>, <code>{`{{fathername}}`}</code>, <code>{`{{class}}`}</code>, <code>{`{{date}}`}</code>
+              </p>
             </div>
 
             <div className="flex gap-3 flex-col sm:flex-row items-stretch sm:items-end">
@@ -198,7 +216,9 @@ export default function BulkMessagePage() {
             {/* left: student list */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{loading ? 'Loading students...' : `${filtered.length} students`}</div>
+                <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  {loading ? 'Loading students...' : `${filtered.length} students`}
+                </div>
                 <div className="flex gap-2">
                   <Button onClick={toggleSelectAll} disabled={!students.length} className="px-3 py-1.5">
                     {selectAll ? 'Unselect all' : 'Select all'}
@@ -231,7 +251,7 @@ export default function BulkMessagePage() {
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-3 text-xs text-gray-600 dark:text-gray-400">
                               <div className="truncate">{s.fathername}</div>
-                              <div className="font-medium text-gray-800 dark:text-gray-200">{ '—'}</div>
+                              <div className="font-medium text-gray-800 dark:text-gray-200">{s.class}</div>
                             </div>
                           </div>
                         </li>
@@ -249,7 +269,7 @@ export default function BulkMessagePage() {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={10}
-                placeholder="Write the message to save for selected students..."
+                placeholder="Write message using {{name}}, {{fathername}}, {{class}}, {{date}}"
                 className="w-full h-56 sm:h-64 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
               />
 
@@ -276,7 +296,8 @@ export default function BulkMessagePage() {
               </div>
 
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                <strong>Note:</strong> Messages are saved to the <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">messages</code> table (columns: <code>student_id</code>, <code>number</code>, <code>sent</code>, <code>text</code>, <code>created_at</code>).
+                <strong>Note:</strong> Use placeholders <code>{`{{name}}`}</code>, <code>{`{{fathername}}`}</code>, <code>{`{{class}}`}</code>, <code>{`{{date}}`}</code>.  
+                They will be replaced with the student’s actual info when saving.
               </p>
             </aside>
           </div>
