@@ -234,6 +234,16 @@ export default function ClassResultPage() {
     color: #222;
     page-break-inside: avoid;
   }
+      /* Force page break after each result card */
+  .report-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: always;
+  }
+  .report-card:last-child {
+    page-break-after: auto;
+  }
+
   .remarks-title { font-weight: 800; margin-bottom: 6px; }
 
   /* Footer */
