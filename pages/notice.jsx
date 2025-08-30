@@ -138,6 +138,7 @@ export default function BulkMessagePage() {
         let customizedMessage = message
           .replace(/{{name}}/g, student?.name || '')
           .replace(/{{fathername}}/g, student?.fathername || '')
+          .replace(/{{id}}/g,student?.studentid || '')
           .replace(/{{class}}/g, student?.class || '')
           .replace(/{{date}}/g, today)
 
