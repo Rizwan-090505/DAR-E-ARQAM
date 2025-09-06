@@ -238,6 +238,11 @@ export default function ClassPage() {
                   Mark Attendance
                 </Button>
               </Link>
+              <Link href={`/attendance-record/report`}>
+                <Button className="btn-gradient shadow-md">
+                  Report
+                </Button>
+              </Link>
 
               <Dialog open={isAddStudentDialogOpen} onOpenChange={setIsAddStudentDialogOpen}>
                 <DialogTrigger asChild>
