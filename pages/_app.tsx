@@ -36,12 +36,13 @@ function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!loading && !user) {
-      // Only redirect if the user is definitely not logged in
-      if (!['/login', '/auth/callback'].includes(router.pathname)) {
-        router.push('/login')
-      }
-    }
+    const openRoutes = ['/login', '/auth/callback','/datesheets','/res','/res1'];
+if (!loading && !user) {
+  if (!openRoutes.some(route => router.pathname.startsWith(route))) {
+    router.push('/login')
+  }
+}
+
   }, [user, loading, router])
 
   if (loading) {
