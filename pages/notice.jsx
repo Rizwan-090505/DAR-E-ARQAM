@@ -1,185 +1,248 @@
 // pages/bulk-message.jsx
-import { useState, useEffect, useMemo } from 'react'
-import { supabase } from '../utils/supabaseClient'
-import Navbar from '../components/Navbar' // adjust path if needed
-import { Button } from '../components/ui/button'
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select'
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import Navbar from '../components/Navbar';
+import { Button } from '../components/ui/button';
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
+
+// 📝 A simple custom modal component
+const CustomModal = ({ title, description, isOpen, onClose, onAction, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 dark:bg-opacity-70">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+        <div className="flex justify-between items-center pb-3">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 dark:dark-text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            &times;
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
+        <div>{children}</div>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button onClick={onClose} variant="ghost" className="px-3 py-2 text-sm">Cancel</Button>
+          <Button onClick={onAction} className="px-3 py-2 text-sm">Generate Message</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function BulkMessagePage() {
-  const [classes, setClasses] = useState([])
-  const [selectedClass, setSelectedClass] = useState('')
-  const [students, setStudents] = useState([]) // { studentid, name, fathername, class_id, mobilenumber, class }
-  const [selectedIds, setSelectedIds] = useState(new Set())
-  const [selectAll, setSelectAll] = useState(false)
-  const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [query, setQuery] = useState('')
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState('');
+  const [students, setStudents] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [currentTemplate, setCurrentTemplate] = useState(null);
+  const [templateInputs, setTemplateInputs] = useState({});
+
+  const templates = [
+    {
+      name: 'PTM Reminder',
+      text: (inputs) => `_Respected Parent_,\n\n*A Parent-Teacher Meeting (PTM) has been scheduled on ${inputs.ptm_date} at ${inputs.ptm_time}*. Please ensure your presence to discuss the academic progress of your child, *{{name}}* (ID: {{id}}).\n\nThank you.`,
+      placeholders: [{ name: 'ptm_date', label: 'PTM Date', type: 'date' }, { name: 'ptm_time', label: 'PTM Time', type: 'time' }]
+    },
+    {
+      name: 'Fee Reminder',
+      text: () => `_Respected Parent_,\n\nThis is a gentle reminder that the school fee for your child, *{{name}}* (Class: {{class}}), is now due. Your timely payment ensures smooth functioning of school operations.\n\n_Kindly ignore this message if the fee has already been paid._\n\nThank you for your cooperation!`
+    },
+    {
+      name: 'Uniform Notice',
+      text: (inputs) => `_Respected Parent_,\n\nThis is a notice regarding the school uniform. We have observed that *{{name}}* (ID: {{id}}) is not adhering to the uniform code due to _${inputs.uniform_issue}_.\n\nPlease ensure your child wears the correct and clean uniform daily. Thank you.`,
+      placeholders: [{ name: 'uniform_issue', label: 'Issue', type: 'text' }]
+    },
+    {
+      name: 'Holiday Announcement',
+      text: (inputs) => `_Respected Parent_,\n\nPlease note that the school will remain closed on *${inputs.holiday_date}* on account of _${inputs.holiday_reason}_.\n\nRegular classes will resume from the next working day. Thank you.`,
+      placeholders: [{ name: 'holiday_date', label: 'Holiday Date', type: 'date' }, { name: 'holiday_reason', label: 'Reason', type: 'text' }]
+    },
+  ];
 
   useEffect(() => {
-    // Load classes
     supabase
       .from('classes')
       .select('id, name')
       .order('name', { ascending: true })
       .then(({ data, error }) => {
-        if (error) console.error('Classes fetch error', error)
-        else setClasses(data || [])
-      })
-  }, [])
+        if (error) console.error('Classes fetch error', error);
+        else setClasses(data || []);
+      });
+  }, []);
 
   useEffect(() => {
     if (!selectedClass) {
-      setStudents([])
-      setSelectedIds(new Set())
-      setSelectAll(false)
-      return
+      setStudents([]);
+      setSelectedIds(new Set());
+      setSelectAll(false);
+      return;
     }
 
-    setLoading(true)
+    setLoading(true);
     supabase
       .from('students')
       .select('studentid, name, fathername, class_id, mobilenumber, classes(name)')
       .eq('class_id', selectedClass)
       .order('name', { ascending: true })
       .then(({ data, error }) => {
-        setLoading(false)
+        setLoading(false);
         if (error) {
-          console.error('Students fetch error', error)
-          setStudents([])
+          console.error('Students fetch error', error);
+          setStudents([]);
         } else {
-          // flatten class name
           const withClass = (data || []).map(s => ({
             ...s,
             class: s.classes?.name || ''
-          }))
-          setStudents(withClass)
-          setSelectedIds(new Set())
-          setSelectAll(false)
+          }));
+          setStudents(withClass);
+          setSelectedIds(new Set());
+          setSelectAll(false);
         }
-      })
-  }, [selectedClass])
+      });
+  }, [selectedClass]);
 
-  // filtered students by query
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return students
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
     return students.filter(s =>
       (s.name || '').toLowerCase().includes(q) ||
       (s.fathername || '').toLowerCase().includes(q) ||
       String(s.studentid).toLowerCase().includes(q) ||
       (s.mobilenumber || '').toLowerCase().includes(q) ||
       (s.class || '').toLowerCase().includes(q)
-    )
-  }, [students, query])
+    );
+  }, [students, query]);
 
   const toggleSelect = (studentid) => {
     setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(studentid)) next.delete(studentid)
-      else next.add(studentid)
-      setSelectAll(next.size === students.length && students.length > 0)
-      return next
-    })
-  }
+      const next = new Set(prev);
+      if (next.has(studentid)) next.delete(studentid);
+      else next.add(studentid);
+      setSelectAll(next.size === students.length && students.length > 0);
+      return next;
+    });
+  };
 
   const toggleSelectAll = () => {
     if (selectAll) {
-      setSelectedIds(new Set())
-      setSelectAll(false)
+      setSelectedIds(new Set());
+      setSelectAll(false);
     } else {
-      const all = new Set(students.map(s => s.studentid))
-      setSelectedIds(all)
-      setSelectAll(true)
+      const all = new Set(students.map(s => s.studentid));
+      setSelectedIds(all);
+      setSelectAll(true);
     }
-  }
+  };
 
   const invertSelection = () => {
     setSelectedIds(prev => {
-      const next = new Set()
+      const next = new Set();
       students.forEach(s => {
-        if (!prev.has(s.studentid)) next.add(s.studentid)
-      })
-      setSelectAll(next.size === students.length && students.length > 0)
-      return next
-    })
-  }
+        if (!prev.has(s.studentid)) next.add(s.studentid);
+      });
+      setSelectAll(next.size === students.length && students.length > 0);
+      return next;
+    });
+  };
+
+  const handleTemplateClick = (template) => {
+    setCurrentTemplate(template);
+    if (template.placeholders) {
+      const initialInputs = template.placeholders.reduce((acc, p) => ({ ...acc, [p.name]: '' }), {});
+      setTemplateInputs(initialInputs);
+      setShowTemplateModal(true);
+    } else {
+      setMessage(template.text());
+    }
+  };
+
+  const generateTemplateMessage = () => {
+    if (currentTemplate) {
+      setMessage(currentTemplate.text(templateInputs));
+      setShowTemplateModal(false);
+    }
+  };
 
   const handleSave = async () => {
     if (selectedIds.size === 0) {
-      alert('Please select at least one student.')
-      return
+      alert('Please select at least one student.');
+      return;
     }
     if (!message.trim()) {
-      alert('Please enter a message before saving.')
-      return
+      alert('Please enter a message before saving.');
+      return;
     }
 
-    // Check for missing numbers
-    const selectedArray = Array.from(selectedIds)
+    const selectedArray = Array.from(selectedIds);
     const missingNumberStudents = selectedArray
       .map(id => students.find(s => s.studentid === id))
-      .filter(s => !s || !s.mobilenumber)
+      .filter(s => !s || !s.mobilenumber);
 
     if (missingNumberStudents.length > 0) {
-      const names = missingNumberStudents.map(s => (s ? `${s.name} (${s.studentid})` : '(unknown id)')).join(', ')
-      alert(`Cannot save. The following selected students are missing mobile numbers:\n\n${names}\n\nPlease update their mobile number(s) before saving.`)
-      return
+      const names = missingNumberStudents.map(s => (s ? `${s.name} (${s.studentid})` : '(unknown id)')).join(', ');
+      alert(`Cannot save. The following selected students are missing mobile numbers:\n\n${names}\n\nPlease update their mobile number(s) before saving.`);
+      return;
     }
 
-    const today = new Date().toLocaleDateString()
+    const today = new Date().toLocaleDateString();
 
-    setSaving(true)
+    setSaving(true);
     try {
       const payload = selectedArray.map(studentid => {
-        const student = students.find(s => s.studentid === studentid)
+        const student = students.find(s => s.studentid === studentid);
 
-        // replace placeholders
         let customizedMessage = message
           .replace(/{{name}}/g, student?.name || '')
           .replace(/{{fathername}}/g, student?.fathername || '')
-          .replace(/{{id}}/g,student?.studentid || '')
+          .replace(/{{id}}/g, student?.studentid || '')
           .replace(/{{class}}/g, student?.class || '')
           .replace(/{{date}}/g, today)
+          .replace(/_/g, '')
+          .replace(/\*/g, '');
 
         return {
           student_id: studentid,
           number: student?.mobilenumber || '',
           sent: false,
-          class_id:student?.class_id,
+          class_id: student?.class_id,
           text: customizedMessage.trim(),
           created_at: new Date().toISOString()
-        }
-      })
+        };
+      });
 
       const { error } = await supabase
         .from('messages')
-        .insert(payload)
+        .insert(payload);
 
       if (error) {
-        console.error('Save error', error)
-        alert('Failed to save messages. Check console for details.')
+        console.error('Save error', error);
+        alert('Failed to save messages. Check console for details.');
       } else {
-        alert(`Saved personalized message for ${payload.length} student(s).`)
-        setMessage('')
-        setSelectedIds(new Set())
-        setSelectAll(false)
+        alert(`Saved personalized message for ${payload.length} student(s).`);
+        setMessage('');
+        setSelectedIds(new Set());
+        setSelectAll(false);
       }
     } catch (err) {
-      console.error('Unexpected save error', err)
-      alert('Unexpected error while saving. Check console for details.')
+      console.error('Unexpected save error', err);
+      alert('Unexpected error while saving. Check console for details.');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <>
       <Navbar />
-
       <main className="max-w-6xl mx-auto p-4 sm:p-6">
         <div className="bg-white dark:bg-gray-800 dark:border-gray-700 border border-gray-100 dark:shadow-none rounded-lg shadow-md p-5 sm:p-6">
-          {/* header */}
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-4">
             <div>
               <h1 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">Send Message (bulk)</h1>
@@ -187,7 +250,6 @@ export default function BulkMessagePage() {
                 Use placeholders: <code>{`{{name}}`}</code>, <code>{`{{fathername}}`}</code>, <code>{`{{class}}`}</code>, <code>{`{{date}}`}</code>
               </p>
             </div>
-
             <div className="flex gap-3 flex-col sm:flex-row items-stretch sm:items-end">
               <div className="w-full sm:w-80">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Class</label>
@@ -200,7 +262,6 @@ export default function BulkMessagePage() {
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="w-full sm:w-64">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
                 <input
@@ -212,10 +273,7 @@ export default function BulkMessagePage() {
               </div>
             </div>
           </div>
-
-          {/* body */}
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* left: student list */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
@@ -228,16 +286,14 @@ export default function BulkMessagePage() {
                   <Button onClick={invertSelection} disabled={!students.length} className="px-3 py-1.5">Invert</Button>
                 </div>
               </div>
-
               <div className="border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
                 <div className="max-h-[56vh] overflow-auto">
                   {filtered.length === 0 && !loading && (
                     <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No students to show for selected class.</div>
                   )}
-
                   <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                     {filtered.map(s => {
-                      const checked = selectedIds.has(s.studentid)
+                      const checked = selectedIds.has(s.studentid);
                       return (
                         <li key={s.studentid} className={`flex items-center gap-4 p-3 sm:p-4 ${checked ? 'bg-blue-50 dark:bg-gray-800' : 'bg-transparent'}`}>
                           <input
@@ -257,16 +313,25 @@ export default function BulkMessagePage() {
                             </div>
                           </div>
                         </li>
-                      )
+                      );
                     })}
                   </ul>
                 </div>
               </div>
             </div>
-
-            {/* right: message composer */}
             <aside className="w-full lg:w-[420px] flex-shrink-0">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {templates.map((template) => (
+                  <button
+                    key={template.name}
+                    onClick={() => handleTemplateClick(template)}
+                    className="flex-1 px-3 py-2 text-xs font-semibold rounded-md border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -274,7 +339,6 @@ export default function BulkMessagePage() {
                 placeholder="Write message using {{name}}, {{fathername}}, {{class}}, {{date}}"
                 className="w-full h-56 sm:h-64 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
               />
-
               <div className="flex items-center gap-3 mt-4">
                 <Button
                   onClick={handleSave}
@@ -283,28 +347,48 @@ export default function BulkMessagePage() {
                 >
                   {saving ? 'Saving...' : `Save for ${selectedIds.size || 0} selected`}
                 </Button>
-
                 <Button
-                  onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage('') }}
+                  onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
                   disabled={saving}
                   className="px-3 py-2"
                 >
                   Reset
                 </Button>
-
                 <div className="ml-auto text-sm text-gray-600 dark:text-gray-300">
                   {students.length > 0 && <span><strong className="text-gray-800 dark:text-gray-100">{students.length}</strong> in class</span>}
                 </div>
               </div>
-
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                <strong>Note:</strong> Use placeholders <code>{`{{name}}`}</code>, <code>{`{{fathername}}`}</code>, <code>{`{{class}}`}</code>, <code>{`{{date}}`}</code>.  
-                They will be replaced with the student’s actual info when saving.
+                <strong>Note:</strong> Placeholders like <code>{`{{name}}`}</code> will be replaced. For bold/italics, use `*...*` and `_..._`.
               </p>
             </aside>
           </div>
         </div>
       </main>
+      <CustomModal
+        title={currentTemplate?.name}
+        description="Please provide the necessary details for your message."
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        onAction={generateTemplateMessage}
+      >
+        <div className="grid gap-4 py-4">
+          {currentTemplate?.placeholders?.map((p) => (
+            <div key={p.name} className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor={p.name} className="text-right text-gray-700 dark:text-gray-300">
+                {p.label}
+              </label>
+              <input
+                id={p.name}
+                type={p.type}
+                value={templateInputs[p.name]}
+                onChange={(e) => setTemplateInputs({ ...templateInputs, [p.name]: e.target.value })}
+                className="col-span-3 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          ))}
+        </div>
+      </CustomModal>
     </>
-  )
+  );
 }
