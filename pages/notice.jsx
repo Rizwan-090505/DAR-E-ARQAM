@@ -30,6 +30,9 @@ const CustomModal = ({ title, description, isOpen, onClose, onAction, children }
 };
 
 export default function BulkMessagePage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authKey, setAuthKey] = useState('');
+
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
@@ -66,7 +69,17 @@ export default function BulkMessagePage() {
     },
   ];
 
+  const handleAuth = () => {
+    if (authKey === '1234') {
+      setIsAuthenticated(true);
+    } else {
+      alert('Incorrect key. Please try again.');
+    }
+  };
+
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     supabase
       .from('classes')
       .select('id, name')
@@ -75,10 +88,10 @@ export default function BulkMessagePage() {
         if (error) console.error('Classes fetch error', error);
         else setClasses(data || []);
       });
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!selectedClass) {
+    if (!isAuthenticated || !selectedClass) {
       setStudents([]);
       setSelectedIds(new Set());
       setSelectAll(false);
@@ -106,7 +119,7 @@ export default function BulkMessagePage() {
           setSelectAll(false);
         }
       });
-  }, [selectedClass]);
+  }, [selectedClass, isAuthenticated]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -237,6 +250,38 @@ export default function BulkMessagePage() {
       setSaving(false);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="w-full max-w-sm p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Enter Auth Key</h2>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="authKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Auth Key
+              </label>
+              <input
+                type="password"
+                id="authKey"
+                value={authKey}
+                onChange={(e) => setAuthKey(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                placeholder="Enter the auth key for admins"
+              />
+            </div>
+            <Button
+              onClick={handleAuth}
+              className="w-full justify-center px-4 py-2"
+            >
+              Authenticate
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

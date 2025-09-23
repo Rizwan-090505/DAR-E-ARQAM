@@ -18,6 +18,7 @@ export default function AuthPage() {
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [secretKey, setSecretKey] = useState('') // New state for secret key
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +55,12 @@ export default function AuthPage() {
 
     if (registerPassword !== confirmPassword) {
       setError("Passwords do not match")
+      setLoading(false)
+      return
+    }
+
+    if (secretKey !== '1234') { // New check for the secret key
+      setError("Incorrect secret key")
       setLoading(false)
       return
     }
@@ -205,6 +212,13 @@ export default function AuthPage() {
                   placeholder="Confirm Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+                <Input
+                  type="password"
+                  placeholder="Secret " // New input field for the key
+                  value={secretKey}
+                  onChange={(e) => setSecretKey(e.target.value)}
                   required
                 />
                 <Button type="submit" className="w-full" disabled={loading}>
