@@ -196,7 +196,7 @@ export default function ComplaintsAdmin() {
           const newTeacher = users.find(u => u.id === newAssignedToUserId)?.email;
           const adminReassignMsg = `*Complaint Re-Assigned* 🔁\n\n*Title:* ${editingComplaint.title}\n*Student:* ${student.name}\n*From:* ${oldTeacher}\n*To:* ${newTeacher}`;
           await sendMessage("923085333392", adminReassignMsg, student.id, student.class_id);
-          const studentReassignMsg = `*Complaint Update* 🧑‍🏫\n\nDear Parent,\nThere is an update on your complaint "*${editingComplaint.title}*". It has been forwarded to another department for further action.`
+          const studentReassignMsg = `*Complaint Update* 🧑‍🏫\n\nDear Parent,\nThere is an update on your complaint "*${editingComplaint.title}*". It has been forwarded to another staff member for further action.`
           await sendMessage(student.mobilenumber, studentReassignMsg, student.id, student.class_id);
       }
 
