@@ -36,7 +36,7 @@ function MyApp({ Component, pageProps }: AppProps) {
   const router = useRouter()
 
   useEffect(() => {
-    const openRoutes = ['/login', '/auth/callback','/datesheets','/res','/res1'];
+    const openRoutes = ['/login','/parents_portal', '/auth/callback','/datesheets','/res','/res1'];
 if (!loading && !user) {
   if (!openRoutes.some(route => router.pathname.startsWith(route))) {
     router.push('/login')
