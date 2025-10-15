@@ -11,7 +11,7 @@ import { useToast } from '../../hooks/use-toast';
 import { Badge } from '../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import Breadcrumbs from '../../components/Breadcrumbs';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 interface Student {
   studentid: string;
@@ -33,7 +33,8 @@ export default function AttendanceRecordPage() {
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting,setIsSubmitting]=useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sendAbsenteeMessages, setSendAbsenteeMessages] = useState(true);
   const router = useRouter();
   const { id } = router.query;
   const { toast } = useToast();
@@ -48,7 +49,6 @@ export default function AttendanceRecordPage() {
 
   useEffect(() => {
     if (id) {
-      console.log("🔵 ID found:", id);
       fetchClassData();
       fetchStudents();
     }
@@ -56,46 +56,40 @@ export default function AttendanceRecordPage() {
 
   useEffect(() => {
     if (id && students.length > 0) {
-      console.log("🟡 Students loaded, fetching attendance...");
       fetchAttendance();
     }
   }, [id, students, selectedDate]);
 
   const fetchClassData = async () => {
-    console.log("📡 Fetching class data for ID:", id);
     const { data, error } = await supabase
       .from('classes')
       .select('name, description')
       .eq('id', id)
       .single();
     if (error) {
-      console.error("❌ Error fetching class data:", error);
+      console.error("Error fetching class data:", error);
     } else {
-      console.log("✅ Class data:", data);
       setClassData(data);
     }
   };
 
   const fetchStudents = async () => {
-    console.log("📡 Fetching students for class:", id);
     setIsLoading(true);
     const { data, error } = await supabase
       .from('students')
       .select('studentid, name, fathername, mobilenumber')
       .eq('class_id', id);
     if (error) {
-      console.error("❌ Error fetching students:", error);
+      console.error("Error fetching students:", error);
     } else {
-      console.log("✅ Students fetched:", data);
       setStudents(data || []);
     }
-    setIsLoading(false);
+    // Note: setIsLoading(false) is handled in fetchAttendance to avoid flashes
   };
 
   const fetchAttendance = async () => {
     setIsLoading(true);
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    console.log(`📡 Fetching attendance for class ${id} on ${dateStr}`);
 
     const { data, error } = await supabase
       .from('attendance')
@@ -104,10 +98,9 @@ export default function AttendanceRecordPage() {
       .eq('date', dateStr);
 
     if (error) {
-      console.error("❌ Attendance fetch error:", error);
+      console.error("Attendance fetch error:", error);
       setAttendanceData([]);
     } else if (data && data.length > 0) {
-      console.log("✅ Attendance data from DB:", data);
       const mapped = data.map((row: any) => ({
         studentid: row.studentid,
         date: row.date,
@@ -121,7 +114,6 @@ export default function AttendanceRecordPage() {
       }));
       setAttendanceData(mapped);
     } else {
-      console.log("ℹ️ No attendance records found, marking all Present by default.");
       setAttendanceData(
         students.map(s => ({
           studentid: s.studentid,
@@ -131,17 +123,14 @@ export default function AttendanceRecordPage() {
         }))
       );
     }
-
     setIsLoading(false);
   };
 
   const markAllPresent = () => {
-    console.log("🔄 Marking all students as Present");
     setAttendanceData(prev => prev.map(a => ({ ...a, status: 'Present' })));
   };
 
   const toggleStatus = (studentid: string) => {
-    console.log(`🔄 Toggling status for student: ${studentid}`);
     setAttendanceData(prev =>
       prev.map(a =>
         a.studentid === studentid
@@ -152,25 +141,18 @@ export default function AttendanceRecordPage() {
   };
 
   const saveAttendance = async () => {
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      console.log("💾 Saving attendance for date:", dateStr);
-      console.log("📤 Attendance data to save:", attendanceData);
-
-      // Delete old
-      console.log("🗑 Deleting old attendance...");
-      let { error: delErr } = await supabase
+      
+      const { error: delErr } = await supabase
         .from('attendance')
         .delete()
         .eq('class_id', id)
         .eq('date', dateStr);
       if (delErr) throw delErr;
-      console.log("✅ Old attendance deleted.");
 
-      // Insert new attendance
-      console.log("📥 Inserting new attendance...");
-      let { error: attErr } = await supabase
+      const { error: attErr } = await supabase
         .from('attendance')
         .insert(
           attendanceData.map(a => ({
@@ -181,34 +163,33 @@ export default function AttendanceRecordPage() {
           }))
         );
       if (attErr) throw attErr;
-      console.log("✅ Attendance inserted.");
 
-      // Prepare messages for absentees
-      const absentMessages = attendanceData
-        .filter(a => a.status === 'Absent')
-        .map(a => ({
-          student_id: a.studentid,
-          class_id: id,
-          number: a.student.mobilenumber || '',
-          text: `*Mr./Mrs. ${a.student.fathername}*,\n\nKindly be informed that your child *${a.student.name}* is absent on *${format(selectedDate, 'dd-MM-yyyy')}* \n*Best Regards,*\nManagement\nDAR-E-ARQAM SCHOOL `
-        }));
+      if (sendAbsenteeMessages) {
+        const absentMessages = attendanceData
+          .filter(a => a.status === 'Absent' && a.student.mobilenumber)
+          .map(a => ({
+            student_id: a.studentid,
+            class_id: id,
+            number: a.student.mobilenumber,
+            text: `*Mr./Mrs. ${a.student.fathername}*,\n\nKindly be informed that your child *${a.student.name}* is absent on *${format(selectedDate, 'dd-MM-yyyy')}*. \n*Best Regards,*\nManagement\nDAR-E-ARQAM SCHOOL`
+          }));
 
-      console.log("📤 Messages to insert:", absentMessages);
-
-      if (absentMessages.length > 0) {
-        const { error: msgErr } = await supabase
-          .from('messages')
-          .insert(absentMessages);
-        if (msgErr) throw msgErr;
-        console.log("✅ Messages inserted into DB.");
+        if (absentMessages.length > 0) {
+          const { error: msgErr } = await supabase
+            .from('messages')
+            .insert(absentMessages);
+          if (msgErr) throw msgErr;
+        }
       } else {
-        console.log("ℹ️ No absent students, no messages inserted.");
+        console.log("Message sending skipped by user.");
       }
 
-      toast({ variant: 'success', title: 'Saved', description: 'Attendance & messages saved.' });
+      toast({ variant: 'success', title: 'Saved', description: 'Attendance has been saved successfully.' });
     } catch (error: any) {
-      console.error('❌ Error saving attendance/messages:', error);
+      console.error('Error saving attendance/messages:', error);
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save.' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -242,39 +223,34 @@ export default function AttendanceRecordPage() {
 
     return (
       <div className="w-full max-w-sm mx-auto mb-6">
-  <div className="mb-2 text-lg font-semibold text-center">
-    {format(selectedDate, 'MMMM yyyy')}
-  </div>
-  <div className="grid grid-cols-7 gap-1 mb-2">
-    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-      <div key={day} className="text-center text-sm font-medium text-gray-500">{day}</div>
-    ))}
-  </div>
-  <div className="grid grid-cols-7 gap-1">
-    {days.map((day, index) => {
-      const isSelected = isSameDay(day, selectedDate);
-      const isFirstDay = index === 0;
-      const dayOfWeek = day.getDay(); // 0 (Sun) to 6 (Sat)
+        <div className="mb-2 text-lg font-semibold text-center">
+          {format(selectedDate, 'MMMM yyyy')}
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="text-center text-sm font-medium text-gray-500">{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day, index) => {
+            const isSelected = isSameDay(day, selectedDate);
+            const isFirstDay = index === 0;
+            const dayOfWeek = day.getDay(); // 0 (Sun) to 6 (Sat)
+            const colStartClass = isFirstDay ? `col-start-${dayOfWeek + 1}` : '';
 
-      const colStartClass = isFirstDay ? `col-start-${dayOfWeek + 1}` : '';
-
-      return (
-        <Button
-          key={day.toString()}
-          variant={isSelected ? 'default' : 'outline'}
-          className={`h-8 w-8 p-0 ${colStartClass}`}
-          onClick={() => {
-            console.log("📅 Date selected:", day);
-            setSelectedDate(day);
-          }}
-        >
-          {format(day, 'd')}
-        </Button>
-      );
-    })}
-  </div>
-</div>
-
+            return (
+              <Button
+                key={day.toString()}
+                variant={isSelected ? 'default' : 'outline'}
+                className={`h-8 w-8 p-0 ${colStartClass}`}
+                onClick={() => setSelectedDate(day)}
+              >
+                {format(day, 'd')}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
     );
   };
 
@@ -283,7 +259,7 @@ export default function AttendanceRecordPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
-      <div className="container mx-auto p-8">
+      <div className="container mx-auto p-4 md:p-8">
         <Breadcrumbs
           items={[
             { label: 'Dashboard', href: '/dashboard' },
@@ -302,39 +278,60 @@ export default function AttendanceRecordPage() {
         {renderCalendar()}
 
         <Card>
-          <CardHeader className="flex justify-between items-center">
-            <CardTitle>Attendance for {format(selectedDate, 'dd-MM-yyyy')}</CardTitle>
+          <CardHeader className="flex flex-row justify-between items-center">
+            <CardTitle>Attendance for {format(selectedDate, 'dd MMMM, yyyy')}</CardTitle>
             <Button variant="secondary" onClick={markAllPresent}>Mark All Present</Button>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Father Name</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {attendanceData.map(a => (
-                  <TableRow key={a.studentid}>
-                    <TableCell>{a.student.name}</TableCell>
-                    <TableCell>{a.student.fathername}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={a.status === 'Present' ? 'success' : 'destructive'}
-                        className="cursor-pointer"
-                        onClick={() => toggleStatus(a.studentid)}
-                      >
-                        {a.status}
-                      </Badge>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Father Name</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="mt-4 flex justify-end">
-              {isSubmitting?<p>Submitting</p>:<Button onClick={saveAttendance}>Save Attendance</Button>}
+                </TableHeader>
+                <TableBody>
+                  {attendanceData.map(a => (
+                    <TableRow key={a.studentid}>
+                      <TableCell>{a.student.name}</TableCell>
+                      <TableCell>{a.student.fathername}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={a.status === 'Present' ? 'success' : 'destructive'}
+                          className="cursor-pointer"
+                          onClick={() => toggleStatus(a.studentid)}
+                        >
+                          {a.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {/* --- MODIFIED: Using standard HTML checkbox and label --- */}
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="sendMessages"
+                  checked={sendAbsenteeMessages}
+                  onChange={(e) => setSendAbsenteeMessages(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="sendMessages"
+                  className="text-sm font-medium leading-none cursor-pointer"
+                >
+                  Send absentee messages to parents
+                </label>
+              </div>
+              <Button onClick={saveAttendance} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? 'Saving...' : 'Save Attendance'}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -342,3 +339,4 @@ export default function AttendanceRecordPage() {
     </div>
   );
 }
+

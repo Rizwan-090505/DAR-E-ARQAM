@@ -60,6 +60,23 @@ export default function ComplaintsAdmin() {
 
   // WhatsApp Messaging Helper Function
   const sendMessage = async (mobileNumber, messageText, studentId, classId) => {
+    // Check if the recipient is the admin. If so, send without confirmation.
+    const isAdminNumber = mobileNumber === "923085333392";
+
+    let shouldSendMessage = true; // Default to true for admin messages
+
+    if (!isAdminNumber) {
+      // For parent messages, ask for confirmation.
+      shouldSendMessage = window.confirm(
+        `Do you want to send the following message to ${mobileNumber}?\n\n---\n${messageText}\n---`
+      );
+    }
+
+    if (!shouldSendMessage) {
+      console.log("Message sending cancelled by user.");
+      return; // Stop execution if user cancels
+    }
+    
     try {
       const { error } = await supabase.from("messages").insert({
         number: mobileNumber,
