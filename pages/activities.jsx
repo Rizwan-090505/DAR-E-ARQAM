@@ -152,24 +152,16 @@ export default function ActivitiesTracker() {
     });
   }
 
-  // Build: latest date per (class, subject) within the filtered set
-  const { latestDateByKey, countOnLatestByKey } = useMemo(() => {
-    const latest = {};
-    for (const rec of records) {
-      const key = `${rec.class_id}|${rec.subject}`;
-      if (!latest[key] || new Date(rec.date) > new Date(latest[key])) {
-        latest[key] = rec.date;
-      }
-    }
+  // UPDATED: Calculate the total count of activities for each class and subject
+  const activityCountsByKey = useMemo(() => {
     const counts = {};
     for (const rec of records) {
       const key = `${rec.class_id}|${rec.subject}`;
-      if (latest[key] && rec.date === latest[key]) {
-        counts[key] = (counts[key] || 0) + 1;
-      }
+      counts[key] = (counts[key] || 0) + 1;
     }
-    return { latestDateByKey: latest, countOnLatestByKey: counts };
+    return counts;
   }, [records]);
+
 
   const group1Ids = useMemo(
     () => classes.filter((c) => orderPG.includes(c.name)).map((c) => c.id),
@@ -199,14 +191,14 @@ export default function ActivitiesTracker() {
     const group = getGroupName(firstName);
     const subjects = group ? SUBJECTS_ENUM[group] : [];
 
-    // Column averages (average the *latest-day* counts across classes that have data)
+    // Column averages
     const colAvg = {};
     for (const s of subjects) {
       let total = 0;
       let count = 0;
       for (const cid of classIds) {
         const key = `${cid}|${s}`;
-        const v = countOnLatestByKey[key];
+        const v = activityCountsByKey[key]; // UPDATED
         if (typeof v === "number") {
           total += v;
           count++;
@@ -244,15 +236,13 @@ export default function ActivitiesTracker() {
                         </TableCell>
                         {subjects.map((s) => {
                           const key = `${cid}|${s}`;
-                          const value = countOnLatestByKey[key];
+                          const value = activityCountsByKey[key]; // UPDATED
                           return (
                             <TableCell key={s}>
                               {value !== undefined ? (
+                                // UPDATED: Removed the date display
                                 <span className={getColorRelativeToAvg(value, colAvg[s])}>
                                   {value}
-                                  {latestDateByKey[key] ? (
-                                    <span className="block text-xs text-muted-foreground">{latestDateByKey[key]}</span>
-                                  ) : null}
                                 </span>
                               ) : (
                                 "—"
@@ -398,8 +388,3 @@ export default function ActivitiesTracker() {
     </div>
   );
 }
-
-// --- Notes ---
-// Works with schema *without* activity_count. Each row is a single activity.
-// UI shows, for each Class × Subject, the COUNT of activities on the *latest date* that has entries within the selected range.
-// Adjust aggregation if you prefer: (a) total over range, or (b) rolling weekly window.
