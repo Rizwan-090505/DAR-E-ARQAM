@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import Navbar from '../../components/Navbar'
 import { useToast } from '../../hooks/use-toast'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Trash2, X } from 'lucide-react'
 
 interface Student {
   studentid: string
@@ -33,6 +33,7 @@ export default function MarksEntryPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [sendToParents, setSendToParents] = useState(false)
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
 
   const parsedTotal = useMemo(() => {
     const n = Number(totalMarks)
@@ -115,7 +116,10 @@ export default function MarksEntryPage() {
     try {
       const tid = Number(testId)
 
-      const normalizedPayload = Object.entries(marks).map(([studentid, { obtained }]) => ({
+      // Filter out excluded students
+      const filteredMarks = Object.entries(marks).filter(([studentid]) => !excluded.has(studentid))
+
+      const normalizedPayload = filteredMarks.map(([studentid, { obtained }]) => ({
         test_id: tid,
         studentid,
         total_marks: parsedTotal,
@@ -133,18 +137,20 @@ export default function MarksEntryPage() {
       // Send to parents if enabled
       if (sendToParents) {
         const testDate = test?.date ? new Date(test.date).toLocaleDateString('en-GB') : ''
-        const messagesPayload = students.map((s) => {
-          const obtained = Number(sanitizeObtained(marks[s.studentid]?.obtained || '0'))
-          const percentage = parsedTotal ? ((obtained / parsedTotal) * 100).toFixed(1) : '0'
-          return {
-            student_id: s.studentid,
-            class_id: test?.class_id || null,
-            number: s.mobilenumber || null,
-            text: `Respected Parents,\n\n${s.name}'s marks in ${test?.test_name} held on ${testDate} are ${obtained}/${parsedTotal} (Percentage: ${percentage}%).\n\nRegards,\nManagement\nDAR-E-ARQAM SCHOOL`,
-            created_at: new Date().toISOString(),
-            sent: false
-          }
-        })
+        const messagesPayload = students
+          .filter((s) => !excluded.has(s.studentid))
+          .map((s) => {
+            const obtained = Number(sanitizeObtained(marks[s.studentid]?.obtained || '0'))
+            const percentage = parsedTotal ? ((obtained / parsedTotal) * 100).toFixed(1) : '0'
+            return {
+              student_id: s.studentid,
+              class_id: test?.class_id || null,
+              number: s.mobilenumber || null,
+              text: `Respected Parents,\n\n${s.name}'s marks in ${test?.test_name} held on ${testDate} are ${obtained}/${parsedTotal} (Percentage: ${percentage}%).\n\nRegards,\nManagement\nDAR-E-ARQAM SCHOOL`,
+              created_at: new Date().toISOString(),
+              sent: false
+            }
+          })
         const { error: msgErr } = await supabase.from('messages').insert(messagesPayload)
         if (msgErr) throw msgErr
       }
@@ -168,6 +174,15 @@ export default function MarksEntryPage() {
       toast({ variant: 'success', title: 'Deleted', description: 'Test removed.' })
       router.push('/marks')
     }
+  }
+
+  const toggleExclude = (studentid: string) => {
+    setExcluded((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(studentid)) newSet.delete(studentid)
+      else newSet.add(studentid)
+      return newSet
+    })
   }
 
   if (loading) {
@@ -218,6 +233,7 @@ export default function MarksEntryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-white/10">
+                <th className="p-3 font-medium"></th>
                 <th className="p-3 font-medium">Student ID</th>
                 <th className="p-3 font-medium">Name</th>
                 <th className="p-3 font-medium">Father Name</th>
@@ -225,43 +241,61 @@ export default function MarksEntryPage() {
               </tr>
             </thead>
             <tbody>
-              {students.map((s, idx) => (
-                <tr
-                  key={s.studentid}
-                  className={`${idx % 2 ? 'bg-gray-50 dark:bg-white/0' : 'bg-gray-100 dark:bg-white/[0.03]'} transition-colors`}
-                >
-                  <td className="p-3">{s.studentid}</td>
-                  <td className="p-3">{s.name}</td>
-                  <td className="p-3">{s.fathername}</td>
-                  <td className="p-3">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      disabled={saving}
-                      value={marks[s.studentid]?.obtained ?? '0'}
-                      onChange={(e) =>
-                        setMarks((prev) => ({
-                          ...prev,
-                          [s.studentid]: {
-                            ...prev[s.studentid],
-                            obtained: e.target.value
-                          }
-                        }))
-                      }
-                      onBlur={(e) =>
-                        setMarks((prev) => ({
-                          ...prev,
-                          [s.studentid]: {
-                            ...prev[s.studentid],
-                            obtained: sanitizeObtained(e.target.value)
-                          }
-                        }))
-                      }
-                      className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {students.map((s, idx) => {
+                const isExcluded = excluded.has(s.studentid)
+                return (
+                  <tr
+                    key={s.studentid}
+                    className={`${idx % 2 ? 'bg-gray-50 dark:bg-white/0' : 'bg-gray-100 dark:bg-white/[0.03]'} transition-colors ${
+                      isExcluded ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <td className="p-3 text-center">
+                      <button
+                        onClick={() => toggleExclude(s.studentid)}
+                        className={`p-1 rounded-full ${
+                          isExcluded
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-red-600 hover:bg-red-700'
+                        } text-white transition`}
+                        title={isExcluded ? 'Undo Skip' : 'Skip this student'}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </td>
+                    <td className="p-3">{s.studentid}</td>
+                    <td className="p-3">{s.name}</td>
+                    <td className="p-3">{s.fathername}</td>
+                    <td className="p-3">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        disabled={saving || isExcluded}
+                        value={marks[s.studentid]?.obtained ?? '0'}
+                        onChange={(e) =>
+                          setMarks((prev) => ({
+                            ...prev,
+                            [s.studentid]: {
+                              ...prev[s.studentid],
+                              obtained: e.target.value
+                            }
+                          }))
+                        }
+                        onBlur={(e) =>
+                          setMarks((prev) => ({
+                            ...prev,
+                            [s.studentid]: {
+                              ...prev[s.studentid],
+                              obtained: sanitizeObtained(e.target.value)
+                            }
+                          }))
+                        }
+                        className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100"
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
