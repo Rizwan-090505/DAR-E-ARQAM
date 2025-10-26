@@ -38,6 +38,7 @@ export default function DiaryPage() {
   const [diary, setDiary] = useState('');
   const [date, setDate] = useState('');
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<number | null>(null); // 👈 track which diary is expanded
   const { toast } = useToast();
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function DiaryPage() {
 
     setLoading(true);
 
-    const isoDate = new Date(date).toISOString(); // ensure valid date format
+    const isoDate = new Date(date).toISOString();
 
     const { data: inserted, error } = await supabase
       .from('diary')
@@ -103,7 +104,7 @@ export default function DiaryPage() {
         {
           class_id: classId,
           diary,
-          date: isoDate, // store diary created_at as selected date
+          date: isoDate,
         },
       ])
       .select();
@@ -139,7 +140,7 @@ export default function DiaryPage() {
         class_id: classId,
         number: s.mobilenumber || '',
         text: diary,
-        created_at: isoDate, // set messages.created_at same as diary date
+        created_at: isoDate,
       }));
 
       const { error: msgError } = await supabase
@@ -176,12 +177,17 @@ export default function DiaryPage() {
     }
   });
 
+  const toggleExpand = (id: number) => {
+    setExpanded(expanded === id ? null : id);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Navbar />
       <div className="container mx-auto p-6">
         <h1 className="text-3xl font-bold mb-6">Diary Management</h1>
 
+        {/* Add Diary Section */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Add New Diary</CardTitle>
@@ -214,6 +220,7 @@ export default function DiaryPage() {
           </CardContent>
         </Card>
 
+        {/* Diary Status Section */}
         <Card>
           <CardHeader>
             <CardTitle>Today's Diary Status</CardTitle>
@@ -224,16 +231,24 @@ export default function DiaryPage() {
               return (
                 <div
                   key={c.id}
-                  className={`p-3 rounded-md ${
-                    entry ? 'bg-green-100' : 'bg-red-100'
+                  onClick={() => entry && toggleExpand(c.id)}
+                  className={`p-3 rounded-md cursor-pointer transition-all duration-200 ${
+                    entry ? 'bg-green-100 hover:bg-green-200' : 'bg-red-100'
                   }`}
                 >
                   <div className="font-bold">{c.name}</div>
                   {entry && (
-                    <div className="text-sm text-gray-700 mt-1">
-                      {entry.diary.length > 100
+                    <div className="text-sm text-gray-700 mt-1 whitespace-pre-line">
+                      {expanded === c.id
+                        ? entry.diary
+                        : entry.diary.length > 100
                         ? entry.diary.slice(0, 100) + '...'
                         : entry.diary}
+                    </div>
+                  )}
+                  {entry && entry.diary.length > 100 && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      {expanded === c.id ? 'Click to collapse' : 'Click to read more'}
                     </div>
                   )}
                 </div>
