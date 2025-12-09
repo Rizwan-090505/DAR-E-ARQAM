@@ -54,8 +54,11 @@ export default function Dashboard() {
           .from('attendance')
           .select('date')
           .eq('class_id', cls.id)
+        
+        const attendanceMarkedToday = attendanceData?.some(record => {
+          return new Date(record.date).toISOString().split("T")[0] === today
+      })
 
-        const attendanceMarkedToday = attendanceData?.some(record => record.date === today)
         const uniqueDates = new Set(attendanceData?.map(record => record.date) || [])
         return { ...cls, studentCount: studentCount || 0, totalClassDays: uniqueDates.size, attendanceMarkedToday }
       }))
