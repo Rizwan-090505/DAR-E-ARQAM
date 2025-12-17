@@ -103,11 +103,11 @@ export default function ClassResultPage() {
       .map(m => {
         const percent = (m.obtained_marks / m.total_marks) * 100
         const grade = gradeFromPercent(percent)
-        return `📘 ${m.subject}: ${m.obtained_marks}/${m.total_marks} (${percent.toFixed(1)}%, ${grade})`
+        return `- *${m.subject}:* ${m.obtained_marks}/${m.total_marks} (${percent.toFixed(1)}%, ${grade})`
       })
       .join("\n")
 
-    const body = `📊 Report Card\n\n Name: ${student.studentName}\n Father: ${student.fatherName}\n${subjectsText}\n\n Total: ${totalObtained}/${totalMax}\n Percentage: ${overallPercent.toFixed(2)}%\n Grade: ${overallGrade}\n\n Regards, \n Management \n DAR-E-ARQAM`
+    const body = `📊 *Report Card*\n\n *Name:* ${student.studentName}\n *Father:* ${student.fatherName}\n${subjectsText}\n\n *Total:* ${totalObtained}/${totalMax}\n *Percentage:* ${overallPercent.toFixed(2)}%\n *Grade:* ${overallGrade}\n\n *Regards,* \n *Management* \n DAR-E-ARQAM`
 
     return { 
       number: student.mobilenumber, 
