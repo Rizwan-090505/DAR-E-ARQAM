@@ -35,6 +35,10 @@ export default function BulkMessagePage() {
 
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
+  
+  // State for the filter
+  const [filterClear, setFilterClear] = useState('all'); // Options: 'all', 'true', 'false'
+
   const [students, setStudents] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
@@ -99,9 +103,11 @@ export default function BulkMessagePage() {
     }
 
     setLoading(true);
+    // FIX 1: Explicitly requesting 'Clear' (Capital C)
+    // Note: If you created the column with quotes like "Clear", Supabase respects that case.
     supabase
       .from('students')
-      .select('studentid, name, fathername, class_id, mobilenumber, classes(name)')
+      .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
       .eq('class_id', selectedClass)
       .order('name', { ascending: true })
       .then(({ data, error }) => {
@@ -122,23 +128,34 @@ export default function BulkMessagePage() {
   }, [selectedClass, isAuthenticated]);
 
   const filtered = useMemo(() => {
+    let result = students;
+
+    // FIX 2: Using s.Clear (Capital C) for filtering logic
+    if (filterClear === 'true') {
+      result = result.filter(s => s.Clear === true);
+    } else if (filterClear === 'false') {
+      // Handles false, null, or undefined as "not clear"
+      result = result.filter(s => s.Clear !== true);
+    }
+
     const q = query.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter(s =>
+    if (!q) return result;
+
+    return result.filter(s =>
       (s.name || '').toLowerCase().includes(q) ||
       (s.fathername || '').toLowerCase().includes(q) ||
       String(s.studentid).toLowerCase().includes(q) ||
       (s.mobilenumber || '').toLowerCase().includes(q) ||
       (s.class || '').toLowerCase().includes(q)
     );
-  }, [students, query]);
+  }, [students, query, filterClear]);
 
   const toggleSelect = (studentid) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(studentid)) next.delete(studentid);
       else next.add(studentid);
-      setSelectAll(next.size === students.length && students.length > 0);
+      setSelectAll(next.size === filtered.length && filtered.length > 0);
       return next;
     });
   };
@@ -148,7 +165,7 @@ export default function BulkMessagePage() {
       setSelectedIds(new Set());
       setSelectAll(false);
     } else {
-      const all = new Set(students.map(s => s.studentid));
+      const all = new Set(filtered.map(s => s.studentid));
       setSelectedIds(all);
       setSelectAll(true);
     }
@@ -157,10 +174,10 @@ export default function BulkMessagePage() {
   const invertSelection = () => {
     setSelectedIds(prev => {
       const next = new Set();
-      students.forEach(s => {
+      filtered.forEach(s => {
         if (!prev.has(s.studentid)) next.add(s.studentid);
       });
-      setSelectAll(next.size === students.length && students.length > 0);
+      setSelectAll(next.size === filtered.length && filtered.length > 0);
       return next;
     });
   };
@@ -296,7 +313,7 @@ export default function BulkMessagePage() {
               </p>
             </div>
             <div className="flex gap-3 flex-col sm:flex-row items-stretch sm:items-end">
-              <div className="w-full sm:w-80">
+              <div className="w-full sm:w-48">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Class</label>
                 <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
                   <SelectTrigger className="w-full">
@@ -307,6 +324,22 @@ export default function BulkMessagePage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Status Filter */}
+              <div className="w-full sm:w-36">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                <Select value={filterClear} onValueChange={setFilterClear}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Students</SelectItem>
+                    <SelectItem value="true">Cleared Only</SelectItem>
+                    <SelectItem value="false">Not Cleared</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="w-full sm:w-64">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
                 <input
@@ -334,7 +367,7 @@ export default function BulkMessagePage() {
               <div className="border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
                 <div className="max-h-[56vh] overflow-auto">
                   {filtered.length === 0 && !loading && (
-                    <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No students to show for selected class.</div>
+                    <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No students found matching your filters.</div>
                   )}
                   <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                     {filtered.map(s => {
@@ -349,7 +382,15 @@ export default function BulkMessagePage() {
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{s.name}</div>
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
+                                {s.name}
+                                {/* FIX 3: Using s.Clear (Capital C) for the badge */}
+                                {s.Clear ? 
+                                  <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">Clear</span> 
+                                  : 
+                                  <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100">Pending</span>
+                                }
+                              </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">{s.studentid}</div>
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-3 text-xs text-gray-600 dark:text-gray-400">
