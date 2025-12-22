@@ -7,6 +7,45 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '.
 import logo from "../../public/logo-1.png"
 import Navbar from '../../components/Navbar'
 
+// 🔹 Simple Modal Component for Action Confirmation
+const ActionModal = ({ isOpen, onClose, onConfirm, actionType }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md border border-gray-200">
+        <h3 className="text-xl font-bold mb-4">
+          {actionType === 'print' ? '🖨 Print Options' : '📲 WhatsApp Options'}
+        </h3>
+        <p className="mb-6 text-gray-700">
+          How would you like to proceed with the <strong>{actionType === 'print' ? 'printing' : 'sending'}</strong> process?
+        </p>
+        <div className="flex flex-col gap-3">
+          <Button 
+            className="w-full bg-gray-800 hover:bg-gray-900 text-white shadow font-semibold" 
+            onClick={() => onConfirm(false)}
+          >
+            ✅ Only Cleared Students (Exclude Pending)
+          </Button>
+          
+          <Button 
+            className="w-full light:bg-gray-700 hover:bg-gray-800 text-white shadow font-semibold" 
+            onClick={() => onConfirm(true)}
+          >
+            👥 Include All Students (Pending & Cleared)
+          </Button>
+          
+          <Button 
+            className="w-full mt-2 bg-white border border-gray-400 text-gray-900 hover:bg-gray-100" 
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ClassResultPage() {
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
@@ -15,6 +54,9 @@ export default function ClassResultPage() {
   const [studentsResults, setStudentsResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
+  const [printFilter, setPrintFilter] = useState('all')
 
   const gradeFromPercent = (percent) => {
     if (percent >= 90) return 'A+'
@@ -35,10 +77,11 @@ export default function ClassResultPage() {
     setLoading(true)
     setGenerated(false)
     setStudentsResults([])
+    setPrintFilter('all') 
 
     const { data: studentsData, error: studentsError } = await supabase
       .from('students')
-      .select('studentid, name, fathername, mobilenumber')
+      .select('studentid, name, fathername, mobilenumber, Clear')
       .eq('class_id', selectedClass)
 
     if (studentsError) {
@@ -72,6 +115,7 @@ export default function ClassResultPage() {
           fatherName: student.fathername,
           mobilenumber: student.mobilenumber,
           dasNumber: student.studentid,
+          isClear: student.Clear, 
           marksData: marks.map(m => ({
             subject: m.tests?.test_name || '',
             total_marks: m.total_marks,
@@ -86,254 +130,273 @@ export default function ClassResultPage() {
     setLoading(false)
   }
 
-  const sendAllResults = async () => {
-  if (studentsResults.length === 0) {
-    alert("⚠️ No results to send")
-    return
+  const handlePrintClick = () => {
+    setPendingAction('print')
+    setShowModal(true)
   }
 
-  const messages = studentsResults.map(student => {
-    const totalObtained = student.marksData.reduce((acc, m) => acc + m.obtained_marks, 0)
-    const totalMax = student.marksData.reduce((acc, m) => acc + m.total_marks, 0)
-    const overallPercent = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0
-    const overallGrade = gradeFromPercent(overallPercent)
+  const handleWAClick = () => {
+    setPendingAction('whatsapp')
+    setShowModal(true)
+  }
 
-    // 🔹 Build subject-wise breakdown
-    const subjectsText = student.marksData
-      .map(m => {
-        const percent = (m.obtained_marks / m.total_marks) * 100
-        const grade = gradeFromPercent(percent)
-        return `- *${m.subject}:* ${m.obtained_marks}/${m.total_marks} (${percent.toFixed(1)}%, ${grade})`
-      })
-      .join("\n")
+  const handleActionConfirm = (includeUncleared) => {
+    setShowModal(false)
 
-    const body = `📊 *Report Card*\n\n *Name:* ${student.studentName}\n *Father:* ${student.fatherName}\n${subjectsText}\n\n *Total:* ${totalObtained}/${totalMax}\n *Percentage:* ${overallPercent.toFixed(2)}%\n *Grade:* ${overallGrade}\n\n *Regards,* \n *Management* \n DAR-E-ARQAM`
-
-    return { 
-      number: student.mobilenumber, 
-      text: body, 
-      sent: false, 
-      student_id: student.studentid, 
-      class_id: selectedClass 
+    if (pendingAction === 'whatsapp') {
+      sendResults(includeUncleared)
+    } else if (pendingAction === 'print') {
+      executePrint(includeUncleared)
     }
-  })
-
-  const { error } = await supabase.from('messages').insert(messages)
-
-  if (error) {
-    console.error(error)
-    alert("❌ Failed to queue class results")
-  } else {
-    alert("✅ All results queued for WhatsApp")
   }
-}
 
+  const executePrint = (includeUncleared) => {
+    if (includeUncleared) {
+      setPrintFilter('all')
+      setTimeout(() => window.print(), 100)
+    } else {
+      setPrintFilter('cleared')
+      setTimeout(() => window.print(), 100)
+    }
+  }
+
+  const sendResults = async (includeUncleared) => {
+    const targetList = includeUncleared 
+      ? studentsResults 
+      : studentsResults.filter(s => s.isClear === true)
+
+    if (targetList.length === 0) {
+      alert("⚠️ No results to send based on your selection.")
+      return
+    }
+
+    const messages = targetList.map(student => {
+      const totalObtained = student.marksData.reduce((acc, m) => acc + m.obtained_marks, 0)
+      const totalMax = student.marksData.reduce((acc, m) => acc + m.total_marks, 0)
+      const overallPercent = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0
+      const overallGrade = gradeFromPercent(overallPercent)
+
+      const subjectsText = student.marksData
+        .map(m => {
+          const percent = (m.obtained_marks / m.total_marks) * 100
+          const grade = gradeFromPercent(percent)
+          return `- *${m.subject}:* ${m.obtained_marks}/${m.total_marks} (${percent.toFixed(1)}%, ${grade})`
+        })
+        .join("\n")
+
+      const body = `📊 *Report Card*\n\n *Name:* ${student.studentName}\n *Father:* ${student.fatherName}\n${subjectsText}\n\n *Total:* ${totalObtained}/${totalMax}\n *Percentage:* ${overallPercent.toFixed(2)}%\n *Grade:* ${overallGrade}\n\n *Regards,* \n *Management* \n DAR-E-ARQAM`
+
+      return { 
+        number: student.mobilenumber, 
+        text: body, 
+        sent: false, 
+        student_id: student.dasNumber, 
+        class_id: selectedClass 
+      }
+    })
+
+    const { error } = await supabase.from('messages').insert(messages)
+
+    if (error) {
+      console.error(error)
+      alert("❌ Failed to queue class results")
+    } else {
+      alert(`✅ ${messages.length} results queued for WhatsApp (${includeUncleared ? 'All' : 'Cleared Only'})`)
+    }
+  }
+
+  const displayedResults = printFilter === 'all' 
+    ? studentsResults 
+    : studentsResults.filter(s => s.isClear === true)
 
   return (
     <>
       <style>{`
+  @page { size: A4; margin: 5mm; }
   @media print {
     .page-break { page-break-after: always; }
-    .no-print { display: none; }
-    body { -webkit-print-color-adjust: exact; }
+    .no-print { display: none !important; }
+    body { -webkit-print-color-adjust: exact; background-color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    main, nav, header, footer { display: none; }
   }
-
-  .report-card {
-    border: 2px solid #444;
-    border-radius: 8px;
-    padding: 16px;
-    margin: 12px auto;
-    background: #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    max-width: 800px;
-    height: 950px; /* lock to A4 */
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    page-break-inside: avoid;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .logo-container {
-    text-align: center;
-    margin-bottom: 4px;
-  }
-  .logo-container img {
-    width: 180px;
-    height: auto;
-    margin:auto;
-    margin-bottom: 18px;
-  }
-
-  .urdu-text {
-    font-family: "Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Naskh Arabic", serif;
-    direction: rtl;
-    unicode-bidi: isolate;
-    font-size: 15px;
-    margin: 0;
-  }
-
-  .title {
-    font-size: 20px;
-    font-weight: bold;
-    text-align: center;
-    margin: 6px 0;
-    color: #222;
-  }
-
-  .student-info {
-    font-size: 14px;
-    margin: 4px 0;
-    line-height: 1.3;
-  }
-.report-card table {
-  border-collapse: collapse; /* avoids extra gaps */
-}
-
-.report-card th,
-.report-card td {
-  height: 30px;          /* fixed row height in px */
-  padding: 0 4px;        /* no vertical padding */
-  line-height: 30px;     /* matches height for vertical centering */
-  font-size: 16px;
-  border: 5px solid #bbb;
-  text-align: center;
-  white-space: nowrap;   /* prevent wrapping which increases height */
-  overflow: hidden;      /* clip if text is too long */
-}
-
-  .report-card th {
-    background: #bbb;
-    font-weight: bold;
-  }
-
-  .footer-text {
-    position: absolute;
-    bottom: 8px; /* always at bottom */
-    left: 0;
-    right: 0;
-    text-align: center;
-    font-size: 12px;
-    color: #555;
-    margin: 0;
-    padding-top: 4px;
-  }
+  .report-card { border: 1px solid #ccc; padding: 15px 20px; margin: 0 auto; background: #fff; width: 100%; max-width: 210mm; min-height: 260mm; height: auto; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000; }
+  .logo-container { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 1rem; position: relative; }
+  .logo-container img { width: 150px !important; height: auto; display: block; object-fit: contain; }
+  .urdu-text { font-family: "Noto Nastaliq Urdu", serif; direction: rtl; font-size: 14px; margin-top: 0.5rem; margin-bottom: 0.75rem; color: #333; font-weight: normal; }
+  .report-title-box { text-align: center; border-top: 2px solid #000; border-bottom: 2px solid #000; margin: 0.75rem 0 1.5rem 0; padding: 5px 0; }
+  .title { font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin: 0; color: #000; }
+  .student-details { display: flex; flex-wrap: wrap; justify-content: space-between; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 10px 15px; margin-bottom: 15px; }
+  .detail-group { display: flex; flex-direction: column; min-width: 30%; }
+  .detail-label { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 2px; font-weight: 600; }
+  .detail-value { font-size: 15px; font-weight: bold; color: #000; }
+  .marks-table-container { flex-grow: 1; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+  th { background-color: #222; color: #fff; font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 8px 6px; border: 1px solid #222; }
+  td { border: 1px solid #ddd; padding: 6px 6px; font-size: 13px; color: #333; vertical-align: middle; }
+  tbody tr:nth-child(even) { background-color: #f9f9f9; }
+  .col-subject { text-align: left; padding-left: 10px; font-weight: 500; }
+  .col-center { text-align: center; }
+  .row-total td { background-color: #f0f0f0; font-weight: bold; color: #000; border-top: 3px double #000; font-size: 14px; }
+  .footer-section { margin-top: 10px; text-align: center; border-top: 1px solid #eee; padding-top: 5px; padding-bottom: 0; }
+  .footer-note { font-size: 10px; color: #777; margin: 2px 0; font-style: italic; }
+  .footer-copyright { font-size: 11px; color: #000; font-weight: 600; margin-top: 5px; }
 `}</style>
-
-
-
-
-
 
       <Navbar />
 
       <div className="p-6">
-        <div className="controls no-print mb-6">
-          <label htmlFor="class-select">Select Class</label>
-          <Select
-            id="class-select"
-            onValueChange={(val) => setSelectedClass(val)}
-            value={selectedClass}
-          >
-            <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
-            <SelectContent>
-              {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="controls no-print mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-xl font-bold mb-4 text-gray-800">Generate Report Cards</h2>
+          <div className="flex flex-wrap gap-4 items-end">
+            <div className="w-56">
+              <label htmlFor="class-select" className="block text-sm font-medium mb-1 text-gray-600">Select Class</label>
+              <Select id="class-select" onValueChange={setSelectedClass} value={selectedClass}>
+                <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
+                <SelectContent>
+                  {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <label htmlFor="start-date">Start Date</label>
-          <Input id="start-date" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-600">Start Date</label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            </div>
 
-          <label htmlFor="end-date">End Date</label>
-          <Input id="end-date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-600">End Date</label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            </div>
 
-          <Button onClick={fetchClassResults} disabled={loading || !selectedClass || !startDate || !endDate}>
-            {loading ? 'Loading...' : 'Generate Class Results'}
-          </Button>
-
-          {generated && studentsResults.length > 0 && (
-            <>
-              <Button className="ml-2" onClick={() => window.print()}>
-                🖨 Print All
-              </Button>
-              <Button className="ml-2" onClick={sendAllResults}>
-                📲 Send All Results to WA
-              </Button>
-            </>
-          )}
+            <Button 
+                className="light:bg-gray-900  hover:bg-gray-800 light:text-white font-semibold px-6 py-2" 
+                onClick={fetchClassResults} 
+                disabled={loading || !selectedClass || !startDate || !endDate}
+            >
+              {loading ? 'Processing...' : 'Generate Results'}
+            </Button>
+            
+            {generated && studentsResults.length > 0 && (
+              <div className="flex gap-2 ml-auto">
+                <Button 
+                    className="bg-white border-2 border-gray-800 text-gray-900 hover:bg-gray-100 font-semibold" 
+                    onClick={handlePrintClick}
+                >
+                    🖨 Print Report
+                </Button>
+                <Button 
+                    className="bg-white border-2 border-green-600 text-green-700 hover:bg-green-50 font-semibold" 
+                    onClick={handleWAClick}
+                >
+                    📲 WhatsApp
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {generated && studentsResults.length === 0 && (
-          <p className="text-center font-semibold mt-6">
-            No results found for this class and date range.
-          </p>
+        {generated && displayedResults.length === 0 && (
+          <div className="text-center py-12 bg-gray-50 rounded border border-dashed border-gray-300">
+            <p className="text-gray-500 font-medium">No results found for the selected criteria.</p>
+          </div>
         )}
 
-        {generated && studentsResults.length > 0 && (
-          studentsResults.map((student) => {
-            const totalObtained = student.marksData.reduce((acc, m) => acc + m.obtained_marks, 0)
-            const totalMax = student.marksData.reduce((acc, m) => acc + m.total_marks, 0)
-            const overallPercent = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0
-            const overallGrade = gradeFromPercent(overallPercent)
+        <div id="print-area">
+          {generated && displayedResults.length > 0 && (
+            displayedResults.map((student) => {
+              const totalObtained = student.marksData.reduce((acc, m) => acc + m.obtained_marks, 0)
+              const totalMax = student.marksData.reduce((acc, m) => acc + m.total_marks, 0)
+              const overallPercent = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0
+              const overallGrade = gradeFromPercent(overallPercent)
 
-            return (
-              <section key={student.dasNumber} className="report-card page-break">
-                <div className="logo-container">
-                  <Image src={logo} alt="DAR-E-ARQAM Logo" />
-                  <p className="urdu-text ">تعلیم، تہذیب ساتھ ساتھ</p>
-                </div>
+              return (
+                <section key={student.dasNumber} className="report-card page-break">
+                  
+                  <div>
+                    <div className="logo-container">
+                        <Image src={logo} alt="Logo" width={150} height={150} priority />
+                        <p className="urdu-text">تعلیم، تہذیب ساتھ ساتھ</p>
+                    </div>
 
-                <p className="title">📑 Report Card</p>
+                    <div className="report-title-box">
+                        <h1 className="title">Result Card</h1>
+                    </div>
 
-                <div className="text-lg mb-4">
-                  <p><strong>Name:</strong> {student.studentName}</p>
-                  <p><strong>Father Name:</strong> {student.fatherName}</p>
-                  <p><strong>DAS Number:</strong> {student.dasNumber}</p>
-                </div>
+                    <div className="student-details">
+                        <div className="detail-group">
+                        <span className="detail-label">Student Name</span>
+                        <span className="detail-value">{student.studentName}</span>
+                        </div>
+                        <div className="detail-group">
+                        <span className="detail-label">Father Name</span>
+                        <span className="detail-value">{student.fatherName}</span>
+                        </div>
+                        <div className="detail-group">
+                        <span className="detail-label">Roll / ID No</span>
+                        <span className="detail-value">{student.dasNumber}</span>
+                        </div>
+                    </div>
 
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Subject</th>
-                      <th>Total Marks</th>
-                      <th>Obtained Marks</th>
-                      <th>Percentage</th>
-                      <th>Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {student.marksData.map((m, i) => {
-                      const percent = (m.obtained_marks / m.total_marks) * 100
-                      return (
-                        <tr key={i}>
-                          <td>{m.subject}</td>
-                          <td>{m.total_marks}</td>
-                          <td>{m.obtained_marks}</td>
-                          <td>{percent.toFixed(2)}%</td>
-                          <td>{gradeFromPercent(percent)}</td>
-                        </tr>
-                      )
-                    })}
-                    <tr>
-                      <td><strong>Overall</strong></td>
-                      <td>{totalMax}</td>
-                      <td>{totalObtained}</td>
-                      <td>{overallPercent.toFixed(2)}%</td>
-                      <td>{overallGrade}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                    {!student.isClear && (
+                        <div className="no-print mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded text-center text-sm font-bold">
+                        ⚠️ Outstanding Dues Pending
+                        </div>
+                    )}
 
-                <div className="footer-text">
-                  <p>This is a software-generated report card and does not require a signature.</p>
-                  <p>© DAR-E-ARQAM</p>
-                </div>
-              </section>
-            )
-          })
-        )}
+                    <div className="marks-table-container">
+                        <table>
+                        <thead>
+                            <tr>
+                            <th className="text-left pl-4">Subject</th>
+                            <th>Total Marks</th>
+                            <th>Obtained</th>
+                            <th>Percentage</th>
+                            <th>Grade</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {student.marksData.map((m, i) => {
+                            const percent = (m.obtained_marks / m.total_marks) * 100
+                            return (
+                                <tr key={i}>
+                                <td className="col-subject">{m.subject}</td>
+                                <td className="col-center">{m.total_marks}</td>
+                                <td className="col-center">{m.obtained_marks}</td>
+                                <td className="col-center">{percent.toFixed(0)}%</td>
+                                <td className="col-center">{gradeFromPercent(percent)}</td>
+                                </tr>
+                            )
+                            })}
+                            <tr className="row-total">
+                            <td className="text-right pr-4">OVERALL RESULT</td>
+                            <td className="col-center">{totalMax}</td>
+                            <td className="col-center">{totalObtained}</td>
+                            <td className="col-center">{overallPercent.toFixed(1)}%</td>
+                            <td className="col-center">{overallGrade}</td>
+                            </tr>
+                        </tbody>
+                        </table>
+                    </div>
+                  </div>
+
+                  <div className="footer-section">
+                    <p className="footer-note">This document is computer-generated and does not require a signature.</p>
+                    <p className="footer-copyright">© DAR-E-ARQAM SCHOOLS</p>
+                  </div>
+                </section>
+              )
+            })
+          )}
+        </div>
       </div>
+
+      <ActionModal 
+        isOpen={showModal} 
+        onClose={() => setShowModal(false)} 
+        onConfirm={handleActionConfirm}
+        actionType={pendingAction}
+      />
     </>
   )
 }
+
