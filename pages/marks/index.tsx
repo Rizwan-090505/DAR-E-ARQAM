@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../utils/supabaseClient'
 import { Button } from '../../components/ui/button'
@@ -23,13 +23,20 @@ interface Test {
   has_marks?: boolean
 }
 
+const CHUNK_DAYS = 60
+
 export default function MarksDashboard() {
   const [tests, setTests] = useState<Test[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [classes, setClasses] = useState<ClassData[]>([])
   const [selectedClass, setSelectedClass] = useState<string>('')
   const [selectedType, setSelectedType] = useState<string>('')
 
+  const [endDate, setEndDate] = useState<Date>(new Date())
+  const [hasMore, setHasMore] = useState(true)
+  const loaderRef = useRef<HTMLDivElement | null>(null)
+
+  // Fetch classes
   const fetchClasses = async () => {
     const { data, error } = await supabase
       .from('classes')
@@ -38,12 +45,19 @@ export default function MarksDashboard() {
     if (!error && data) setClasses(data)
   }
 
-  const fetchTests = async () => {
+  // Fetch tests in a 60-day chunk
+  const fetchTestsChunk = async () => {
+    if (!hasMore || loading) return
     setLoading(true)
+
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - CHUNK_DAYS)
 
     let query = supabase
       .from('tests')
       .select('id, test_name, test_type, subject, date, class_name, class_id')
+      .lte('date', endDate.toISOString())
+      .gte('date', startDate.toISOString())
       .order('date', { ascending: false })
 
     if (selectedClass) query = query.eq('class_id', selectedClass)
@@ -51,34 +65,61 @@ export default function MarksDashboard() {
 
     const { data: testsData, error } = await query
 
-    if (!error && testsData) {
-      // For each test, check if marks exist
-      const testsWithMarks = await Promise.all(
-        testsData.map(async (t: any) => {
-          const { count } = await supabase
-            .from('marks')
-            .select('id', { count: 'exact', head: true })
-            .eq('test_id', t.id)
+    if (!error && testsData && testsData.length > 0) {
+      const testIds = testsData.map(t => t.id)
 
-          return { ...t, has_marks: (count ?? 0) > 0 }
-        })
-      )
+      // Fetch all marks counts in a single query
+      const { data: marksData } = await supabase
+        .from('marks')
+        .select('test_id', { count: 'exact' })
+        .in('test_id', testIds)
 
-      setTests(testsWithMarks as Test[])
+      const marksCountMap = marksData?.reduce((acc: Record<number, number>, mark: any) => {
+        acc[mark.test_id] = (acc[mark.test_id] || 0) + 1
+        return acc
+      }, {}) || {}
+
+      const testsWithMarks = testsData.map(t => ({
+        ...t,
+        has_marks: (marksCountMap[t.id] ?? 0) > 0
+      }))
+
+      setTests(prev => [...prev, ...testsWithMarks])
+      setEndDate(startDate)
+      setHasMore(true)
+    } else {
+      setHasMore(false)
     }
 
     setLoading(false)
   }
 
+  // Reset data when filters change
+  useEffect(() => {
+    setTests([])
+    setEndDate(new Date())
+    setHasMore(true)
+    fetchTestsChunk()
+  }, [selectedClass, selectedType])
+
   useEffect(() => {
     fetchClasses()
   }, [])
 
-  useEffect(() => {
-    fetchTests()
-  }, [selectedClass, selectedType])
+  // Infinite scroll
+  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
+    const target = entries[0]
+    if (target.isIntersecting && hasMore && !loading) {
+      fetchTestsChunk()
+    }
+  }, [hasMore, loading])
 
-  if (loading) return <Loader />
+  useEffect(() => {
+    const option = { root: null, rootMargin: "20px", threshold: 0 }
+    const observer = new IntersectionObserver(handleObserver, option)
+    if (loaderRef.current) observer.observe(loaderRef.current)
+    return () => { if (loaderRef.current) observer.unobserve(loaderRef.current) }
+  }, [handleObserver])
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,7 +134,6 @@ export default function MarksDashboard() {
 
         {/* Filters */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
-          {/* Class Filter */}
           <Select onValueChange={(val) => setSelectedClass(val === 'all' ? '' : val)}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Filter by Class" />
@@ -108,7 +148,6 @@ export default function MarksDashboard() {
             </SelectContent>
           </Select>
 
-          {/* Test Type Filter */}
           <Select onValueChange={(val) => setSelectedType(val === 'all' ? '' : val)}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Filter by Test Type" />
@@ -123,7 +162,12 @@ export default function MarksDashboard() {
             </SelectContent>
           </Select>
 
-          <Button onClick={fetchTests} variant="outline">Apply Filters</Button>
+          <Button
+            onClick={() => { setTests([]); setEndDate(new Date()); setHasMore(true); fetchTestsChunk() }}
+            variant="outline"
+          >
+            Apply Filters
+          </Button>
         </div>
 
         {/* Tests Table */}
@@ -132,52 +176,54 @@ export default function MarksDashboard() {
             <CardTitle>All Tests</CardTitle>
           </CardHeader>
           <CardContent>
-  {tests.length === 0 ? (
-    <p className="text-muted-foreground">No tests found.</p>
-  ) : (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm md:text-base">
-        <thead>
-          <tr className="border-b">
-            <th className="text-left p-2">Test Name</th>
-            <th className="text-left p-2 hidden md:table-cell">Type</th>
-            <th className="text-left p-2 hidden md:table-cell">Subject</th>
-            <th className="text-left p-2 ">Class</th>
-            <th className="text-left p-2 hidden md:table-cell">Date</th>
-            <th className="text-center p-2">Status</th>
-            <th className="text-center p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tests.map(t => (
-            <tr key={t.id} className="border-b hover:bg-muted/50">
-              <td className="p-2 font-medium">{t.test_name}</td>
-              <td className="p-2 hidden md:table-cell">{t.test_type}</td>
-              <td className="p-2 hidden md:table-cell">{t.subject}</td>
-              <td className="p-2 ">{t.class_name || 'N/A'}</td>
-              <td className="p-2 hidden md:table-cell">{t.date}</td>
-              <td className="text-center p-2">
-                {t.has_marks ? (
-                  <CheckCircle className="w-5 h-5 text-green-600 inline" />
-                ) : (
-                  <XCircle className="w-5 h-5 text-red-500 inline" />
-                )}
-              </td>
-              <td className="text-center p-2">
-                <Link href={`/marks/${t.id}`}>
-                  <Button variant="outline" size="sm">Enter</Button>
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )}
-</CardContent>
-
+            {tests.length === 0 && !loading ? (
+              <p className="text-muted-foreground">No tests found.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm md:text-base">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2">Test Name</th>
+                      <th className="text-left p-2 hidden md:table-cell">Type</th>
+                      <th className="text-left p-2 hidden md:table-cell">Subject</th>
+                      <th className="text-left p-2">Class</th>
+                      <th className="text-left p-2 hidden md:table-cell">Date</th>
+                      <th className="text-center p-2">Status</th>
+                      <th className="text-center p-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tests.map(t => (
+                      <tr key={t.id} className="border-b hover:bg-muted/50">
+                        <td className="p-2 font-medium">{t.test_name}</td>
+                        <td className="p-2 hidden md:table-cell">{t.test_type}</td>
+                        <td className="p-2 hidden md:table-cell">{t.subject}</td>
+                        <td className="p-2">{t.class_name || 'N/A'}</td>
+                        <td className="p-2 hidden md:table-cell">{t.date}</td>
+                        <td className="text-center p-2">
+                          {t.has_marks ? (
+                            <CheckCircle className="w-5 h-5 text-green-600 inline" />
+                          ) : (
+                            <XCircle className="w-5 h-5 text-red-500 inline" />
+                          )}
+                        </td>
+                        <td className="text-center p-2">
+                          <Link href={`/marks/${t.id}`}>
+                            <Button variant="outline" size="sm">Enter</Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {loading && <Loader />}
+            <div ref={loaderRef} />
+          </CardContent>
         </Card>
       </div>
     </div>
   )
 }
+
