@@ -1,12 +1,18 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../utils/supabaseClient'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import Navbar from '../../components/Navbar'
 import Loader from '../../components/Loader'
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../../components/ui/select'
-import { CheckCircle, XCircle } from "lucide-react"
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue
+} from '../../components/ui/select'
+import { CheckCircle, XCircle } from 'lucide-react'
 
 interface ClassData {
   id: number
@@ -23,8 +29,6 @@ interface Test {
   has_marks?: boolean
 }
 
-const CHUNK_DAYS = 60
-
 export default function MarksDashboard() {
   const [tests, setTests] = useState<Test[]>([])
   const [loading, setLoading] = useState(false)
@@ -32,100 +36,77 @@ export default function MarksDashboard() {
   const [selectedClass, setSelectedClass] = useState<string>('')
   const [selectedType, setSelectedType] = useState<string>('')
 
-  const [endDate, setEndDate] = useState<Date>(new Date())
-  const [hasMore, setHasMore] = useState(true)
-  const loaderRef = useRef<HTMLDivElement | null>(null)
-
-  // Fetch classes
-  const fetchClasses = async () => {
-    const { data, error } = await supabase
+  /* ---------------- Fetch Classes ---------------- */
+  useEffect(() => {
+    supabase
       .from('classes')
       .select('id, name')
       .order('name')
-    if (!error && data) setClasses(data)
-  }
+      .then(({ data }) => {
+        if (data) setClasses(data)
+      })
+  }, [])
 
-  // Fetch tests in a 60-day chunk
-  const fetchTestsChunk = async () => {
-    if (!hasMore || loading) return
+  /* ---------------- Fetch Tests (ALL for class) ---------------- */
+  const fetchTests = async () => {
+    if (!selectedClass) return
+
     setLoading(true)
-
-    const startDate = new Date(endDate)
-    startDate.setDate(startDate.getDate() - CHUNK_DAYS)
+    setTests([])
 
     let query = supabase
       .from('tests')
-      .select('id, test_name, test_type, subject, date, class_name, class_id')
-      .lte('date', endDate.toISOString())
-      .gte('date', startDate.toISOString())
+      .select('id, test_name, test_type, subject, date, class_name')
+      .eq('class_id', selectedClass)
       .order('date', { ascending: false })
 
-    if (selectedClass) query = query.eq('class_id', selectedClass)
-    if (selectedType) query = query.eq('test_type', selectedType)
+    if (selectedType) {
+      query = query.eq('test_type', selectedType)
+    }
 
     const { data: testsData, error } = await query
 
-    if (!error && testsData && testsData.length > 0) {
-      const testIds = testsData.map(t => t.id)
+    if (error || !testsData || testsData.length === 0) {
+      setLoading(false)
+      setTests([])
+      return
+    }
 
-      // Fetch all marks counts in a single query
-      const { data: marksData } = await supabase
-        .from('marks')
-        .select('test_id', { count: 'exact' })
-        .in('test_id', testIds)
+    const testIds = testsData.map(t => t.id)
 
-      const marksCountMap = marksData?.reduce((acc: Record<number, number>, mark: any) => {
-        acc[mark.test_id] = (acc[mark.test_id] || 0) + 1
+    const { data: marksData } = await supabase
+      .from('marks')
+      .select('test_id')
+      .in('test_id', testIds)
+
+    const marksMap =
+      marksData?.reduce((acc: Record<number, number>, m: any) => {
+        acc[m.test_id] = (acc[m.test_id] || 0) + 1
         return acc
       }, {}) || {}
 
-      const testsWithMarks = testsData.map(t => ({
+    setTests(
+      testsData.map(t => ({
         ...t,
-        has_marks: (marksCountMap[t.id] ?? 0) > 0
+        has_marks: (marksMap[t.id] ?? 0) > 0
       }))
-
-      setTests(prev => [...prev, ...testsWithMarks])
-      setEndDate(startDate)
-      setHasMore(true)
-    } else {
-      setHasMore(false)
-    }
+    )
 
     setLoading(false)
   }
 
-  // Reset data when filters change
-  useEffect(() => {
-    setTests([])
-    setEndDate(new Date())
-    setHasMore(true)
-    fetchTestsChunk()
-  }, [selectedClass, selectedType])
-
-  useEffect(() => {
-    fetchClasses()
-  }, [])
-
-  // Infinite scroll
-  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
-    const target = entries[0]
-    if (target.isIntersecting && hasMore && !loading) {
-      fetchTestsChunk()
-    }
-  }, [hasMore, loading])
-
-  useEffect(() => {
-    const option = { root: null, rootMargin: "20px", threshold: 0 }
-    const observer = new IntersectionObserver(handleObserver, option)
-    if (loaderRef.current) observer.observe(loaderRef.current)
-    return () => { if (loaderRef.current) observer.unobserve(loaderRef.current) }
-  }, [handleObserver])
+  /* ---------------- Apply Filters ---------------- */
+  const applyFilters = () => {
+    if (!selectedClass) return
+    fetchTests()
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+
       <div className="container mx-auto p-6">
-        <div className="flex flex-col md:flex-row justify-between mb-4 gap-3">
+        <div className="flex flex-col md:flex-row justify-between gap-3 mb-4">
           <h1 className="text-3xl font-bold">Marks Management</h1>
           <Link href="/marks/new-test">
             <Button>+ New Test</Button>
@@ -134,12 +115,12 @@ export default function MarksDashboard() {
 
         {/* Filters */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <Select onValueChange={(val) => setSelectedClass(val === 'all' ? '' : val)}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by Class" />
+          <Select onValueChange={v => setSelectedClass(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Select Class *" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Classes</SelectItem>
+              <SelectItem value="all">Select Class</SelectItem>
               {classes.map(c => (
                 <SelectItem key={c.id} value={String(c.id)}>
                   {c.name}
@@ -148,9 +129,9 @@ export default function MarksDashboard() {
             </SelectContent>
           </Select>
 
-          <Select onValueChange={(val) => setSelectedType(val === 'all' ? '' : val)}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by Test Type" />
+          <Select onValueChange={v => setSelectedType(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Test Type (optional)" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
@@ -162,10 +143,7 @@ export default function MarksDashboard() {
             </SelectContent>
           </Select>
 
-          <Button
-            onClick={() => { setTests([]); setEndDate(new Date()); setHasMore(true); fetchTestsChunk() }}
-            variant="outline"
-          >
+          <Button onClick={applyFilters} disabled={!selectedClass || loading}>
             Apply Filters
           </Button>
         </div>
@@ -173,43 +151,73 @@ export default function MarksDashboard() {
         {/* Tests Table */}
         <Card>
           <CardHeader>
-            <CardTitle>All Tests</CardTitle>
+            <CardTitle>Tests</CardTitle>
           </CardHeader>
+
           <CardContent>
-            {tests.length === 0 && !loading ? (
-              <p className="text-muted-foreground">No tests found.</p>
-            ) : (
+            {!selectedClass && (
+              <p className="text-sm text-muted-foreground">
+                Please select a class to view tests.
+              </p>
+            )}
+
+            {loading && (
+              <div className="flex justify-center py-6">
+                <Loader />
+              </div>
+            )}
+
+            {!loading && tests.length === 0 && selectedClass && (
+              <p className="text-sm text-muted-foreground">
+                No tests found for the selected filters.
+              </p>
+            )}
+
+            {tests.length > 0 && (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-sm md:text-base">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Test Name</th>
-                      <th className="text-left p-2 hidden md:table-cell">Type</th>
-                      <th className="text-left p-2 hidden md:table-cell">Subject</th>
-                      <th className="text-left p-2">Class</th>
-                      <th className="text-left p-2 hidden md:table-cell">Date</th>
-                      <th className="text-center p-2">Status</th>
-                      <th className="text-center p-2">Actions</th>
+                <table className="w-full border border-border text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="border p-3 text-left">Test</th>
+                      <th className="border p-3 text-left hidden sm:table-cell">
+                        Type
+                      </th>
+                      <th className="border p-3 text-left hidden md:table-cell">
+                        Subject
+                      </th>
+                      <th className="border p-3 text-center">Status</th>
+                      <th className="border p-3 text-center">Action</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {tests.map(t => (
-                      <tr key={t.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2 font-medium">{t.test_name}</td>
-                        <td className="p-2 hidden md:table-cell">{t.test_type}</td>
-                        <td className="p-2 hidden md:table-cell">{t.subject}</td>
-                        <td className="p-2">{t.class_name || 'N/A'}</td>
-                        <td className="p-2 hidden md:table-cell">{t.date}</td>
-                        <td className="text-center p-2">
+                      <tr key={t.id} className="hover:bg-muted/40 transition">
+                        <td className="border p-3 font-medium">
+                          {t.test_name}
+                        </td>
+
+                        <td className="border p-3 hidden sm:table-cell">
+                          {t.test_type}
+                        </td>
+
+                        <td className="border p-3 hidden md:table-cell">
+                          {t.subject}
+                        </td>
+
+                        <td className="border p-3 text-center">
                           {t.has_marks ? (
-                            <CheckCircle className="w-5 h-5 text-green-600 inline" />
+                            <CheckCircle className="inline w-5 h-5 text-green-600" />
                           ) : (
-                            <XCircle className="w-5 h-5 text-red-500 inline" />
+                            <XCircle className="inline w-5 h-5 text-red-500" />
                           )}
                         </td>
-                        <td className="text-center p-2">
+
+                        <td className="border p-3 text-center">
                           <Link href={`/marks/${t.id}`}>
-                            <Button variant="outline" size="sm">Enter</Button>
+                            <Button size="sm" variant="outline">
+                              Enter
+                            </Button>
                           </Link>
                         </td>
                       </tr>
@@ -218,8 +226,6 @@ export default function MarksDashboard() {
                 </table>
               </div>
             )}
-            {loading && <Loader />}
-            <div ref={loaderRef} />
           </CardContent>
         </Card>
       </div>
