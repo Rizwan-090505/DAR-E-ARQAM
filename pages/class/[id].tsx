@@ -151,6 +151,18 @@ export default function ClassPage() {
     const start = startOfMonth(selectedDate)
     const end = endOfMonth(selectedDate)
     const days = eachDayOfInterval({ start, end })
+
+    // FIX: Explicitly define these strings so Tailwind doesn't purge them
+    const colStartClasses = [
+      'col-start-1',
+      'col-start-2',
+      'col-start-3',
+      'col-start-4',
+      'col-start-5',
+      'col-start-6',
+      'col-start-7',
+    ]
+
     return (
       <div className="w-full max-w-sm mx-auto">
         <div className="mb-4 text-lg font-semibold text-center">
@@ -162,16 +174,22 @@ export default function ClassPage() {
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {days.map((day, index) => (
-            <Button
-              key={day.toString()}
-              variant={isSameDay(day, selectedDate) ? "default" : "outline"}
-              className={`h-8 w-8 p-0 ${index === 0 && `col-start-${day.getDay() + 1}`}`}
-              onClick={() => setSelectedDate(day)}
-            >
-              <time dateTime={format(day, 'yyyy-MM-dd')}>{format(day, 'd')}</time>
-            </Button>
-          ))}
+          {days.map((day, index) => {
+             // 0 = Sunday, 1 = Monday, etc.
+             const dayOfWeek = day.getDay();
+             const isFirstDay = index === 0;
+
+             return (
+              <Button
+                key={day.toString()}
+                variant={isSameDay(day, selectedDate) ? "default" : "outline"}
+                className={`h-8 w-8 p-0 ${isFirstDay ? colStartClasses[dayOfWeek] : ''}`}
+                onClick={() => setSelectedDate(day)}
+              >
+                <time dateTime={format(day, 'yyyy-MM-dd')}>{format(day, 'd')}</time>
+              </Button>
+            )
+          })}
         </div>
       </div>
     )

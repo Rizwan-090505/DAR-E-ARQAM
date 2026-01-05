@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import Navbar from '../../components/Navbar';
 import Loader from '../../components/Loader';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getYear, getMonth, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getYear, getMonth, isSameDay, getDay } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { useToast } from '../../hooks/use-toast';
 import { Badge } from '../../components/ui/badge';
@@ -23,7 +23,7 @@ interface Student {
 interface AttendanceRecord {
   studentid: string;
   date: string;
-  status: 'Present' | 'Absent';
+  status: 'Present' | 'Absent' | 'Unmarked';
   student: Student;
 }
 
@@ -84,7 +84,6 @@ export default function AttendanceRecordPage() {
     } else {
       setStudents(data || []);
     }
-    // Note: setIsLoading(false) is handled in fetchAttendance to avoid flashes
   };
 
   const fetchAttendance = async () => {
@@ -118,7 +117,7 @@ export default function AttendanceRecordPage() {
         students.map(s => ({
           studentid: s.studentid,
           date: dateStr,
-          status: 'Present',
+          status: 'Unmarked',
           student: s
         }))
       );
@@ -134,13 +133,26 @@ export default function AttendanceRecordPage() {
     setAttendanceData(prev =>
       prev.map(a =>
         a.studentid === studentid
-          ? { ...a, status: a.status === 'Present' ? 'Absent' : 'Present' }
+          ? { 
+              ...a, 
+              status: a.status === 'Present' ? 'Absent' : 'Present' 
+            }
           : a
       )
     );
   };
 
   const saveAttendance = async () => {
+    const hasUnmarked = attendanceData.some(a => a.status === 'Unmarked');
+    if (hasUnmarked) {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Incomplete Attendance', 
+        description: 'Please mark attendance (Present/Absent) for all students before saving.' 
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -220,6 +232,10 @@ export default function AttendanceRecordPage() {
     const start = startOfMonth(selectedDate);
     const end = endOfMonth(selectedDate);
     const days = eachDayOfInterval({ start, end });
+    
+    // Calculate how many empty cells we need before the 1st of the month
+    // getDay returns 0 for Sunday, 1 for Monday... 6 for Saturday.
+    const startDayIndex = getDay(start); 
 
     return (
       <div className="w-full max-w-sm mx-auto mb-6">
@@ -232,17 +248,19 @@ export default function AttendanceRecordPage() {
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {days.map((day, index) => {
+          {/* Render empty cells for padding */}
+          {Array.from({ length: startDayIndex }).map((_, i) => (
+            <div key={`empty-${i}`} className="h-8 w-8" />
+          ))}
+          
+          {/* Render actual days */}
+          {days.map((day) => {
             const isSelected = isSameDay(day, selectedDate);
-            const isFirstDay = index === 0;
-            const dayOfWeek = day.getDay(); // 0 (Sun) to 6 (Sat)
-            const colStartClass = isFirstDay ? `col-start-${dayOfWeek + 1}` : '';
-
             return (
               <Button
                 key={day.toString()}
                 variant={isSelected ? 'default' : 'outline'}
-                className={`h-8 w-8 p-0 ${colStartClass}`}
+                className={`h-8 w-8 p-0`} 
                 onClick={() => setSelectedDate(day)}
               >
                 {format(day, 'd')}
@@ -299,8 +317,12 @@ export default function AttendanceRecordPage() {
                       <TableCell>{a.student.fathername}</TableCell>
                       <TableCell className="text-right">
                         <Badge
-                          variant={a.status === 'Present' ? 'success' : 'destructive'}
-                          className="cursor-pointer"
+                          variant={
+                            a.status === 'Present' ? 'success' : 
+                            a.status === 'Absent' ? 'destructive' : 
+                            'secondary'
+                          }
+                          className="cursor-pointer min-w-[80px] justify-center"
                           onClick={() => toggleStatus(a.studentid)}
                         >
                           {a.status}
@@ -311,7 +333,7 @@ export default function AttendanceRecordPage() {
                 </TableBody>
               </Table>
             </div>
-            {/* --- MODIFIED: Using standard HTML checkbox and label --- */}
+            
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <input
@@ -339,4 +361,3 @@ export default function AttendanceRecordPage() {
     </div>
   );
 }
-
