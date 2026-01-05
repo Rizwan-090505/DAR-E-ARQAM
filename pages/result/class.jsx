@@ -49,8 +49,13 @@ const ActionModal = ({ isOpen, onClose, onConfirm, actionType }) => {
 export default function ClassResultPage() {
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
+  // Test/Marks Date Range
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  // Attendance Date Range
+  const [attnStartDate, setAttnStartDate] = useState('')
+  const [attnEndDate, setAttnEndDate] = useState('')
+
   const [studentsResults, setStudentsResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
@@ -72,13 +77,59 @@ export default function ClassResultPage() {
     supabase.from('classes').select('id, name').then(({ data }) => setClasses(data || []))
   }, [])
 
+  // 🔄 HELPER: Recursive Fetch to Bypass 1000-Row Limit
+  const fetchAllAttendance = async (studentIds, start, end) => {
+    let allRows = [];
+    let page = 0;
+    const pageSize = 1000; // Chunk size
+    let hasMore = true;
+
+    while (hasMore) {
+        // Fetch range: 0-999, then 1000-1999, etc.
+        const { data, error } = await supabase
+            .from('attendance')
+            .select('studentid, date, status')
+            .in('studentid', studentIds)
+            .gte('date', start)
+            .lte('date', end)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+            console.error("Error fetching attendance page:", error);
+            throw error;
+        }
+
+        if (data.length > 0) {
+            allRows = [...allRows, ...data];
+            // If we got fewer rows than requested, we've reached the end
+            if (data.length < pageSize) {
+                hasMore = false;
+            } else {
+                page++; // Move to next page
+            }
+        } else {
+            hasMore = false;
+        }
+    }
+    return allRows;
+  };
+
+  // ⚡️ OPTIMIZED FETCH FUNCTION
   const fetchClassResults = async () => {
-    if (!selectedClass || !startDate || !endDate) return
+    if (!selectedClass || !startDate || !endDate || !attnStartDate || !attnEndDate) {
+        alert("Please fill in all date fields (both Marks and Attendance ranges).")
+        return
+    }
     setLoading(true)
     setGenerated(false)
     setStudentsResults([])
     setPrintFilter('all') 
 
+    // Get Class Name for display
+    const currentClassObj = classes.find(c => String(c.id) === selectedClass)
+    const classNameStr = currentClassObj ? currentClassObj.name : ''
+
+    // 1. Fetch All Students in Class
     const { data: studentsData, error: studentsError } = await supabase
       .from('students')
       .select('studentid, name, fathername, mobilenumber, Clear')
@@ -96,38 +147,86 @@ export default function ClassResultPage() {
       return
     }
 
-    const results = []
-    for (const student of studentsData) {
-      const { data: marks } = await supabase
-        .from('marks')
-        .select(`
-          total_marks,
-          obtained_marks,
-          tests!inner(test_name, date)
-        `)
-        .eq('studentid', student.studentid)
-        .gte('tests.date', startDate)
-        .lte('tests.date', endDate)
+    // 2. Extract IDs for Batch Querying
+    const studentIds = studentsData.map(s => s.studentid)
 
-      if (marks && marks.length > 0) {
-        results.push({
-          studentName: student.name,
-          fatherName: student.fathername,
-          mobilenumber: student.mobilenumber,
-          dasNumber: student.studentid,
-          isClear: student.Clear, 
-          marksData: marks.map(m => ({
-            subject: m.tests?.test_name || '',
-            total_marks: m.total_marks,
-            obtained_marks: m.obtained_marks
-          }))
-        })
-      }
+    try {
+        // 3. Fetch Data (Marks = Standard, Attendance = Paginated Loop)
+        const marksPromise = supabase
+            .from('marks')
+            .select(`
+                studentid,
+                total_marks,
+                obtained_marks,
+                tests!inner(test_name, date)
+            `)
+            .in('studentid', studentIds)
+            .gte('tests.date', startDate)
+            .lte('tests.date', endDate)
+            .limit(10000); // 10k usually enough for marks
+        
+        // Use the new Loop Function for Attendance
+        const attendancePromise = fetchAllAttendance(studentIds, attnStartDate, attnEndDate);
+
+        const [marksResponse, allAttendance] = await Promise.all([
+            marksPromise,
+            attendancePromise
+        ])
+
+        const allMarks = marksResponse.data || []
+        
+        // Debugging Logs
+        console.log(`✅ Total Attendance Rows Fetched: ${allAttendance.length}`);
+        const uniqueDates = [...new Set(allAttendance.map(item => item.date))].sort();
+        console.log(`✅ Total Unique Dates: ${uniqueDates.length}`);
+        const classTotalDays = uniqueDates.length;
+
+        // 4. Map the data back to students
+        const results = []
+
+        for (const student of studentsData) {
+            // Filter marks for this specific student
+            const studentMarks = allMarks.filter(m => m.studentid === student.studentid)
+            
+            // Filter attendance for this specific student
+            const studentAttendance = allAttendance.filter(a => a.studentid === student.studentid)
+
+            if (studentMarks && studentMarks.length > 0) {
+                
+                const presentDays = studentAttendance.filter(a => a.status === 'Present').length
+                const absentDays = classTotalDays - presentDays; 
+                const attnPercent = classTotalDays > 0 ? (presentDays / classTotalDays) * 100 : 0
+
+                results.push({
+                    studentName: student.name,
+                    fatherName: student.fathername,
+                    mobilenumber: student.mobilenumber,
+                    dasNumber: student.studentid,
+                    className: classNameStr,
+                    isClear: student.Clear, 
+                    attendance: {
+                        total: classTotalDays,
+                        present: presentDays,
+                        absent: absentDays,
+                        percent: attnPercent
+                    },
+                    marksData: studentMarks.map(m => ({
+                        subject: m.tests?.test_name || '',
+                        total_marks: m.total_marks,
+                        obtained_marks: m.obtained_marks
+                    }))
+                })
+            }
+        }
+
+        setStudentsResults(results)
+        setGenerated(true)
+    } catch (err) {
+        console.error("Error generating results:", err);
+        alert("An error occurred while fetching data. Check console for details.");
+    } finally {
+        setLoading(false)
     }
-
-    setStudentsResults(results)
-    setGenerated(true)
-    setLoading(false)
   }
 
   const handlePrintClick = () => {
@@ -184,7 +283,9 @@ export default function ClassResultPage() {
         })
         .join("\n")
 
-      const body = `📊 *Report Card*\n\n *Name:* ${student.studentName}\n *Father:* ${student.fatherName}\n${subjectsText}\n\n *Total:* ${totalObtained}/${totalMax}\n *Percentage:* ${overallPercent.toFixed(2)}%\n *Grade:* ${overallGrade}\n\n *Regards,* \n *Management* \n DAR-E-ARQAM`
+      const attnText = `\n *Attendance:* ${student.attendance.percent.toFixed(1)}% (P:${student.attendance.present}/T:${student.attendance.total})`
+
+      const body = `📊 *Report Card*\n\n *Name:* ${student.studentName}\n *Father:* ${student.fatherName}\n *Class:* ${student.className}\n${subjectsText}\n${attnText}\n\n *Total:* ${totalObtained}/${totalMax}\n *Percentage:* ${overallPercent.toFixed(2)}%\n *Grade:* ${overallGrade}\n\n *Regards,* \n *Management* \n DAR-E-ARQAM`
 
       return { 
         number: student.mobilenumber, 
@@ -221,12 +322,12 @@ export default function ClassResultPage() {
   }
   .report-card { border: 1px solid #ccc; padding: 15px 20px; margin: 0 auto; background: #fff; width: 100%; max-width: 210mm; min-height: 260mm; height: auto; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000; }
   .logo-container { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 1rem; position: relative; }
-  .logo-container img { width: 150px !important; height: auto; display: block; object-fit: contain; }
+  .logo-container img { width: 250px !important; height: auto; display: block; object-fit: contain; }
   .urdu-text { font-family: "Noto Nastaliq Urdu", serif; direction: rtl; font-size: 14px; margin-top: 0.5rem; margin-bottom: 0.75rem; color: #333; font-weight: normal; }
   .report-title-box { text-align: center; border-top: 2px solid #000; border-bottom: 2px solid #000; margin: 0.75rem 0 1.5rem 0; padding: 5px 0; }
   .title { font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin: 0; color: #000; }
   .student-details { display: flex; flex-wrap: wrap; justify-content: space-between; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 6px; padding: 10px 15px; margin-bottom: 15px; }
-  .detail-group { display: flex; flex-direction: column; min-width: 30%; }
+  .detail-group { display: flex; flex-direction: column; min-width: 22%; }
   .detail-label { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 2px; font-weight: 600; }
   .detail-value { font-size: 15px; font-weight: bold; color: #000; }
   .marks-table-container { flex-grow: 1; }
@@ -237,6 +338,11 @@ export default function ClassResultPage() {
   .col-subject { text-align: left; padding-left: 10px; font-weight: 500; }
   .col-center { text-align: center; }
   .row-total td { background-color: #f0f0f0; font-weight: bold; color: #000; border-top: 3px double #000; font-size: 14px; }
+  
+  .attn-table { width: 60%; margin-top: 15px; border: 1px solid #000; }
+  .attn-table th { background-color: #444; color: #fff; padding: 5px; font-size: 10px; }
+  .attn-table td { padding: 5px; font-size: 12px; text-align: center; font-weight: bold; }
+  
   .footer-section { margin-top: 10px; text-align: center; border-top: 1px solid #eee; padding-top: 5px; padding-bottom: 0; }
   .footer-note { font-size: 10px; color: #777; margin: 2px 0; font-style: italic; }
   .footer-copyright { font-size: 11px; color: #000; font-weight: 600; margin-top: 5px; }
@@ -248,7 +354,7 @@ export default function ClassResultPage() {
         <div className="controls no-print mb-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h2 className="text-xl font-bold mb-4 text-gray-800">Generate Report Cards</h2>
           <div className="flex flex-wrap gap-4 items-end">
-            <div className="w-56">
+            <div className="w-48">
               <label htmlFor="class-select" className="block text-sm font-medium mb-1 text-gray-600">Select Class</label>
               <Select id="class-select" onValueChange={setSelectedClass} value={selectedClass}>
                 <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
@@ -258,34 +364,54 @@ export default function ClassResultPage() {
               </Select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-600">Start Date</label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-            </div>
+            <div className="p-2 border rounded bg-gray-50 flex gap-4">
+                <div>
+                    <label className="block text-xs font-bold mb-1 text-blue-600 uppercase">Tests Date Range</label>
+                    <div className="flex gap-2">
+                        <div>
+                        <span className="text-xs text-gray-500 block">From</span>
+                        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-8 text-sm" />
+                        </div>
+                        <div>
+                        <span className="text-xs text-gray-500 block">To</span>
+                        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-sm" />
+                        </div>
+                    </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1 text-gray-600">End Date</label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                <div className="border-l border-gray-300 pl-4">
+                    <label className="block text-xs font-bold mb-1 text-green-600 uppercase">Attendance Date Range</label>
+                    <div className="flex gap-2">
+                        <div>
+                        <span className="text-xs text-gray-500 block">From</span>
+                        <Input type="date" value={attnStartDate} onChange={e => setAttnStartDate(e.target.value)} className="h-8 text-sm" />
+                        </div>
+                        <div>
+                        <span className="text-xs text-gray-500 block">To</span>
+                        <Input type="date" value={attnEndDate} onChange={e => setAttnEndDate(e.target.value)} className="h-8 text-sm" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <Button 
-                className="light:bg-gray-900  hover:bg-gray-800 light:text-white font-semibold px-6 py-2" 
+                className="light:bg-gray-900  hover:bg-gray-800 light:text-white font-semibold px-6 py-2 h-10 mb-1" 
                 onClick={fetchClassResults} 
-                disabled={loading || !selectedClass || !startDate || !endDate}
+                disabled={loading || !selectedClass || !startDate || !endDate || !attnStartDate || !attnEndDate}
             >
               {loading ? 'Processing...' : 'Generate Results'}
             </Button>
             
             {generated && studentsResults.length > 0 && (
-              <div className="flex gap-2 ml-auto">
+              <div className="flex gap-2 ml-auto mb-1">
                 <Button 
-                    className="bg-white border-2 border-gray-800 text-gray-900 hover:bg-gray-100 font-semibold" 
+                    className="bg-white border-2 border-gray-800 text-gray-900 hover:bg-gray-100 font-semibold h-10" 
                     onClick={handlePrintClick}
                 >
                     🖨 Print Report
                 </Button>
                 <Button 
-                    className="bg-white border-2 border-green-600 text-green-700 hover:bg-green-50 font-semibold" 
+                    className="bg-white border-2 border-green-600 text-green-700 hover:bg-green-50 font-semibold h-10" 
                     onClick={handleWAClick}
                 >
                     📲 WhatsApp
@@ -314,7 +440,7 @@ export default function ClassResultPage() {
                   
                   <div>
                     <div className="logo-container">
-                        <Image src={logo} alt="Logo" width={150} height={150} priority />
+                        <Image src={logo} alt="Logo" width={250} height={150} priority />
                         <p className="urdu-text">تعلیم، تہذیب ساتھ ساتھ</p>
                     </div>
 
@@ -330,6 +456,10 @@ export default function ClassResultPage() {
                         <div className="detail-group">
                         <span className="detail-label">Father Name</span>
                         <span className="detail-value">{student.fatherName}</span>
+                        </div>
+                        <div className="detail-group">
+                        <span className="detail-label">Class</span>
+                        <span className="detail-value">{student.className}</span>
                         </div>
                         <div className="detail-group">
                         <span className="detail-label">Roll / ID No</span>
@@ -376,6 +506,30 @@ export default function ClassResultPage() {
                             </tr>
                         </tbody>
                         </table>
+
+                        {/* Attendance Table */}
+                        <div className="mt-4">
+                            <h4 className="text-xs font-bold uppercase mb-1">Attendance Summary ({attnStartDate} to {attnEndDate})</h4>
+                            <table className="attn-table">
+                                <thead>
+                                    <tr>
+                                        <th>Total Working Days</th>
+                                        <th>Days Present</th>
+                                        <th>Days Absent</th>
+                                        <th>Attendance %</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>{student.attendance.total}</td>
+                                        <td>{student.attendance.present}</td>
+                                        <td style={{color: student.attendance.absent > 0 ? 'red' : 'inherit'}}>{student.attendance.absent}</td>
+                                        <td>{student.attendance.percent.toFixed(1)}%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
                     </div>
                   </div>
 
@@ -399,4 +553,3 @@ export default function ClassResultPage() {
     </>
   )
 }
-

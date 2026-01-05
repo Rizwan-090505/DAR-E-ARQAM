@@ -49,17 +49,44 @@ export default function AttendanceReportPage() {
 
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from("attendance")
-        .select("studentid, status, date, students(name, fathername, mobilenumber)")
-        .eq("class_id", selectedClassId)
-        .gte("date", startDate)
-        .lte("date", endDate);
 
-      if (error) throw error;
+      // --- PAGINATION LOGIC STARTS HERE ---
+      let allData = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+          .from("attendance")
+          .select("studentid, status, date, students(name, fathername, mobilenumber)")
+          .eq("class_id", selectedClassId)
+          .gte("date", startDate)
+          .lte("date", endDate)
+          .range(from, to); // Fetch specific range
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          
+          // If we fetched fewer records than the pageSize, we are at the end
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++; // Next page
+          }
+        } else {
+          hasMore = false; // No data returned
+        }
+      }
+      // --- PAGINATION LOGIC ENDS HERE ---
 
       const map = new Map();
-      (data || []).forEach((row) => {
+      (allData || []).forEach((row) => {
         if (!map.has(row.studentid)) {
           map.set(row.studentid, {
             studentid: row.studentid,
@@ -99,7 +126,7 @@ export default function AttendanceReportPage() {
       toast({
         variant: "success",
         title: "Report ready",
-        description: `${aggregated.length} students included.`,
+        description: `${aggregated.length} students processed from ${allData.length} records.`,
       });
     } catch (err) {
       console.error("❌ Report fetch error:", err);
