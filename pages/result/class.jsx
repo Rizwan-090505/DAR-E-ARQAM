@@ -7,8 +7,94 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '.
 import logo from "../../public/logo-1.png"
 import Navbar from '../../components/Navbar'
 
-// 🔹 Simple Modal Component for Action Confirmation
-const ActionModal = ({ isOpen, onClose, onConfirm, actionType }) => {
+// 🔹 New Modal for Manual Student Selection
+const StudentSelectionModal = ({ isOpen, onClose, students, onSend }) => {
+  const [selectedIds, setSelectedIds] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIds([]);
+    }
+  }, [isOpen]);
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === students.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(students.map(s => s.dasNumber));
+    }
+  };
+
+  const handleConfirm = () => {
+    const selectedStudents = students.filter(s => selectedIds.includes(s.dasNumber));
+    onSend(selectedStudents);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 no-print">
+      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl border border-gray-200 flex flex-col max-h-[90vh]">
+        <h3 className="text-xl font-bold mb-2">✅ Select Students to Send</h3>
+        <p className="text-sm text-gray-500 mb-4">Select the specific students you want to send WhatsApp messages to.</p>
+        
+        <div className="flex justify-between items-center mb-2 px-1">
+            <span className="font-semibold text-sm">{selectedIds.length} selected</span>
+            <button onClick={toggleSelectAll} className="text-sm text-blue-600 hover:underline">
+                {selectedIds.length === students.length ? 'Deselect All' : 'Select All'}
+            </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto border border-gray-200 rounded p-2 mb-4">
+            {students.map((student) => (
+                <div key={student.dasNumber} className="flex items-center gap-3 p-2 hover:bg-gray-50 border-b last:border-0">
+                    <input 
+                        type="checkbox" 
+                        className="w-5 h-5 cursor-pointer accent-green-600"
+                        checked={selectedIds.includes(student.dasNumber)}
+                        onChange={() => toggleSelect(student.dasNumber)}
+                    />
+                    <div className="flex-1">
+                        <p className="font-bold text-sm">{student.studentName}</p>
+                        <p className="text-xs text-gray-500">Father: {student.fatherName}</p>
+                    </div>
+                    <div className="text-right">
+                        <span className={`text-xs font-bold px-2 py-1 rounded ${student.isClear ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {student.isClear ? 'Cleared' : 'Pending'}
+                        </span>
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        <div className="flex gap-3 pt-2 border-t">
+          <Button 
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold" 
+            onClick={handleConfirm}
+            disabled={selectedIds.length === 0}
+          >
+            📤 Send to {selectedIds.length} Students
+          </Button>
+          <Button 
+            className="flex-1 bg-gray-200 text-gray-800 hover:bg-gray-300" 
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 🔹 Updated Action Modal with correct button color
+const ActionModal = ({ isOpen, onClose, onConfirm, actionType, onManualSelect }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 no-print">
@@ -33,6 +119,16 @@ const ActionModal = ({ isOpen, onClose, onConfirm, actionType }) => {
           >
             👥 Include All Students (Pending & Cleared)
           </Button>
+
+          {/* Updated Button Color */}
+          {actionType === 'whatsapp' && (
+              <Button 
+                className="w-full light:bg-gray-700  hover:bg-blue-700 text-white shadow font-semibold border border-blue-800" 
+                onClick={onManualSelect}
+              >
+                📝 Select Students Manually
+              </Button>
+          )}
           
           <Button 
             className="w-full mt-2 bg-white border border-gray-400 text-gray-900 hover:bg-gray-100" 
@@ -49,17 +145,18 @@ const ActionModal = ({ isOpen, onClose, onConfirm, actionType }) => {
 export default function ClassResultPage() {
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
-  // Test/Marks Date Range
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  // Attendance Date Range
   const [attnStartDate, setAttnStartDate] = useState('')
   const [attnEndDate, setAttnEndDate] = useState('')
 
   const [studentsResults, setStudentsResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
+  
   const [showModal, setShowModal] = useState(false)
+  const [showSelectionModal, setShowSelectionModal] = useState(false) 
+  
   const [pendingAction, setPendingAction] = useState(null)
   const [printFilter, setPrintFilter] = useState('all')
 
@@ -77,15 +174,13 @@ export default function ClassResultPage() {
     supabase.from('classes').select('id, name').then(({ data }) => setClasses(data || []))
   }, [])
 
-  // 🔄 HELPER: Recursive Fetch to Bypass 1000-Row Limit
   const fetchAllAttendance = async (studentIds, start, end) => {
     let allRows = [];
     let page = 0;
-    const pageSize = 1000; // Chunk size
+    const pageSize = 1000;
     let hasMore = true;
 
     while (hasMore) {
-        // Fetch range: 0-999, then 1000-1999, etc.
         const { data, error } = await supabase
             .from('attendance')
             .select('studentid, date, status')
@@ -101,11 +196,10 @@ export default function ClassResultPage() {
 
         if (data.length > 0) {
             allRows = [...allRows, ...data];
-            // If we got fewer rows than requested, we've reached the end
             if (data.length < pageSize) {
                 hasMore = false;
             } else {
-                page++; // Move to next page
+                page++; 
             }
         } else {
             hasMore = false;
@@ -114,7 +208,6 @@ export default function ClassResultPage() {
     return allRows;
   };
 
-  // ⚡️ OPTIMIZED FETCH FUNCTION
   const fetchClassResults = async () => {
     if (!selectedClass || !startDate || !endDate || !attnStartDate || !attnEndDate) {
         alert("Please fill in all date fields (both Marks and Attendance ranges).")
@@ -125,11 +218,9 @@ export default function ClassResultPage() {
     setStudentsResults([])
     setPrintFilter('all') 
 
-    // Get Class Name for display
     const currentClassObj = classes.find(c => String(c.id) === selectedClass)
     const classNameStr = currentClassObj ? currentClassObj.name : ''
 
-    // 1. Fetch All Students in Class
     const { data: studentsData, error: studentsError } = await supabase
       .from('students')
       .select('studentid, name, fathername, mobilenumber, Clear')
@@ -147,11 +238,9 @@ export default function ClassResultPage() {
       return
     }
 
-    // 2. Extract IDs for Batch Querying
     const studentIds = studentsData.map(s => s.studentid)
 
     try {
-        // 3. Fetch Data (Marks = Standard, Attendance = Paginated Loop)
         const marksPromise = supabase
             .from('marks')
             .select(`
@@ -163,9 +252,8 @@ export default function ClassResultPage() {
             .in('studentid', studentIds)
             .gte('tests.date', startDate)
             .lte('tests.date', endDate)
-            .limit(10000); // 10k usually enough for marks
+            .limit(10000); 
         
-        // Use the new Loop Function for Attendance
         const attendancePromise = fetchAllAttendance(studentIds, attnStartDate, attnEndDate);
 
         const [marksResponse, allAttendance] = await Promise.all([
@@ -175,20 +263,13 @@ export default function ClassResultPage() {
 
         const allMarks = marksResponse.data || []
         
-        // Debugging Logs
-        console.log(`✅ Total Attendance Rows Fetched: ${allAttendance.length}`);
         const uniqueDates = [...new Set(allAttendance.map(item => item.date))].sort();
-        console.log(`✅ Total Unique Dates: ${uniqueDates.length}`);
         const classTotalDays = uniqueDates.length;
 
-        // 4. Map the data back to students
         const results = []
 
         for (const student of studentsData) {
-            // Filter marks for this specific student
             const studentMarks = allMarks.filter(m => m.studentid === student.studentid)
-            
-            // Filter attendance for this specific student
             const studentAttendance = allAttendance.filter(a => a.studentid === student.studentid)
 
             if (studentMarks && studentMarks.length > 0) {
@@ -249,6 +330,16 @@ export default function ClassResultPage() {
     }
   }
 
+  const handleManualSelectionTrigger = () => {
+    setShowModal(false); 
+    setShowSelectionModal(true); 
+  }
+
+  const handleManualSend = (selectedList) => {
+    setShowSelectionModal(false);
+    sendResults(null, selectedList); 
+  }
+
   const executePrint = (includeUncleared) => {
     if (includeUncleared) {
       setPrintFilter('all')
@@ -259,10 +350,16 @@ export default function ClassResultPage() {
     }
   }
 
-  const sendResults = async (includeUncleared) => {
-    const targetList = includeUncleared 
-      ? studentsResults 
-      : studentsResults.filter(s => s.isClear === true)
+  const sendResults = async (includeUncleared, specificList = null) => {
+    let targetList = [];
+
+    if (specificList) {
+        targetList = specificList;
+    } else {
+        targetList = includeUncleared 
+            ? studentsResults 
+            : studentsResults.filter(s => s.isClear === true)
+    }
 
     if (targetList.length === 0) {
       alert("⚠️ No results to send based on your selection.")
@@ -302,7 +399,7 @@ export default function ClassResultPage() {
       console.error(error)
       alert("❌ Failed to queue class results")
     } else {
-      alert(`✅ ${messages.length} results queued for WhatsApp (${includeUncleared ? 'All' : 'Cleared Only'})`)
+      alert(`✅ ${messages.length} results queued for WhatsApp`)
     }
   }
 
@@ -320,7 +417,36 @@ export default function ClassResultPage() {
     body { -webkit-print-color-adjust: exact; background-color: white; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
     main, nav, header, footer { display: none; }
   }
-  .report-card { border: 1px solid #ccc; padding: 15px 20px; margin: 0 auto; background: #fff; width: 100%; max-width: 210mm; min-height: 260mm; height: auto; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; position: relative; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000; }
+  
+  /* Report Card Container */
+  .report-card { 
+    border: 1px solid #ccc; 
+    padding: 15px 20px; 
+    margin: 0 auto; 
+    background: #fff; 
+    width: 100%; 
+    max-width: 210mm; /* A4 Width */
+    min-height: 260mm; 
+    height: auto; 
+    box-sizing: border-box; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
+    position: relative; 
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+    color: #000;
+  }
+
+  /* Responsive Mobile Fix */
+  @media screen and (max-width: 768px) {
+    .report-card {
+        margin-bottom: 20px;
+        min-height: auto;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+  }
+
   .logo-container { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 1rem; position: relative; }
   .logo-container img { width: 250px !important; height: auto; display: block; object-fit: contain; }
   .urdu-text { font-family: "Noto Nastaliq Urdu", serif; direction: rtl; font-size: 14px; margin-top: 0.5rem; margin-bottom: 0.75rem; color: #333; font-weight: normal; }
@@ -330,10 +456,23 @@ export default function ClassResultPage() {
   .detail-group { display: flex; flex-direction: column; min-width: 22%; }
   .detail-label { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 2px; font-weight: 600; }
   .detail-value { font-size: 15px; font-weight: bold; color: #000; }
-  .marks-table-container { flex-grow: 1; }
+  
+  /* 🛑 TABLE FIXES FOR MOBILE 🛑 */
+  .marks-table-container { 
+      flex-grow: 1; 
+      width: 100%;
+      overflow-x: auto; /* Allows table to scroll horizontally on small screens */
+  }
   table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
   th { background-color: #222; color: #fff; font-weight: 700; text-transform: uppercase; font-size: 11px; padding: 8px 6px; border: 1px solid #222; }
-  td { border: 1px solid #ddd; padding: 6px 6px; font-size: 13px; color: #333; vertical-align: middle; }
+  td { 
+      border: 1px solid #ddd; 
+      padding: 6px 6px; 
+      font-size: 13px; 
+      color: #333; 
+      vertical-align: middle;
+      word-break: break-word; /* Prevents long text from breaking layout */
+  }
   tbody tr:nth-child(even) { background-color: #f9f9f9; }
   .col-subject { text-align: left; padding-left: 10px; font-weight: 500; }
   .col-center { text-align: center; }
@@ -549,6 +688,14 @@ export default function ClassResultPage() {
         onClose={() => setShowModal(false)} 
         onConfirm={handleActionConfirm}
         actionType={pendingAction}
+        onManualSelect={handleManualSelectionTrigger}
+      />
+      
+      <StudentSelectionModal
+        isOpen={showSelectionModal}
+        onClose={() => setShowSelectionModal(false)}
+        students={studentsResults}
+        onSend={handleManualSend}
       />
     </>
   )
