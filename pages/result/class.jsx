@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { supabase } from '../../utils/supabaseClient'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -6,92 +7,6 @@ import Image from 'next/image'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../../components/ui/select'
 import logo from "../../public/logo-1.png"
 import Navbar from '../../components/Navbar'
-
-// 🔹 New Modal for Manual Student Selection
-const StudentSelectionModal = ({ isOpen, onClose, students, onSend }) => {
-  const [selectedIds, setSelectedIds] = useState([]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedIds([]);
-    }
-  }, [isOpen]);
-
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === students.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(students.map(s => s.dasNumber));
-    }
-  };
-
-  const handleConfirm = () => {
-    const selectedStudents = students.filter(s => selectedIds.includes(s.dasNumber));
-    onSend(selectedStudents);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 no-print">
-      <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl border border-gray-200 flex flex-col max-h-[90vh]">
-        <h3 className="text-xl font-bold mb-2">✅ Select Students to Send</h3>
-        <p className="text-sm text-gray-500 mb-4">Select the specific students you want to send WhatsApp messages to.</p>
-        
-        <div className="flex justify-between items-center mb-2 px-1">
-            <span className="font-semibold text-sm">{selectedIds.length} selected</span>
-            <button onClick={toggleSelectAll} className="text-sm text-blue-600 hover:underline">
-                {selectedIds.length === students.length ? 'Deselect All' : 'Select All'}
-            </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto border border-gray-200 rounded p-2 mb-4">
-            {students.map((student) => (
-                <div key={student.dasNumber} className="flex items-center gap-3 p-2 hover:bg-gray-50 border-b last:border-0">
-                    <input 
-                        type="checkbox" 
-                        className="w-5 h-5 cursor-pointer accent-green-600"
-                        checked={selectedIds.includes(student.dasNumber)}
-                        onChange={() => toggleSelect(student.dasNumber)}
-                    />
-                    <div className="flex-1">
-                        <p className="font-bold text-sm">{student.studentName}</p>
-                        <p className="text-xs text-gray-500">Father: {student.fatherName}</p>
-                    </div>
-                    <div className="text-right">
-                        <span className={`text-xs font-bold px-2 py-1 rounded ${student.isClear ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {student.isClear ? 'Cleared' : 'Pending'}
-                        </span>
-                    </div>
-                </div>
-            ))}
-        </div>
-
-        <div className="flex gap-3 pt-2 border-t">
-          <Button 
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold" 
-            onClick={handleConfirm}
-            disabled={selectedIds.length === 0}
-          >
-            📤 Send to {selectedIds.length} Students
-          </Button>
-          <Button 
-            className="flex-1 bg-gray-200 text-gray-800 hover:bg-gray-300" 
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // 🔹 Updated Action Modal with correct button color
 const ActionModal = ({ isOpen, onClose, onConfirm, actionType, onManualSelect }) => {
@@ -143,6 +58,7 @@ const ActionModal = ({ isOpen, onClose, onConfirm, actionType, onManualSelect })
 };
 
 export default function ClassResultPage() {
+  const router = useRouter()
   const [classes, setClasses] = useState([])
   const [selectedClass, setSelectedClass] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -153,9 +69,8 @@ export default function ClassResultPage() {
   const [studentsResults, setStudentsResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [generated, setGenerated] = useState(false)
-  
+   
   const [showModal, setShowModal] = useState(false)
-  const [showSelectionModal, setShowSelectionModal] = useState(false) 
   
   const [pendingAction, setPendingAction] = useState(null)
   const [printFilter, setPrintFilter] = useState('all')
@@ -330,14 +245,21 @@ export default function ClassResultPage() {
     }
   }
 
+  // 🔹 Redirects to /result/selection with query params
   const handleManualSelectionTrigger = () => {
-    setShowModal(false); 
-    setShowSelectionModal(true); 
-  }
-
-  const handleManualSend = (selectedList) => {
-    setShowSelectionModal(false);
-    sendResults(null, selectedList); 
+    setShowModal(false);
+    
+    // We forward the filter params so the selection page can fetch or process context
+    router.push({
+      pathname: '/result/selection',
+      query: {
+        classId: selectedClass,
+        startDate: startDate,
+        endDate: endDate,
+        attnStartDate: attnStartDate,
+        attnEndDate: attnEndDate
+      }
+    });
   }
 
   const executePrint = (includeUncleared) => {
@@ -689,13 +611,6 @@ export default function ClassResultPage() {
         onConfirm={handleActionConfirm}
         actionType={pendingAction}
         onManualSelect={handleManualSelectionTrigger}
-      />
-      
-      <StudentSelectionModal
-        isOpen={showSelectionModal}
-        onClose={() => setShowSelectionModal(false)}
-        students={studentsResults}
-        onSend={handleManualSend}
       />
     </>
   )
