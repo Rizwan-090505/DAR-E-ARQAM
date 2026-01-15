@@ -12,8 +12,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Breadcrumbs from '../components/Breadcrumbs'
 
 // --- HELPER: Handle Supabase 1000 Row Limit ---
-const fetchWithPagination = async (query) => {
-  let allData = [];
+const fetchWithPagination = async (query: any) => {
+  let allData: any[] = [];
   let from = 0;
   let limit = 1000;
   let hasMore = true;
@@ -156,39 +156,39 @@ export default function Dashboard() {
   if (isLoading) return <Loader />
 
   return (
-    <div className="min-h-screen bg-[#0f172a] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0f1d] to-black text-slate-100 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0f172a] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-slate-900 dark:via-[#0a0f1d] dark:to-black text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-500/30 transition-colors duration-300">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-6 py-10 space-y-8">
         <Breadcrumbs items={[{ label: 'Dashboard', href: '/dashboard' }]} />
 
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-end gap-6 pb-4 border-b border-white/5">
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 pb-4 border-b border-slate-200 dark:border-white/5">
           <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-              <Layers className="w-8 h-8 text-blue-400" /> Classes
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
+              <Layers className="w-8 h-8 text-blue-600 dark:text-blue-400" /> Classes
             </h1>
-            <p className="text-slate-400 font-medium">Overview of academic sessions.</p>
+            <p className="text-slate-500 dark:text-slate-400 font-medium">Overview of academic sessions.</p>
           </div>
 
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="rounded-full px-6 bg-blue-600 hover:bg-blue-500 text-white shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all hover:scale-105 font-bold">
+              <Button className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 dark:shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all hover:scale-105 font-bold">
                 <Plus className="w-5 h-5 mr-2" /> New Class
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-slate-900/95 backdrop-blur-2xl border-white/10 text-white rounded-[2rem] shadow-2xl">
+            <DialogContent className="bg-white dark:bg-slate-900/95 backdrop-blur-2xl border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] shadow-2xl">
               <DialogHeader><DialogTitle className="text-2xl font-bold">New Class</DialogTitle></DialogHeader>
               <div className="space-y-5 py-6">
-                <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-black/40 border-white/10 text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-                <Input placeholder="Brief Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-black/40 border-white/10 text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-                <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-500" onClick={createClass}>Create Class</Button>
+                <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+                <Input placeholder="Brief Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+                <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white" onClick={createClass}>Create Class</Button>
               </div>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* PREMIUM GLASSMORPHIC GRID */}
+        {/* PREMIUM CARD GRID */}
         <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <AnimatePresence mode='popLayout'>
             {classes.map((cls, index) => (
@@ -199,15 +199,19 @@ export default function Dashboard() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.4, type: "spring", bounce: 0.3, delay: index * 0.05 }}
               >
-                {/* ULTRA-PREMIUM CARD DESIGN */}
+                {/* FIXED HERE:
+                   Added `dark:bg-transparent`. 
+                   This forces the solid white background to disappear in dark mode, 
+                   allowing the glass gradient to take full effect.
+                */}
                 <div 
                     onClick={() => router.push(`/class/${cls.id}`)}
                     className="group relative h-full flex flex-col justify-between p-5 cursor-pointer
                     rounded-[2rem] 
-                    border-t-white/20 border-l-white/20 border-b-black/40 border-r-black/40 border
-                    bg-gradient-to-br from-white/[0.08] to-transparent backdrop-blur-2xl
-                    shadow-2xl shadow-black/50
-                    hover:from-white/[0.12] hover:to-white/[0.02] hover:scale-[1.02] hover:-translate-y-1
+                    border border-slate-200 dark:border-white/10
+                    bg-white dark:bg-transparent dark:bg-gradient-to-br dark:from-white/[0.08] dark:to-transparent backdrop-blur-2xl
+                    shadow-xl shadow-slate-200/60 dark:shadow-black/50
+                    hover:scale-[1.02] hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10 dark:hover:from-white/[0.12]
                     transition-all duration-300 ease-out overflow-hidden"
                 >
                   
@@ -215,45 +219,56 @@ export default function Dashboard() {
                   <div className="space-y-3 z-10">
                     <div className="flex justify-between items-start">
                         {/* ID Badge */}
-                        <span className="text-[10px] font-black tracking-widest text-slate-400 bg-black/40 px-3 py-1 rounded-full border border-white/10">
+                        <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-black/40 px-3 py-1 rounded-full border border-slate-200 dark:border-white/10">
                             #{cls.id}
                         </span>
 
-                        {/* Status Dot (Glow effect) */}
+                        {/* Status Dot */}
                         <div className={`relative flex items-center justify-center w-3 h-3 rounded-full ${
-                            cls.attendanceMarkedToday ? 'bg-emerald-400' : 'bg-rose-500'
+                            cls.attendanceMarkedToday ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-rose-500'
                         }`}>
                             <span className={`absolute inset-0 rounded-full animate-ping opacity-75 ${
-                                cls.attendanceMarkedToday ? 'bg-emerald-400' : 'bg-rose-500'
+                                cls.attendanceMarkedToday ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-rose-500'
                             }`}></span>
                         </div>
                     </div>
 
                     <div>
-                        {/* BOLDER TYPOGRAPHY */}
-                        <h3 className="text-2xl font-extrabold tracking-tight text-white group-hover:text-blue-300 transition-colors drop-shadow-smTruncate">
+                        {/* Title & Desc */}
+                        <h3 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
                             {cls.name}
                         </h3>
-                        <p className="text-sm text-slate-400 font-medium line-clamp-1 mt-0.5">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium line-clamp-1 mt-0.5">
                             {cls.description || "No description provided."}
                         </p>
                     </div>
                   </div>
 
-                  {/* Middle Section: Compressed Stats */}
+                  {/* Middle Section: Stats Boxes */}
                   <div className="grid grid-cols-2 gap-3 my-4 z-10">
-                    <div className="flex flex-col items-start justify-center p-3 rounded-3xl bg-black/30 border border-white/5 relative overflow-hidden group/stat">
-                        <div className="absolute inset-0 bg-blue-500/20 opacity-0 group-hover/stat:opacity-100 transition-opacity blurred-xl"></div>
-                        <Users className="w-4 h-4 text-blue-400 mb-2 relative z-10" />
-                        {/* BIGGER NUMBERS */}
-                        <span className="text-3xl font-black text-white relative z-10 leading-none">{cls.studentCount}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 relative z-10 mt-1">Students</span>
+                    
+                    {/* Student Count Box */}
+                    <div className="flex flex-col items-start justify-center p-3 rounded-3xl bg-slate-50 dark:bg-black/30 border border-slate-100 dark:border-white/5 relative overflow-hidden group/stat">
+                        <div className="absolute inset-0 bg-blue-500/10 dark:bg-blue-500/20 opacity-0 group-hover/stat:opacity-100 transition-opacity blurred-xl"></div>
+                        <Users className="w-4 h-4 text-blue-500 dark:text-blue-400 mb-2 relative z-10" />
+                        <span className="text-3xl font-black text-slate-900 dark:text-white relative z-10 leading-none">
+                            {cls.studentCount}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-500 relative z-10 mt-1">
+                            Students
+                        </span>
                     </div>
-                    <div className="flex flex-col items-start justify-center p-3 rounded-3xl bg-black/30 border border-white/5 relative overflow-hidden group/stat">
-                         <div className="absolute inset-0 bg-purple-500/20 opacity-0 group-hover/stat:opacity-100 transition-opacity blurred-xl"></div>
-                        <Calendar className="w-4 h-4 text-purple-400 mb-2 relative z-10" />
-                        <span className="text-3xl font-black text-white relative z-10 leading-none">{cls.totalClassDays}</span>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 relative z-10 mt-1">Days</span>
+
+                    {/* Days Count Box */}
+                    <div className="flex flex-col items-start justify-center p-3 rounded-3xl bg-slate-50 dark:bg-black/30 border border-slate-100 dark:border-white/5 relative overflow-hidden group/stat">
+                         <div className="absolute inset-0 bg-purple-500/10 dark:bg-purple-500/20 opacity-0 group-hover/stat:opacity-100 transition-opacity blurred-xl"></div>
+                        <Calendar className="w-4 h-4 text-purple-500 dark:text-purple-400 mb-2 relative z-10" />
+                        <span className="text-3xl font-black text-slate-900 dark:text-white relative z-10 leading-none">
+                            {cls.totalClassDays}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-500 relative z-10 mt-1">
+                            Days
+                        </span>
                     </div>
                   </div>
 
@@ -263,7 +278,7 @@ export default function Dashboard() {
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-9 w-9 rounded-full bg-black/40 hover:bg-blue-600/80 text-slate-300 hover:text-white border border-white/10 transition-all"
+                            className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-blue-600 dark:hover:bg-blue-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
                             onClick={() => {
                                 setEditingClass(cls); setNewClassName(cls.name); setNewClassDescription(cls.description);
                                 setIsEditDialogOpen(true);
@@ -274,7 +289,7 @@ export default function Dashboard() {
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-9 w-9 rounded-full bg-black/40 hover:bg-rose-600/80 text-slate-300 hover:text-white border border-white/10 transition-all"
+                            className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-rose-600 dark:hover:bg-rose-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
                             onClick={() => {
                                 setDeleteClassId(cls.id); setIsDeleteDialogOpen(true);
                             }}
@@ -284,14 +299,14 @@ export default function Dashboard() {
                     </div>
 
                     {/* Enter Button */}
-                    <div className="h-9 px-4 rounded-full bg-white/5 border border-white/10 flex items-center gap-2 group-hover:bg-blue-600 group-hover:border-blue-500 transition-all duration-300">
+                    <div className="h-9 px-4 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center gap-2 group-hover:bg-blue-600 group-hover:border-blue-500 text-slate-700 dark:text-slate-300 group-hover:text-white transition-all duration-300">
                         <span className="text-xs font-bold uppercase tracking-wider">Enter</span>
                         <ArrowRight className="w-4 h-4" />
                     </div>
                   </div>
 
-                 {/* Subtle gradient overlay for reflection effect */}
-                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-t from-transparent via-transparent to-white/5 pointer-events-none z-0"></div>
+                 {/* Glossy overlay effect */}
+                 <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-t from-transparent via-transparent to-white/40 dark:to-white/5 pointer-events-none z-0"></div>
 
                 </div>
               </motion.div>
@@ -300,25 +315,25 @@ export default function Dashboard() {
         </motion.div>
       </main>
 
-      {/* EDIT MODAL (Matches new theme) */}
+      {/* EDIT MODAL */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="bg-slate-900/95 backdrop-blur-2xl border-white/10 text-white rounded-[2rem] shadow-2xl">
+        <DialogContent className="bg-white dark:bg-slate-900/95 backdrop-blur-2xl border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] shadow-2xl">
           <DialogHeader><DialogTitle className="text-2xl font-bold">Edit Class</DialogTitle></DialogHeader>
           <div className="space-y-5 py-6">
-            <Input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-black/40 border-white/10 text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-            <Input value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-black/40 border-white/10 text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-            <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-500" onClick={updateClass}>Update Class</Button>
+            <Input value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+            <Input value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+            <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white" onClick={updateClass}>Update Class</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* DELETE MODAL (Matches new theme) */}
+      {/* DELETE MODAL */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="bg-slate-900/95 backdrop-blur-2xl border-white/10 text-white rounded-[2rem] shadow-2xl">
+        <DialogContent className="bg-white dark:bg-slate-900/95 backdrop-blur-2xl border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] shadow-2xl">
           <DialogHeader><DialogTitle className="text-xl font-bold">Delete Class</DialogTitle></DialogHeader>
-          <p className="text-slate-400 font-medium">Are you sure? This action is permanent and cannot be undone.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium">Are you sure? This action is permanent and cannot be undone.</p>
           <DialogFooter className="mt-6 gap-2">
-            <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} className="rounded-xl h-12 hover:bg-white/5 text-slate-400 font-bold">Cancel</Button>
+            <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} className="rounded-xl h-12 hover:bg-slate-100 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 font-bold">Cancel</Button>
             <Button variant="destructive" onClick={deleteClass} className="rounded-xl h-12 bg-rose-600 hover:bg-rose-700 font-bold text-white shadow-lg shadow-rose-900/20">Delete Permanently</Button>
           </DialogFooter>
         </DialogContent>
@@ -327,3 +342,5 @@ export default function Dashboard() {
     </div>
   )
 }
+
+
