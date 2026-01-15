@@ -4,25 +4,43 @@ import { supabase } from '../utils/supabaseClient';
 import Navbar from '../components/Navbar';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
+import { 
+  Search, 
+  Users, 
+  FileText, 
+  Send, 
+  CheckSquare, 
+  Square, 
+  X, 
+  ShieldCheck, 
+  Lock,
+  Loader2,
+  RefreshCcw,
+  Sparkles
+} from 'lucide-react';
 
-// 📝 A simple custom modal component
+// 📝 A styled custom modal component
 const CustomModal = ({ title, description, isOpen, onClose, onAction, children }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 dark:bg-opacity-70">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-        <div className="flex justify-between items-center pb-3">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 dark:dark-text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-            &times;
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-start p-6 border-b border-gray-100 dark:border-white/5">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+            <X className="w-5 h-5" />
           </button>
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>
-        <div>{children}</div>
-        <div className="flex justify-end gap-2 mt-4">
-          <Button onClick={onClose} variant="ghost" className="px-3 py-2 text-sm">Cancel</Button>
-          <Button onClick={onAction} className="px-3 py-2 text-sm">Generate Message</Button>
+        <div className="p-6">
+            {children}
+        </div>
+        <div className="flex justify-end gap-3 p-6 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5">
+          <Button onClick={onClose} variant="ghost" className="text-gray-600 dark:text-gray-400">Cancel</Button>
+          <Button onClick={onAction} className="bg-blue-600 hover:bg-blue-700 text-white">Generate Message</Button>
         </div>
       </div>
     </div>
@@ -35,7 +53,7 @@ export default function BulkMessagePage() {
 
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
-  
+    
   // State for the filter
   const [filterClear, setFilterClear] = useState('all'); // Options: 'all', 'true', 'false'
 
@@ -103,8 +121,6 @@ export default function BulkMessagePage() {
     }
 
     setLoading(true);
-    // FIX 1: Explicitly requesting 'Clear' (Capital C)
-    // Note: If you created the column with quotes like "Clear", Supabase respects that case.
     supabase
       .from('students')
       .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
@@ -130,11 +146,9 @@ export default function BulkMessagePage() {
   const filtered = useMemo(() => {
     let result = students;
 
-    // FIX 2: Using s.Clear (Capital C) for filtering logic
     if (filterClear === 'true') {
       result = result.filter(s => s.Clear === true);
     } else if (filterClear === 'false') {
-      // Handles false, null, or undefined as "not clear"
       result = result.filter(s => s.Clear !== true);
     }
 
@@ -270,27 +284,30 @@ export default function BulkMessagePage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="w-full max-w-sm p-8 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-6">Enter Auth Key</h2>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 p-8 rounded-2xl shadow-xl">
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Admin Access</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Enter your authentication key to continue</p>
+          </div>
           <div className="space-y-4">
             <div>
-              <label htmlFor="authKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Auth Key
-              </label>
+              {/* FIXED: Solid backgrounds to ensure text is visible */}
               <input
                 type="password"
-                id="authKey"
                 value={authKey}
                 onChange={(e) => setAuthKey(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                placeholder="Enter the auth key for admins"
+                className="block w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                placeholder="Auth Key"
               />
             </div>
             <Button
               onClick={handleAuth}
-              className="w-full justify-center px-4 py-2"
+              className="w-full rounded-xl py-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/20 transition-all"
             >
               Authenticate
             </Button>
@@ -301,167 +318,234 @@ export default function BulkMessagePage() {
   }
 
   return (
-    <>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
-      <main className="max-w-6xl mx-auto p-4 sm:p-6">
-        <div className="bg-white dark:bg-gray-800 dark:border-gray-700 border border-gray-100 dark:shadow-none rounded-lg shadow-md p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6 mb-4">
-            <div>
-              <h1 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">Send Message (bulk)</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-300 mt-1">
-                Use placeholders: <code>{`{{name}}`}</code>, <code>{`{{fathername}}`}</code>, <code>{`{{class}}`}</code>, <code>{`{{date}}`}</code>
-              </p>
+      
+      <main className="container mx-auto max-w-7xl p-4 md:p-6 space-y-6">
+        
+        {/* Header & Controls */}
+        <div className="flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-end">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Bulk Messaging</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Select students and send personalized broadcasts.
+            </p>
+          </div>
+        </div>
+
+        {/* Filter Bar */}
+        <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl p-4 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-4">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Select Class</label>
+              <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
+                <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                  <SelectValue placeholder="Select Class" />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex gap-3 flex-col sm:flex-row items-stretch sm:items-end">
-              <div className="w-full sm:w-48">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Class</label>
-                <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Status Filter */}
-              <div className="w-full sm:w-36">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                <Select value={filterClear} onValueChange={setFilterClear}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Students</SelectItem>
-                    <SelectItem value="true">Cleared Only</SelectItem>
-                    <SelectItem value="false">Not Cleared</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="w-full sm:w-64">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search</label>
+            <div className="md:col-span-3">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Status</label>
+              <Select value={filterClear} onValueChange={setFilterClear}>
+                <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Students</SelectItem>
+                  <SelectItem value="true">Cleared Only</SelectItem>
+                  <SelectItem value="false">Not Cleared</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Search</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="name / id / mobile"
-                  className="w-full px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Search by name, ID or mobile..."
+                  className="w-full pl-9 pr-4 py-2 rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                 />
               </div>
             </div>
           </div>
-          <div className="flex flex-col lg:flex-row gap-6">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                  {loading ? 'Loading students...' : `${filtered.length} students`}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+          
+          {/* Left Col: Student List */}
+          <div className="lg:col-span-7 flex flex-col h-full">
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden h-[600px]">
+              
+              {/* List Header */}
+              <div className="p-4 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-500" />
+                  <span className="font-semibold text-sm">
+                    {loading ? 'Loading...' : `${filtered.length} Students`}
+                  </span>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={toggleSelectAll} disabled={!students.length} className="px-3 py-1.5">
-                    {selectAll ? 'Unselect all' : 'Select all'}
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={toggleSelectAll} 
+                    disabled={!students.length} 
+                    className="h-8 text-xs border-gray-200 dark:border-white/10"
+                  >
+                    {selectAll ? <CheckSquare className="w-3 h-3 mr-1" /> : <Square className="w-3 h-3 mr-1" />}
+                    {selectAll ? 'Unselect All' : 'Select All'}
                   </Button>
-                  <Button onClick={invertSelection} disabled={!students.length} className="px-3 py-1.5">Invert</Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={invertSelection} 
+                    disabled={!students.length}
+                    className="h-8 text-xs border-gray-200 dark:border-white/10"
+                  >
+                    <RefreshCcw className="w-3 h-3 mr-1" /> Invert
+                  </Button>
                 </div>
               </div>
-              <div className="border border-gray-100 dark:border-gray-700 rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900">
-                <div className="max-h-[56vh] overflow-auto">
-                  {filtered.length === 0 && !loading && (
-                    <div className="p-6 text-center text-sm text-gray-500 dark:text-gray-400">No students found matching your filters.</div>
-                  )}
-                  <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {filtered.map(s => {
-                      const checked = selectedIds.has(s.studentid);
-                      return (
-                        <li key={s.studentid} className={`flex items-center gap-4 p-3 sm:p-4 ${checked ? 'bg-blue-50 dark:bg-gray-800' : 'bg-transparent'}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleSelect(s.studentid)}
-                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate flex items-center gap-2">
-                                {s.name}
-                                {/* FIX 3: Using s.Clear (Capital C) for the badge */}
-                                {s.Clear ? 
-                                  <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">Clear</span> 
-                                  : 
-                                  <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100">Pending</span>
-                                }
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{s.studentid}</div>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between gap-3 text-xs text-gray-600 dark:text-gray-400">
-                              <div className="truncate">{s.fathername}</div>
-                              <div className="font-medium text-gray-800 dark:text-gray-200">{s.class}</div>
-                            </div>
+
+              {/* Scrollable List */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10">
+                {loading && (
+                  <div className="flex flex-col items-center justify-center h-40 gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                    <span className="text-sm text-gray-500">Fetching student data...</span>
+                  </div>
+                )}
+                
+                {!loading && filtered.length === 0 && (
+                  <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    No students found matching criteria.
+                  </div>
+                )}
+
+                <ul className="divide-y divide-gray-100 dark:divide-white/5">
+                  {filtered.map(s => {
+                    const checked = selectedIds.has(s.studentid);
+                    return (
+                      <li 
+                        key={s.studentid} 
+                        onClick={() => toggleSelect(s.studentid)}
+                        // COMPACT FIX: Reduced padding to p-2.5 and gap to gap-3
+                        className={`group flex items-center gap-3 p-2.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${checked ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 dark:border-gray-600 text-transparent'}`}>
+                          <CheckSquare className="w-3 h-3" />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-sm font-medium truncate ${checked ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-200'}`}>
+                              {s.name}
+                            </span>
+                            {s.Clear ? 
+                              <span className="text-[10px] inline-flex items-center gap-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full font-medium">
+                                <ShieldCheck className="w-3 h-3" /> Clear
+                              </span> 
+                              : 
+                              <span className="text-[10px] inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-medium">
+                                Pending
+                              </span>
+                            }
                           </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
+                          {/* COMPACT FIX: Reduced top margin */}
+                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            <span className="truncate">ID: {s.studentid}</span>
+                            <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                            <span className="truncate">{s.fathername}</span>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             </div>
-            <aside className="w-full lg:w-[420px] flex-shrink-0">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {templates.map((template) => (
-                  <button
-                    key={template.name}
-                    onClick={() => handleTemplateClick(template)}
-                    className="flex-1 px-3 py-2 text-xs font-semibold rounded-md border border-gray-200 bg-gray-50 text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    {template.name}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={10}
-                placeholder="Write message using {{name}}, {{fathername}}, {{class}}, {{date}}"
-                className="w-full h-56 sm:h-64 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
-              />
-              <div className="flex items-center gap-3 mt-4">
-                <Button
-                  onClick={handleSave}
-                  disabled={saving || selectedIds.size === 0 || !message.trim()}
-                  className="px-4 py-2"
-                >
-                  {saving ? 'Saving...' : `Save for ${selectedIds.size || 0} selected`}
-                </Button>
-                <Button
-                  onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
-                  disabled={saving}
-                  className="px-3 py-2"
-                >
-                  Reset
-                </Button>
-                <div className="ml-auto text-sm text-gray-600 dark:text-gray-300">
-                  {students.length > 0 && <span><strong className="text-gray-800 dark:text-gray-100">{students.length}</strong> in class</span>}
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                <strong>Note:</strong> Placeholders like <code>{`{{name}}`}</code> will be replaced. For bold/italics, use `*...*` and `_..._`.
-              </p>
-            </aside>
           </div>
+
+          {/* Right Col: Message Composer */}
+          <div className="lg:col-span-5 flex flex-col h-full">
+             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-[600px] flex flex-col">
+                <div className="mb-4">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
+                    <Sparkles className="w-4 h-4" /> Quick Templates
+                  </h2>
+                  <div className="grid grid-cols-2 gap-2">
+                    {templates.map((template) => (
+                      <button
+                        key={template.name}
+                        onClick={() => handleTemplateClick(template)}
+                        className="text-xs font-medium px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-900/20 dark:hover:border-blue-800 text-gray-700 dark:text-gray-300 transition-all text-left"
+                      >
+                        {template.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col min-h-0">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Message Body
+                  </label>
+                  {/* FIXED: Solid backgrounds and high contrast colors */}
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Type your message here... Use {{name}}, {{fathername}} etc."
+                    className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono"
+                  />
+                  <div className="mt-2 text-[10px] text-gray-400 flex flex-wrap gap-2">
+                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{name}}'}</span>
+                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{fathername}}'}</span>
+                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{id}}'}</span>
+                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{class}}'}</span>
+                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{date}}'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                  <Button
+                    onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
+                    disabled={saving}
+                    variant="ghost"
+                    className="flex-1"
+                  >
+                    Reset
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving || selectedIds.size === 0 || !message.trim()}
+                    className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                    {saving ? 'Sending...' : `Send to ${selectedIds.size} Students`}
+                  </Button>
+                </div>
+             </div>
+          </div>
+
         </div>
       </main>
+
       <CustomModal
         title={currentTemplate?.name}
-        description="Please provide the necessary details for your message."
+        description="Fill in the specific details for this template."
         isOpen={showTemplateModal}
         onClose={() => setShowTemplateModal(false)}
         onAction={generateTemplateMessage}
       >
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-5">
           {currentTemplate?.placeholders?.map((p) => (
-            <div key={p.name} className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor={p.name} className="text-right text-gray-700 dark:text-gray-300">
+            <div key={p.name} className="space-y-1.5">
+              <label htmlFor={p.name} className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 {p.label}
               </label>
               <input
@@ -469,12 +553,12 @@ export default function BulkMessagePage() {
                 type={p.type}
                 value={templateInputs[p.name]}
                 onChange={(e) => setTemplateInputs({ ...templateInputs, [p.name]: e.target.value })}
-                className="col-span-3 px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </div>
           ))}
         </div>
       </CustomModal>
-    </>
+    </div>
   );
 }

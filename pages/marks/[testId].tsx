@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import Navbar from '../../components/Navbar'
 import { useToast } from '../../hooks/use-toast'
-import { Loader2, Trash2, X } from 'lucide-react'
+import { Loader2, Trash2, X, Save, Calendar } from 'lucide-react'
 
 interface Student {
   studentid: string
@@ -29,6 +29,11 @@ export default function MarksEntryPage() {
   const [students, setStudents] = useState<Student[]>([])
   const [marks, setMarks] = useState<MarkState>({})
   const [test, setTest] = useState<Test | null>(null)
+  
+  // New States for editing test details
+  const [testName, setTestName] = useState('')
+  const [testDate, setTestDate] = useState('')
+
   const [totalMarks, setTotalMarks] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -53,7 +58,11 @@ export default function MarksEntryPage() {
           .eq('id', Number(testId))
           .single()
         if (testErr) throw testErr
+        
         setTest(testData)
+        // Initialize editable states
+        setTestName(testData.test_name)
+        setTestDate(testData.date || '')
 
         // Load Students (with mobilenumber)
         const { data: studentData, error: stuErr } = await supabase
@@ -112,13 +121,28 @@ export default function MarksEntryPage() {
       return
     }
 
+    if (!testName.trim()) {
+      toast({ variant: 'destructive', title: 'Missing Name', description: 'Test Name is required.' })
+      return
+    }
+
     setSaving(true)
     try {
       const tid = Number(testId)
 
-      // Filter out excluded students
-      const filteredMarks = Object.entries(marks).filter(([studentid]) => !excluded.has(studentid))
+      // 1. Update Test Details (Name & Date) in 'tests' table
+      const { error: testUpdateError } = await supabase
+        .from('tests')
+        .update({ 
+          test_name: testName, 
+          date: testDate || null 
+        })
+        .eq('id', tid)
 
+      if (testUpdateError) throw testUpdateError
+
+      // 2. Prepare Marks Payload
+      const filteredMarks = Object.entries(marks).filter(([studentid]) => !excluded.has(studentid))
       const normalizedPayload = filteredMarks.map(([studentid, { obtained }]) => ({
         test_id: tid,
         studentid,
@@ -134,9 +158,9 @@ export default function MarksEntryPage() {
         .upsert(normalizedPayload, { onConflict: 'test_id,studentid' })
       if (upsertErr) throw upsertErr
 
-      // Send to parents if enabled
+      // 3. Send to parents if enabled
       if (sendToParents) {
-        const testDate = test?.date ? new Date(test.date).toLocaleDateString('en-GB') : ''
+        const displayDate = testDate ? new Date(testDate).toLocaleDateString('en-GB') : ''
         const messagesPayload = students
           .filter((s) => !excluded.has(s.studentid))
           .map((s) => {
@@ -146,7 +170,7 @@ export default function MarksEntryPage() {
               student_id: s.studentid,
               class_id: test?.class_id || null,
               number: s.mobilenumber || null,
-              text: `Respected Parents,\n\n${s.name}'s marks in ${test?.test_name} held on ${testDate} are ${obtained}/${parsedTotal} (Percentage: ${percentage}%).\n\nRegards,\nManagement\nDAR-E-ARQAM SCHOOL`,
+              text: `Respected Parents,\n\n${s.name}'s marks in ${testName} held on ${displayDate} are ${obtained}/${parsedTotal} (Percentage: ${percentage}%).\n\nRegards,\nManagement\nDAR-E-ARQAM SCHOOL`,
               created_at: new Date().toISOString(),
               sent: false
             }
@@ -155,8 +179,11 @@ export default function MarksEntryPage() {
         if (msgErr) throw msgErr
       }
 
-      toast({ variant: 'success', title: 'Saved', description: 'Marks updated successfully.' })
-      router.push('/marks')
+      toast({ variant: 'success', title: 'Saved', description: 'Test details and marks updated.' })
+      
+      // Optional: Update local test object to reflect changes
+      setTest(prev => prev ? { ...prev, test_name: testName, date: testDate } : null)
+      
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Save failed', description: error?.message ?? 'Unknown error' })
     } finally {
@@ -198,32 +225,63 @@ export default function MarksEntryPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
       <div className="container mx-auto p-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">{test.test_name}</h1>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Marks Entry</p>
+        
+        {/* Header & Controls */}
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+          <div className="w-full md:w-auto flex-1">
+             <div className="text-sm text-gray-500 dark:text-slate-400 mb-1">Editing Marks For</div>
+             
+             {/* EDITABLE TEST NAME AND DATE */}
+             <div className="flex flex-col sm:flex-row gap-3">
+                <Input 
+                  value={testName}
+                  onChange={(e) => setTestName(e.target.value)}
+                  placeholder="Test Name"
+                  className="text-lg font-semibold bg-white/50 dark:bg-white/10 border-transparent hover:border-gray-300 focus:border-gray-500 transition-all w-full sm:w-64"
+                />
+                <div className="relative">
+                  <Input 
+                    type="date"
+                    value={testDate}
+                    onChange={(e) => setTestDate(e.target.value)}
+                    className="w-full sm:w-48 bg-white/50 dark:bg-white/10 border-transparent hover:border-gray-300 focus:border-gray-500"
+                  />
+                </div>
+             </div>
           </div>
-          <Button
-            variant="destructive"
-            onClick={deleteTest}
-            className="rounded-full bg-red-600 hover:bg-red-700 shadow hover:shadow-red-500/20 transition-all"
-          >
-            <Trash2 className="w-4 h-4 mr-2" /> Delete Test
-          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              onClick={deleteTest}
+              className="rounded-full bg-red-600 hover:bg-red-700 shadow hover:shadow-red-500/20 transition-all"
+            >
+              <Trash2 className="w-4 h-4 mr-2" /> Delete
+            </Button>
+            
+            {/* Primary Save Button at top as well */}
+            <Button
+              onClick={saveMarks}
+              disabled={saving}
+              className="rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow hover:shadow-blue-500/20 transition-all"
+            >
+               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+               Save All
+            </Button>
+          </div>
         </div>
 
         {/* Total marks card */}
         <div className="mb-6 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 backdrop-blur-xl shadow-sm dark:shadow-xl">
           <div className="p-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Total Marks</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Total Marks (Max Score)</label>
             <Input
               type="number"
               value={totalMarks}
               onChange={(e) => setTotalMarks(e.target.value)}
               placeholder="e.g., 100"
               disabled={saving}
-              className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100"
+              className="bg-transparent border-gray-300 dark:border-slate-600 focus:border-gray-500 dark:focus:border-slate-300 text-gray-900 dark:text-slate-100 max-w-xs"
             />
           </div>
         </div>
@@ -233,11 +291,11 @@ export default function MarksEntryPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-600 dark:text-slate-300 border-b border-gray-200 dark:border-white/10">
-                <th className="p-3 font-medium"></th>
-                <th className="p-3 font-medium">Student ID</th>
-                <th className="p-3 font-medium">Name</th>
-                <th className="p-3 font-medium">Father Name</th>
-                <th className="p-3 font-medium">Obtained</th>
+                <th className="p-3 font-medium w-12"></th>
+                <th className="p-3 font-medium text-left">Student ID</th>
+                <th className="p-3 font-medium text-left">Name</th>
+                <th className="p-3 font-medium text-left">Father Name</th>
+                <th className="p-3 font-medium text-left w-32">Obtained</th>
               </tr>
             </thead>
             <tbody>
@@ -260,12 +318,12 @@ export default function MarksEntryPage() {
                         } text-white transition`}
                         title={isExcluded ? 'Undo Skip' : 'Skip this student'}
                       >
-                        <X className="w-4 h-4" />
+                        <X className="w-3 h-3" />
                       </button>
                     </td>
                     <td className="p-3">{s.studentid}</td>
-                    <td className="p-3">{s.name}</td>
-                    <td className="p-3">{s.fathername}</td>
+                    <td className="p-3 font-medium">{s.name}</td>
+                    <td className="p-3 text-gray-500 dark:text-slate-400">{s.fathername}</td>
                     <td className="p-3">
                       <Input
                         type="number"
@@ -300,25 +358,25 @@ export default function MarksEntryPage() {
           </table>
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+        {/* Footer Actions */}
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 p-4 bg-white dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={sendToParents}
               onChange={(e) => setSendToParents(e.target.checked)}
               disabled={saving}
-              className="w-4 h-4 accent-green-600"
+              className="w-4 h-4 accent-green-600 rounded"
             />
-            Send marks to parents
+            Send marks to parents via SMS
           </label>
           <Button
             onClick={saveMarks}
             disabled={saving}
-            className="rounded-full px-6 py-2 font-medium bg-gray-800 text-white hover:bg-gray-900 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white transition-all shadow hover:shadow-lg"
+            className="rounded-full px-8 py-2 font-medium bg-gray-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white transition-all shadow-lg"
           >
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-            {saving ? 'Saving…' : 'Save Marks'}
+            {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </div>
