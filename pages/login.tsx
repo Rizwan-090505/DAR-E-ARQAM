@@ -5,32 +5,35 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import Navbar from '../components/Navbar'
-import { motion } from 'framer-motion'
-import { FcGoogle } from 'react-icons/fc'
-import { Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Loader2, Mail, Lock, Eye, EyeOff, Key, ArrowRight } from 'lucide-react'
 
 export default function AuthPage() {
-  // Separate states for Login
+  const router = useRouter()
+  
+  // Login States
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
 
-  // Separate states for Register
+  // Register States
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [secretKey, setSecretKey] = useState('') // New state for secret key
+  const [secretKey, setSecretKey] = useState('')
 
+  // UI States
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false) // Toggle for password visibility
 
-  const router = useRouter()
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
-    console.log("Attempting login with:", loginEmail)
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: loginEmail,
@@ -38,13 +41,10 @@ export default function AuthPage() {
     })
 
     if (error) {
-      console.error("Login error:", error)
       setError(error.message)
     } else if (data?.user) {
-      console.log("Login successful:", data.user)
       router.push('/dashboard')
     }
-
     setLoading(false)
   }
 
@@ -59,197 +59,239 @@ export default function AuthPage() {
       return
     }
 
-    if (secretKey !== '1234') { // New check for the secret key
+    if (secretKey !== '1234') {
       setError("Incorrect secret key")
       setLoading(false)
       return
     }
 
-    const redirectUrl =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/auth/callback`
-        : undefined
-
-    console.log("Attempting registration with:", registerEmail, redirectUrl)
+    const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined
 
     const { data, error } = await supabase.auth.signUp({
       email: registerEmail,
       password: registerPassword,
-      options: {
-        emailRedirectTo: redirectUrl,
-      },
+      options: { emailRedirectTo: redirectUrl },
     })
 
     if (error) {
-      console.error("Registration error:", error)
       setError(error.message)
     } else if (data.user) {
-      console.log("Registration successful:", data.user)
-      setError("Registration successful! Check your email for confirmation.")
+      // Create a temporary success message or redirect logic here
+      setError("Registration successful! Check your email.") 
     }
-
     setLoading(false)
   }
 
-  const handleGoogleLogin = async () => {
-    setLoading(true)
-    setError(null)
-
-    const redirectUrl =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/dashboard`
-        : undefined
-
-    console.log("Google login redirect to:", redirectUrl)
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl,
-      },
-    })
-
-    if (error) {
-      console.error("Google login error:", error)
-      setError(error.message)
-      setLoading(false)
-    }
-    // Successful login will redirect automatically
-  }
-
+  // ---------------------------------------------------------------------------
+  // Animation Variants
+  // ---------------------------------------------------------------------------
   const fadeIn = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -10 }
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-lg">
+      
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] p-4">
+        
+        {/* Glass Card Container */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-md p-6 md:p-8 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-white/5 backdrop-blur-xl shadow-xl"
+        >
+          
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold tracking-tight mb-2">Welcome Back</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400">
+              Enter your credentials to access the portal.
+            </p>
+          </div>
+
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="register">Register</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100 dark:bg-white/10 p-1 rounded-lg">
+              <TabsTrigger 
+                value="login"
+                className="data-[state=active]:bg-white data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white transition-all rounded-md"
+              >
+                Login
+              </TabsTrigger>
+              <TabsTrigger 
+                value="register"
+                className="data-[state=active]:bg-white data-[state=active]:text-blue-600 dark:data-[state=active]:bg-blue-600 dark:data-[state=active]:text-white transition-all rounded-md"
+              >
+                Register
+              </TabsTrigger>
             </TabsList>
 
-            {/* LOGIN */}
-            <TabsContent value="login">
-              <motion.form
-                onSubmit={handleLogin}
-                className="space-y-4"
-                initial="hidden"
-                animate="visible"
-                variants={fadeIn}
-                transition={{ duration: 0.5 }}
-              >
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  required
-                />
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                />
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="animate-spin" size={16} /> : "Login"}
-                </Button>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      Or continue with
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                  className="w-full"
+            <AnimatePresence mode="wait">
+              
+              {/* LOGIN TAB */}
+              <TabsContent value="login">
+                <motion.form
+                  key="login-form"
+                  onSubmit={handleLogin}
+                  className="space-y-4"
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={fadeIn}
+                  transition={{ duration: 0.3 }}
                 >
-                  <FcGoogle className="mr-2 h-4 w-4" />
-                  Google
-                </Button>
-              </motion.form>
-            </TabsContent>
+                  {/* Email Input */}
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type="email"
+                      placeholder="Email Address"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                      className="pl-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                  </div>
 
-            {/* REGISTER */}
-            <TabsContent value="register">
-              <motion.form
-                onSubmit={handleRegister}
-                className="space-y-4"
-                initial="hidden"
-                animate="visible"
-                variants={fadeIn}
-                transition={{ duration: 0.5 }}
-              >
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  value={registerEmail}
-                  onChange={(e) => setRegisterEmail(e.target.value)}
-                  required
-                />
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={registerPassword}
-                  onChange={(e) => setRegisterPassword(e.target.value)}
-                  required
-                />
-                <Input
-                  type="password"
-                  placeholder="Confirm Password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-                <Input
-                  type="password"
-                  placeholder="Secret " // New input field for the key
-                  value={secretKey}
-                  onChange={(e) => setSecretKey(e.target.value)}
-                  required
-                />
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="animate-spin" size={16} /> : "Register"}
-                </Button>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
+                  {/* Password Input */}
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      className="pl-10 pr-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      Or continue with
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                  className="w-full"
+
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button 
+                      type="submit" 
+                      className="w-full h-11 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg shadow-blue-500/20 transition-all font-medium flex items-center justify-center gap-2"
+                      disabled={loading}
+                    >
+                      {loading ? <Loader2 className="animate-spin" size={18} /> : (
+                        <>Login <ArrowRight size={16} /></>
+                      )}
+                    </Button>
+                  </motion.div>
+                </motion.form>
+              </TabsContent>
+
+              {/* REGISTER TAB */}
+              <TabsContent value="register">
+                <motion.form
+                  key="register-form"
+                  onSubmit={handleRegister}
+                  className="space-y-4"
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={fadeIn}
+                  transition={{ duration: 0.3 }}
                 >
-                  <FcGoogle className="mr-2 h-4 w-4" />
-                  Google
-                </Button>
-              </motion.form>
-            </TabsContent>
+                  {/* Register Email */}
+                  <div className="relative group">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type="email"
+                      placeholder="Email Address"
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      required
+                      className="pl-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                  </div>
+
+                  {/* Register Password */}
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Create Password"
+                      value={registerPassword}
+                      onChange={(e) => setRegisterPassword(e.target.value)}
+                      required
+                      className="pl-10 pr-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                     <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+
+                  {/* Confirm Password */}
+                  <div className="relative group">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Confirm Password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      className="pl-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                  </div>
+
+                  {/* Secret Key */}
+                  <div className="relative group">
+                    <Key className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <Input
+                      type="password"
+                      placeholder="Admin Secret Key"
+                      value={secretKey}
+                      onChange={(e) => setSecretKey(e.target.value)}
+                      required
+                      className="pl-10 bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10 focus:border-blue-500 dark:focus:border-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400"
+                    />
+                  </div>
+
+                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button 
+                      type="submit" 
+                      className="w-full h-11 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all font-medium flex items-center justify-center gap-2"
+                      disabled={loading}
+                    >
+                      {loading ? <Loader2 className="animate-spin" size={18} /> : (
+                        <>Create Account <ArrowRight size={16} /></>
+                      )}
+                    </Button>
+                  </motion.div>
+                </motion.form>
+              </TabsContent>
+
+            </AnimatePresence>
           </Tabs>
 
-          {error && <p className="text-red-500 text-center mt-4">{error}</p>}
-        </div>
+          {/* Error Message */}
+          {error && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mt-6 p-3 rounded-lg text-sm text-center ${
+                error.includes("successful") 
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-200"
+                  : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200"
+              }`}
+            >
+              {error}
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   )
