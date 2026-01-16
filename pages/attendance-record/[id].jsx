@@ -31,23 +31,8 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useToast } from '../../hooks/use-toast';
 
-/* ---------------- Types ---------------- */
-interface Student {
-  studentid: string;
-  name: string;
-  fathername?: string;
-  mobilenumber?: string;
-}
-
-interface AttendanceRecord {
-  studentid: string;
-  date: string;
-  status: 'Present' | 'Absent' | 'Unmarked';
-  student: Student;
-}
-
 /* ---------------- Reusable Glass Components ---------------- */
-const GlassCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
+const GlassCard = ({ children, className = "" }) => (
   <div className={`rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] backdrop-blur-xl shadow-sm dark:shadow-xl overflow-hidden ${className}`}>
     {children}
   </div>
@@ -59,11 +44,11 @@ export default function AttendanceRecordPage() {
   const { toast } = useToast();
 
   // State
-  const [classData, setClassData] = useState<{ name: string; description: string } | null>(null);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [classData, setClassData] = useState(null);
+  const [students, setStudents] = useState([]);
+  const [attendanceData, setAttendanceData] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  
+   
   // UI State
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -122,7 +107,7 @@ export default function AttendanceRecordPage() {
       .eq('date', dateStr);
 
     if (data && data.length > 0) {
-      const mapped = data.map((row: any) => ({
+      const mapped = data.map((row) => ({
         studentid: row.studentid,
         date: row.date,
         status: row.status,
@@ -136,7 +121,7 @@ export default function AttendanceRecordPage() {
       
       // Merge with student list to ensure all students are present even if not in attendance table yet
       const mergedData = students.map(student => {
-        const existingRecord = mapped.find((r: any) => r.studentid === student.studentid);
+        const existingRecord = mapped.find((r) => r.studentid === student.studentid);
         return existingRecord || {
           studentid: student.studentid,
           date: dateStr,
@@ -166,13 +151,13 @@ export default function AttendanceRecordPage() {
     toast({ title: "Marked All Present", description: "Remember to save changes." });
   };
 
-  const toggleStatus = (studentid: string) => {
+  const toggleStatus = (studentid) => {
     setAttendanceData(prev =>
       prev.map(a => {
         if (a.studentid !== studentid) return a;
         
         // Cycle: Unmarked -> Present -> Absent -> Present
-        let newStatus: 'Present' | 'Absent' = 'Present';
+        let newStatus = 'Present';
         if (a.status === 'Present') newStatus = 'Absent';
         if (a.status === 'Absent') newStatus = 'Present';
         
@@ -237,7 +222,7 @@ export default function AttendanceRecordPage() {
       }
 
       toast({ variant: 'default', title: 'Success', description: 'Attendance saved successfully.' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving:', error);
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save.' });
     } finally {

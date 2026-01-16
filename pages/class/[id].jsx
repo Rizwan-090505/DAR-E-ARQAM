@@ -13,7 +13,7 @@ import {
   XCircle, 
   Search,
   Users,
-  Cake // Added icon for DOB
+  Cake
 } from 'lucide-react'
 
 import { supabase } from '../../utils/supabaseClient'
@@ -24,29 +24,8 @@ import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog'
 import { useToast } from "../../hooks/use-toast"
 
-/* ---------------- Types ---------------- */
-interface ClassData {
-  id: string
-  name: string
-  description: string
-}
-
-interface Student {
-  studentid: string
-  name: string
-  fathername?: string
-  dob?: string // Changed from mobilenumber to dob
-}
-
-interface Attendance {
-  id: string
-  studentid: string
-  date: string
-  status: 'Present' | 'Absent' | null
-}
-
 /* ---------------- Reusable Glass Components ---------------- */
-const GlassCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
+const GlassCard = ({ children, className = "" }) => (
   <div className={`rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] backdrop-blur-xl shadow-sm dark:shadow-xl overflow-hidden ${className}`}>
     {children}
   </div>
@@ -58,23 +37,23 @@ export default function ClassPage() {
   const { toast } = useToast()
 
   // State
-  const [classData, setClassData] = useState<ClassData | null>(null)
-  const [students, setStudents] = useState<Student[]>([])
-  const [attendanceData, setAttendanceData] = useState<Attendance[]>([])
+  const [classData, setClassData] = useState(null)
+  const [students, setStudents] = useState([])
+  const [attendanceData, setAttendanceData] = useState([])
   
   // UI State
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deletestudentid, setDeletestudentid] = useState<string | null>(null)
+  const [deletestudentid, setDeletestudentid] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Form State
   const [newstudentid, setNewstudentid] = useState('')
   const [newStudentName, setNewStudentName] = useState('')
   const [newfathername, setNewfathername] = useState('')
-  const [newDob, setNewDob] = useState('') // Changed state for DOB
+  const [newDob, setNewDob] = useState('') 
 
   /* ---------------- Fetch Data ---------------- */
   useEffect(() => {
@@ -191,7 +170,7 @@ export default function ClassPage() {
   )
 
   // Helper to format DOB safely
-  const formatDOB = (dateString?: string) => {
+  const formatDOB = (dateString) => {
     if (!dateString) return '-';
     try {
       return format(parseISO(dateString), 'd MMM yyyy');
