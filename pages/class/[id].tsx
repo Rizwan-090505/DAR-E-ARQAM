@@ -1,19 +1,31 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import Link from 'next/link'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns'
+import { 
+  Plus, 
+  Trash2, 
+  ArrowLeft, 
+  Calendar as CalendarIcon, 
+  UserPlus, 
+  FileText, 
+  CheckCircle2, 
+  XCircle, 
+  Search,
+  Users,
+  Cake // Added icon for DOB
+} from 'lucide-react'
+
 import { supabase } from '../../utils/supabaseClient'
+import Navbar from '../../components/Navbar'
+import Breadcrumbs from '../../components/Breadcrumbs'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
-import Navbar from '../../components/Navbar'
-import Loader from '../../components/Loader'
-import { Plus, Trash2, ArrowLeft } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog'
 import { useToast } from "../../hooks/use-toast"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns'
-import Link from 'next/link'
-import Breadcrumbs from '../../components/Breadcrumbs'
 
-interface Class {
+/* ---------------- Types ---------------- */
+interface ClassData {
   id: string
   name: string
   description: string
@@ -23,7 +35,7 @@ interface Student {
   studentid: string
   name: string
   fathername?: string
-  mobilenumber?: string
+  dob?: string // Changed from mobilenumber to dob
 }
 
 interface Attendance {
@@ -33,23 +45,38 @@ interface Attendance {
   status: 'Present' | 'Absent' | null
 }
 
+/* ---------------- Reusable Glass Components ---------------- */
+const GlassCard = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
+  <div className={`rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.04] backdrop-blur-xl shadow-sm dark:shadow-xl overflow-hidden ${className}`}>
+    {children}
+  </div>
+)
+
 export default function ClassPage() {
-  const [classData, setClassData] = useState<Class | null>(null)
-  const [students, setStudents] = useState<Student[]>([])
-  const [newstudentid, setNewstudentid] = useState('')
-  const [newStudentName, setNewStudentName] = useState('')
-  const [newfathername, setNewfathername] = useState('')
-  const [newmobilenumber, setNewmobilenumber] = useState('')
-  const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [attendanceData, setAttendanceData] = useState<Attendance[]>([])
   const router = useRouter()
   const { id } = router.query
   const { toast } = useToast()
-  const [deletestudentid, setDeletestudentid] = useState<string | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
+  // State
+  const [classData, setClassData] = useState<ClassData | null>(null)
+  const [students, setStudents] = useState<Student[]>([])
+  const [attendanceData, setAttendanceData] = useState<Attendance[]>([])
+  
+  // UI State
+  const [isLoading, setIsLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [deletestudentid, setDeletestudentid] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  // Form State
+  const [newstudentid, setNewstudentid] = useState('')
+  const [newStudentName, setNewStudentName] = useState('')
+  const [newfathername, setNewfathername] = useState('')
+  const [newDob, setNewDob] = useState('') // Changed state for DOB
+
+  /* ---------------- Fetch Data ---------------- */
   useEffect(() => {
     if (id) {
       fetchClassData()
@@ -70,8 +97,9 @@ export default function ClassPage() {
       .select('*')
       .eq('id', id)
       .single()
+    
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch class data." })
+      toast({ variant: "destructive", title: "Error", description: "Failed to fetch class details." })
     } else {
       setClassData(data)
     }
@@ -79,58 +107,18 @@ export default function ClassPage() {
   }
 
   const fetchStudents = async () => {
-    setIsLoading(true)
+    // UPDATED: Fetching 'dob' instead of 'mobilenumber'
     const { data, error } = await supabase
       .from('students')
-      .select('studentid, name, fathername, mobilenumber')
+      .select('studentid, name, fathername, dob')
       .eq('class_id', id)
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch students." })
-    } else {
-      // Sort by name for display
-      setStudents((data || []).sort((a, b) => a.name.localeCompare(b.name)))
-    }
-    setIsLoading(false)
-  }
+      .order('name')
 
-  const addStudent = async () => {
-    const { data, error } = await supabase
-      .from('students')
-      .insert([{
-        studentid: newstudentid,
-        name: newStudentName,
-        fathername: newfathername,
-        mobilenumber: newmobilenumber,
-        class_id: id
-      }])
-      .select()
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to add student." })
+      toast({ variant: "destructive", title: "Error", description: "Failed to load students." })
     } else {
-      setStudents([...students, data[0]].sort((a, b) => a.name.localeCompare(b.name)))
-      setNewstudentid('')
-      setNewStudentName('')
-      setNewfathername('')
-      setNewmobilenumber('')
-      setIsAddStudentDialogOpen(false)
-      toast({ variant: "success", title: "Success", description: "Student added successfully." })
+      setStudents(data || [])
     }
-  }
-
-  const deleteStudent = async () => {
-    if (!deletestudentid) return
-    const { error } = await supabase
-      .from('students')
-      .delete()
-      .eq('studentid', deletestudentid)
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete student." })
-    } else {
-      setStudents(students.filter(s => s.studentid !== deletestudentid))
-      toast({ variant: "success", title: "Success", description: "Student deleted successfully." })
-    }
-    setDeletestudentid(null)
-    setIsDeleteDialogOpen(false)
   }
 
   const fetchAttendance = async () => {
@@ -141,9 +129,74 @@ export default function ClassPage() {
       .eq('date', format(selectedDate, 'yyyy-MM-dd'))
 
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to fetch attendance." })
+      console.error("Attendance fetch error:", error)
     } else {
       setAttendanceData(data || [])
+    }
+  }
+
+  /* ---------------- Actions ---------------- */
+  const addStudent = async () => {
+    if (!newStudentName || !newstudentid) {
+      toast({ variant: "destructive", title: "Missing Info", description: "Name and ID are required." })
+      return
+    }
+
+    // UPDATED: Insert 'dob'
+    const { data, error } = await supabase
+      .from('students')
+      .insert([{
+        studentid: newstudentid,
+        name: newStudentName,
+        fathername: newfathername,
+        dob: newDob, 
+        class_id: id
+      }])
+      .select()
+
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: error.message })
+    } else {
+      setStudents([...students, data[0]].sort((a, b) => a.name.localeCompare(b.name)))
+      setNewstudentid('')
+      setNewStudentName('')
+      setNewfathername('')
+      setNewDob('')
+      setIsAddStudentDialogOpen(false)
+      toast({ variant: "default", title: "Success", description: "Student added successfully." })
+    }
+  }
+
+  const deleteStudent = async () => {
+    if (!deletestudentid) return
+    const { error } = await supabase
+      .from('students')
+      .delete()
+      .eq('studentid', deletestudentid)
+
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to delete student." })
+    } else {
+      setStudents(students.filter(s => s.studentid !== deletestudentid))
+      toast({ variant: "default", title: "Deleted", description: "Student removed." })
+    }
+    setDeletestudentid(null)
+    setIsDeleteDialogOpen(false)
+  }
+
+  /* ---------------- Render Helpers ---------------- */
+  const filteredStudents = students.filter(s => 
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    s.studentid.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  // Helper to format DOB safely
+  const formatDOB = (dateString?: string) => {
+    if (!dateString) return '-';
+    try {
+      return format(parseISO(dateString), 'd MMM yyyy');
+    } catch (e) {
+      return dateString;
     }
   }
 
@@ -152,42 +205,50 @@ export default function ClassPage() {
     const end = endOfMonth(selectedDate)
     const days = eachDayOfInterval({ start, end })
 
-    // FIX: Explicitly define these strings so Tailwind doesn't purge them
     const colStartClasses = [
-      'col-start-1',
-      'col-start-2',
-      'col-start-3',
-      'col-start-4',
-      'col-start-5',
-      'col-start-6',
-      'col-start-7',
+      'col-start-1', 'col-start-2', 'col-start-3', 'col-start-4', 'col-start-5', 'col-start-6', 'col-start-7',
     ]
 
     return (
-      <div className="w-full max-w-sm mx-auto">
-        <div className="mb-4 text-lg font-semibold text-center">
-          {format(selectedDate, 'MMMM yyyy')}
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 uppercase tracking-wider">
+            {format(selectedDate, 'MMMM yyyy')}
+          </span>
+          <CalendarIcon className="w-4 h-4 text-gray-400" />
         </div>
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="text-center text-sm text-gray-500">{day}</div>
+        
+        <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
+            <div key={d} className="text-xs font-medium text-gray-400 dark:text-slate-500">{d}</div>
           ))}
         </div>
+        
         <div className="grid grid-cols-7 gap-1">
           {days.map((day, index) => {
-             // 0 = Sunday, 1 = Monday, etc.
              const dayOfWeek = day.getDay();
              const isFirstDay = index === 0;
+             const isSelected = isSameDay(day, selectedDate);
+             const isToday = isSameDay(day, new Date());
 
              return (
-              <Button
+              <button
                 key={day.toString()}
-                variant={isSameDay(day, selectedDate) ? "default" : "outline"}
-                className={`h-8 w-8 p-0 ${isFirstDay ? colStartClasses[dayOfWeek] : ''}`}
                 onClick={() => setSelectedDate(day)}
+                className={`
+                  h-8 w-full rounded-md flex items-center justify-center text-xs transition-all relative
+                  ${isFirstDay ? colStartClasses[dayOfWeek] : ''}
+                  ${isSelected 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 font-semibold' 
+                    : 'hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-slate-300'}
+                  ${isToday && !isSelected ? 'text-blue-600 dark:text-blue-400 font-bold' : ''}
+                `}
               >
-                <time dateTime={format(day, 'yyyy-MM-dd')}>{format(day, 'd')}</time>
-              </Button>
+                {format(day, 'd')}
+                {isToday && !isSelected && (
+                  <span className="absolute bottom-1 w-1 h-1 bg-blue-600 rounded-full"></span>
+                )}
+              </button>
             )
           })}
         </div>
@@ -195,187 +256,305 @@ export default function ClassPage() {
     )
   }
 
-  if (isLoading) return <Loader />
-  if (!classData) return <div>No class data found.</div>
+  if (isLoading && !classData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0b1220]">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-8 w-8 bg-blue-600 rounded-full mb-4 animate-bounce"></div>
+          <p className="text-gray-500 text-sm">Loading Class Data...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <>
-      <style jsx>{`
-        /* subtle animated gradient background */
-        .page-bg {
-          background: linear-gradient(135deg, rgba(236,72,153,0.06) 0%, rgba(99,102,241,0.04) 35%, rgba(56,189,248,0.04) 100%);
-        }
-        @media (prefers-color-scheme: dark) {
-          .page-bg {
-            background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(99,102,241,0.03) 50%, rgba(139,92,246,0.05) 100%);
-          }
-        }
-        .card-glass {
-          background: rgba(255,255,255,0.6);
-          backdrop-filter: blur(8px);
-        }
-        @media (prefers-color-scheme: dark) {
-          .card-glass {
-            background: rgba(13,18,25,0.6);
-          }
-        }
-        .btn-gradient {
-          background: linear-gradient(90deg, #6366f1, #ec4899);
-          color: white;
-        }
-        .btn-gradient:hover { opacity: .95; transform: translateY(-1px); }
-        .status-present { background: linear-gradient(90deg, #34d399, #10b981); color: white; padding: 4px 10px; border-radius: 9999px; font-weight: 600; }
-        .status-absent { background: linear-gradient(90deg, #fb7185, #f43f5e); color: white; padding: 4px 10px; border-radius: 9999px; font-weight: 600; }
-        .status-unmarked { background: linear-gradient(90deg, #9ca3af, #6b7280); color: white; padding: 4px 10px; border-radius: 9999px; font-weight: 600; }
-        .table-row-hover:hover { background: rgba(99,102,241,0.04); }
-        @media (prefers-color-scheme: dark) {
-          .table-row-hover:hover { background: rgba(99,102,241,0.06); }
-        }
-      `}</style>
-
-      <div className="min-h-screen page-bg text-foreground transition-colors">
-        <Navbar />
-        <div className="max-w-6xl mx-auto p-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors pb-20">
+      <Navbar />
+      
+      <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-6">
+        
+        {/* Breadcrumbs */}
+        <div className="hidden md:block">
           <Breadcrumbs items={[
             { label: 'Dashboard', href: '/dashboard' },
             { label: classData?.name || 'Class', href: `/class/${id}` }
           ]} />
+        </div>
 
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <Button variant="outline" onClick={() => router.back()} className="mb-0 mr-3">
+        {/* Header Section */}
+        <div className="flex flex-col gap-6">
+          {/* Back & Title */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+            <div className="space-y-2 w-full">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => router.back()} 
+                className="pl-0 text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-transparent"
+              >
                 <ArrowLeft className="w-4 h-4 mr-2" /> Back
               </Button>
-              <h1 className="text-4xl font-extrabold tracking-tight mt-2">{classData?.name}</h1>
-              <p className="text-muted-foreground mt-1 text-lg">{classData?.description}</p>
+              
+              <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">
+                {classData?.name}
+              </h1>
+              <p className="text-gray-500 dark:text-slate-400 max-w-2xl">
+                {classData?.description || 'Manage students and attendance for this class.'}
+              </p>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <Link href={`/attendance-record/${id}`}>
-                <Button className="btn-gradient shadow-md">
-                  Mark Attendance
+            {/* Actions Bar */}
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <Link href={`/attendance-record/${id}`} className="flex-1 md:flex-none">
+                <Button className="w-full md:w-auto rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow hover:shadow-blue-500/20 transition-all">
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Attendance
                 </Button>
               </Link>
-              <Link href={`/attendance-record/report`}>
-                <Button className="btn-gradient shadow-md">
-                  Report
+              
+              <Link href={`/attendance-record/report`} className="flex-1 md:flex-none">
+                <Button variant="outline" className="w-full md:w-auto rounded-full border-gray-200 dark:border-white/10 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-white/10">
+                  <FileText className="mr-2 h-4 w-4" /> Report
                 </Button>
               </Link>
 
               <Dialog open={isAddStudentDialogOpen} onOpenChange={setIsAddStudentDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="flex items-center space-x-2 bg-white dark:bg-gray-800 border shadow-sm">
-                    <Plus className="w-4 h-4 text-primary" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Add Student</span>
+                  <Button className="w-full md:w-auto rounded-full bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-black dark:hover:bg-gray-200 shadow-lg">
+                    <UserPlus className="mr-2 h-4 w-4" /> Add Student
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="rounded-xl card-glass border shadow-lg">
-                  <DialogHeader><DialogTitle className="text-lg font-semibold">Add New Student</DialogTitle></DialogHeader>
-                  <div className="space-y-4 mt-4">
-                    <Input placeholder="Student ID" value={newstudentid} onChange={e => setNewstudentid(e.target.value)} />
-                    <Input placeholder="Name" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
-                    <Input placeholder="Father Name" value={newfathername} onChange={e => setNewfathername(e.target.value)} />
-                    <Input placeholder="Mobile Number" value={newmobilenumber} onChange={e => setNewmobilenumber(e.target.value)} />
-                    <div className="flex justify-end">
-                      <Button onClick={addStudent} className="btn-gradient">Add Student</Button>
+                
+                {/* Add Student Dialog */}
+                <DialogContent className="sm:max-w-md rounded-2xl border-gray-200 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-0 overflow-hidden">
+                  <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-white/5">
+                    <DialogTitle>Add New Student</DialogTitle>
+                  </DialogHeader>
+                  <div className="p-6 space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase text-gray-500">Registration ID</label>
+                      <Input className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10" placeholder="e.g. ST-2024-001" value={newstudentid} onChange={e => setNewstudentid(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold uppercase text-gray-500">Full Name</label>
+                      <Input className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10" placeholder="John Doe" value={newStudentName} onChange={e => setNewStudentName(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase text-gray-500">Father Name</label>
+                        <Input className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10" value={newfathername} onChange={e => setNewfathername(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase text-gray-500">Date of Birth</label>
+                        {/* Changed input type to date for better mobile UX */}
+                        <Input 
+                          type="date"
+                          className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10" 
+                          value={newDob} 
+                          onChange={e => setNewDob(e.target.value)} 
+                        />
+                      </div>
                     </div>
                   </div>
+                  <DialogFooter className="px-6 py-4 bg-gray-50 dark:bg-white/5 flex gap-2">
+                    <Button variant="ghost" onClick={() => setIsAddStudentDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={addStudent} className="bg-blue-600 hover:bg-blue-700 text-white">Save Student</Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div className="lg:col-span-1">
-              <Card className="card-glass border shadow">
-                <CardHeader><CardTitle className="text-lg font-semibold">Calendar</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="py-2">{renderCalendar()}</div>
-                </CardContent>
-              </Card>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          
+          {/* Left Column: Calendar */}
+          <GlassCard className="lg:col-span-1 p-5">
+             {renderCalendar()}
+             <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/5">
+               <div className="flex justify-between items-center text-sm">
+                 <span className="text-gray-500 dark:text-slate-400">Total Students</span>
+                 <span className="font-semibold">{students.length}</span>
+               </div>
+               <div className="flex justify-between items-center text-sm mt-2">
+                 <span className="text-gray-500 dark:text-slate-400">Present Today</span>
+                 <span className="font-semibold text-green-600">
+                    {attendanceData.filter(a => a.status === 'Present').length}
+                 </span>
+               </div>
+             </div>
+          </GlassCard>
+
+          {/* Right Column: Today's Attendance Preview */}
+          <GlassCard className="lg:col-span-2 flex flex-col h-full min-h-[300px]">
+            <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-slate-100">Daily Overview</h3>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{format(selectedDate, 'EEEE, d MMMM yyyy')}</p>
+              </div>
+              <Link href={`/attendance-record/${id}`}>
+                <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 h-8 text-xs">
+                  View Full Log
+                </Button>
+              </Link>
             </div>
-
-            <div className="lg:col-span-2">
-              <Card className="card-glass border shadow">
-                <CardHeader>
-                  <CardTitle className="text-lg font-semibold">Today's Attendance <span className="ml-2 text-sm text-muted-foreground">({format(selectedDate, 'dd MMM yyyy')})</span></CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="text-left">
-                          <th className="pb-2 text-sm font-medium">Name</th>
-                          <th className="pb-2 text-sm font-medium">Status</th>
+            
+            <div className="flex-1 overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-slate-400 uppercase text-xs font-semibold">
+                  <tr>
+                    <th className="px-6 py-3 whitespace-nowrap">Student Name</th>
+                    <th className="px-6 py-3 whitespace-nowrap">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-6 py-8 text-center text-gray-500">No students found.</td>
+                    </tr>
+                  ) : (
+                    students.slice(0, 5).map(student => {
+                      const record = attendanceData.find(a => a.studentid === student.studentid)
+                      return (
+                        <tr key={student.studentid} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
+                          <td className="px-6 py-3 font-medium text-gray-900 dark:text-slate-200">
+                            {student.name}
+                          </td>
+                          <td className="px-6 py-3">
+                            {record?.status === 'Present' && (
+                              <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400 text-xs font-medium bg-green-50 dark:bg-green-500/10 px-2 py-0.5 rounded-full border border-green-200 dark:border-green-500/20">
+                                <CheckCircle2 className="w-3 h-3" /> Present
+                              </span>
+                            )}
+                            {record?.status === 'Absent' && (
+                              <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 text-xs font-medium bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-500/20">
+                                <XCircle className="w-3 h-3" /> Absent
+                              </span>
+                            )}
+                            {!record?.status && (
+                              <span className="text-gray-400 dark:text-slate-600 text-xs italic">Not Marked</span>
+                            )}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {students.map(student => {
-                          const attendance = attendanceData.find(a => a.studentid === student.studentid)
-                          return (
-                            <tr key={student.studentid} className="table-row-hover transition-colors">
-                              <td className="py-3 pr-4">{student.name}</td>
-                              <td className="py-3">
-                                {attendance?.status === 'Present' && <span className="status-present">Present</span>}
-                                {attendance?.status === 'Absent' && <span className="status-absent">Absent</span>}
-                                {!attendance?.status && <span className="status-unmarked">Unmarked</span>}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
+                      )
+                    })
+                  )}
+                  {students.length > 5 && (
+                     <tr>
+                       <td colSpan={2} className="px-6 py-2 text-center text-xs text-gray-400 bg-gray-50/50 dark:bg-white/[0.02]">
+                         + {students.length - 5} more students
+                       </td>
+                     </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </GlassCard>
+        </div>
+
+        {/* Student Management Section */}
+        <GlassCard className="overflow-hidden">
+          <div className="p-5 border-b border-gray-200 dark:border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="font-semibold text-lg flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-500" />
+              Student Directory
+            </h2>
+            
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input 
+                type="text" 
+                placeholder="Search students..." 
+                className="w-full pl-9 pr-4 py-2 text-sm rounded-full bg-gray-100 dark:bg-white/5 border-transparent focus:bg-white dark:focus:bg-black focus:border-blue-500 focus:ring-0 transition-all text-gray-900 dark:text-slate-100 placeholder:text-gray-500"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
-          <Card className="card-glass border shadow">
-            <CardHeader><CardTitle>Students</CardTitle></CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left text-sm text-muted-foreground">
-                      <th className="pb-2">Name</th>
-                      <th className="pb-2">Father Name</th>
-                      <th className="pb-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map(student => (
-                      <tr key={student.studentid} className="border-t">
-                        <td className="py-3">{student.name}</td>
-                        <td className="py-3 text-muted-foreground">{student.fathername}</td>
-                        <td className="py-3 text-right">
-                          <Button variant="outline" size="icon" onClick={() => {
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-slate-400 uppercase text-xs font-semibold border-b border-gray-200 dark:border-white/10">
+                <tr>
+                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Name</th>
+                  <th className="px-6 py-4">Father Name</th>
+                  {/* UPDATED HEADER: DOB */}
+                  <th className="px-6 py-4 hidden sm:table-cell">Date of Birth</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                {filteredStudents.length === 0 ? (
+                   <tr>
+                     <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                       No students found matching your search.
+                     </td>
+                   </tr>
+                ) : (
+                  filteredStudents.map(student => (
+                    <tr key={student.studentid} className="group hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
+                      <td className="px-6 py-4 text-xs font-mono text-gray-500 dark:text-slate-500">
+                        {student.studentid}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-900 dark:text-slate-200">
+                        {student.name}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600 dark:text-slate-400">
+                        {student.fathername || '-'}
+                      </td>
+                      {/* UPDATED CELL: DOB */}
+                      <td className="px-6 py-4 hidden sm:table-cell text-gray-600 dark:text-slate-400">
+                        <div className="flex items-center gap-2">
+                          <Cake className="w-3.5 h-3.5 text-gray-400" />
+                          {formatDOB(student.dob)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 w-8 rounded-full p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => {
                             setDeletestudentid(student.studentid)
                             setIsDeleteDialogOpen(true)
-                          }}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="rounded-xl card-glass border shadow-lg">
-            <DialogHeader><DialogTitle>Confirm Deletion</DialogTitle></DialogHeader>
-            <p>Are you sure you want to delete this student?</p>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-              <Button variant="destructive" onClick={deleteStudent}>Delete</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
       </div>
-    </>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-xl border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" /> Delete Student
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600 dark:text-slate-300">
+              Are you sure you want to delete this student? This action cannot be undone and will remove all associated attendance records.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="rounded-full">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteStudent} className="rounded-full bg-red-600 hover:bg-red-700">
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
