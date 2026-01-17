@@ -86,7 +86,6 @@ export default function ClassPage() {
   }
 
   const fetchStudents = async () => {
-    // UPDATED: Fetching 'dob' instead of 'mobilenumber'
     const { data, error } = await supabase
       .from('students')
       .select('studentid, name, fathername, dob')
@@ -121,7 +120,6 @@ export default function ClassPage() {
       return
     }
 
-    // UPDATED: Insert 'dob'
     const { data, error } = await supabase
       .from('students')
       .insert([{
@@ -169,7 +167,6 @@ export default function ClassPage() {
     s.studentid.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // Helper to format DOB safely
   const formatDOB = (dateString) => {
     if (!dateString) return '-';
     try {
@@ -179,6 +176,7 @@ export default function ClassPage() {
     }
   }
 
+  /* ---------------- FIXED CALENDAR RENDER ---------------- */
   const renderCalendar = () => {
     const start = startOfMonth(selectedDate)
     const end = endOfMonth(selectedDate)
@@ -197,13 +195,21 @@ export default function ClassPage() {
           <CalendarIcon className="w-4 h-4 text-gray-400" />
         </div>
         
-        <div className="grid grid-cols-7 gap-1 mb-2 text-center">
+        {/* FIXED: Using inline styles for grid columns to bypass Tailwind config issues */}
+        <div 
+          className="grid gap-1 mb-2 text-center" 
+          style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
+        >
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-            <div key={d} className="text-xs font-medium text-gray-400 dark:text-slate-500">{d}</div>
+            <div key={d} className="text-[10px] md:text-xs font-medium text-gray-400 dark:text-slate-500">{d}</div>
           ))}
         </div>
         
-        <div className="grid grid-cols-7 gap-1">
+        {/* FIXED: Using inline styles for grid columns to bypass Tailwind config issues */}
+        <div 
+          className="grid gap-1"
+          style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
+        >
           {days.map((day, index) => {
              const dayOfWeek = day.getDay();
              const isFirstDay = index === 0;
@@ -324,7 +330,6 @@ export default function ClassPage() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase text-gray-500">Date of Birth</label>
-                        {/* Changed input type to date for better mobile UX */}
                         <Input 
                           type="date"
                           className="bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10" 
@@ -458,7 +463,6 @@ export default function ClassPage() {
                   <th className="px-6 py-4">ID</th>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Father Name</th>
-                  {/* UPDATED HEADER: DOB */}
                   <th className="px-6 py-4 hidden sm:table-cell">Date of Birth</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -482,7 +486,6 @@ export default function ClassPage() {
                       <td className="px-6 py-4 text-gray-600 dark:text-slate-400">
                         {student.fathername || '-'}
                       </td>
-                      {/* UPDATED CELL: DOB */}
                       <td className="px-6 py-4 hidden sm:table-cell text-gray-600 dark:text-slate-400">
                         <div className="flex items-center gap-2">
                           <Cake className="w-3.5 h-3.5 text-gray-400" />

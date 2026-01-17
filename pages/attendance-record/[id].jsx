@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import Link from 'next/link';
 import { 
   format, 
   startOfMonth, 
@@ -273,13 +272,21 @@ export default function AttendanceRecordPage() {
           </Select>
         </div>
 
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1 mb-2">
+        {/* Calendar Header - FIXED: Using Inline Styles */}
+        <div 
+          className="grid gap-1 mb-2 text-center" 
+          style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
+        >
           {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
             <div key={day} className="text-center text-xs font-medium text-gray-400">{day}</div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1">
+
+        {/* Calendar Body - FIXED: Using Inline Styles */}
+        <div 
+          className="grid gap-1" 
+          style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
+        >
           {Array.from({ length: startDayIndex }).map((_, i) => (
             <div key={`empty-${i}`} className="aspect-square" />
           ))}
@@ -318,13 +325,13 @@ export default function AttendanceRecordPage() {
     );
   }
 
-  // Calculate stats for the current day
   const presentCount = attendanceData.filter(a => a.status === 'Present').length;
   const absentCount = attendanceData.filter(a => a.status === 'Absent').length;
   const unmarkedCount = attendanceData.filter(a => a.status === 'Unmarked').length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors pb-24">
+    // Cleaned up padding since footer is static
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
       
       <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-6">
@@ -384,7 +391,7 @@ export default function AttendanceRecordPage() {
                 <Users className="w-4 h-4 text-purple-500" /> Summary
               </h3>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-100 dark:border-green-500/20">
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-500/20 border border-green-100 dark:border-green-500/20">
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">{presentCount}</div>
                   <div className="text-xs text-green-700 dark:text-green-300">Present</div>
                 </div>
@@ -403,7 +410,7 @@ export default function AttendanceRecordPage() {
           {/* Right: Student List */}
           <div className="lg:col-span-2 space-y-6">
             <GlassCard className="min-h-[500px] flex flex-col">
-              <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] flex justify-between items-center">
+              <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex justify-between items-center">
                 <span className="font-semibold text-sm uppercase tracking-wider text-gray-500">
                   Student List ({students.length})
                 </span>
@@ -466,12 +473,12 @@ export default function AttendanceRecordPage() {
         </div>
       </div>
 
-      {/* Sticky Save Footer */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#0b1220]/90 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 z-50">
-        <div className="container mx-auto max-w-6xl flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* STATIC FOOTER (Not Fixed, Highly Transparent, Vibrant Buttons) */}
+      <div className="w-full mt-12 py-6 border-t border-white/20 dark:border-white/5 bg-white/30 dark:bg-black/30 backdrop-blur-xl">
+        <div className="container mx-auto max-w-6xl flex flex-col md:flex-row items-center justify-between gap-4 px-4">
           
-          <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full border border-blue-100 dark:border-blue-500/20 w-full md:w-auto justify-center md:justify-start">
-            <div className={`p-1.5 rounded-full ${sendAbsenteeMessages ? 'bg-blue-500 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-500'}`}>
+          <div className="flex items-center gap-3 bg-white/40 dark:bg-white/5 px-4 py-2 rounded-full border border-white/30 dark:border-white/10 w-full md:w-auto justify-center md:justify-start backdrop-blur-sm">
+            <div className={`p-1.5 rounded-full shadow-lg ${sendAbsenteeMessages ? 'bg-gradient-to-br from-blue-500 to-cyan-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
               <MessageSquare className="w-4 h-4" />
             </div>
             <div className="flex items-center gap-2">
@@ -482,7 +489,7 @@ export default function AttendanceRecordPage() {
                 onChange={(e) => setSendAbsenteeMessages(e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
               />
-              <label htmlFor="sendMessages" className="text-sm font-medium text-gray-700 dark:text-slate-200 cursor-pointer select-none">
+              <label htmlFor="sendMessages" className="text-sm font-bold text-gray-700 dark:text-slate-200 cursor-pointer select-none">
                 Notify Parents via SMS
               </label>
             </div>
@@ -491,7 +498,7 @@ export default function AttendanceRecordPage() {
           <Button 
             onClick={saveAttendance} 
             disabled={isSubmitting}
-            className="w-full md:w-auto rounded-full px-8 py-6 text-lg shadow-xl shadow-blue-500/20 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all active:scale-[0.98]"
+            className="w-full md:w-auto rounded-full px-10 py-6 text-lg font-bold text-black dark:text-white shadow-xl shadow-blue-500/20 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 transition-all active:scale-[0.98] border border-white/20"
           >
             {isSubmitting ? (
               <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Saving...</>
