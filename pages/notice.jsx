@@ -290,7 +290,7 @@ export default function BulkMessagePage() {
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
               <Lock className="w-6 h-6" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Admin Access</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Access</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Enter your authentication key to continue</p>
           </div>
           <div className="space-y-4">
@@ -443,7 +443,7 @@ export default function BulkMessagePage() {
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium truncate ${checked ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-gray-200'}`}>
+                            <span className={`text-sm font-medium truncate ${checked ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
                               {s.name}
                             </span>
                             {s.Clear ? 

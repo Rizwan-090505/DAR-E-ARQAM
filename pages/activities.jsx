@@ -152,7 +152,7 @@ export default function ActivitiesTracker() {
     });
   }
 
-  // UPDATED: Calculate the total count of activities for each class and subject
+  // Calculate the total count of activities for each class and subject
   const activityCountsByKey = useMemo(() => {
     const counts = {};
     for (const rec of records) {
@@ -161,7 +161,6 @@ export default function ActivitiesTracker() {
     }
     return counts;
   }, [records]);
-
 
   const group1Ids = useMemo(
     () => classes.filter((c) => orderPG.includes(c.name)).map((c) => c.id),
@@ -176,7 +175,6 @@ export default function ActivitiesTracker() {
     const name = classes.find((c) => c.id === classId)?.name;
     const group = getGroupName(name);
     return group ? SUBJECTS_ENUM[group] : [];
-    
   }
 
   function getColorRelativeToAvg(value, avg) {
@@ -198,7 +196,7 @@ export default function ActivitiesTracker() {
       let count = 0;
       for (const cid of classIds) {
         const key = `${cid}|${s}`;
-        const v = activityCountsByKey[key]; // UPDATED
+        const v = activityCountsByKey[key];
         if (typeof v === "number") {
           total += v;
           count++;
@@ -209,18 +207,19 @@ export default function ActivitiesTracker() {
 
     return (
       <div className="mb-10">
-        <h2 className="text-2xl font-bold mb-4 text-primary">{title}</h2>
+        <h2 className="text-2xl font-bold mb-4 text-primary drop-shadow-md">{title}</h2>
         {subjects.length === 0 ? (
           <p className="text-muted-foreground italic">No activity entries yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <Card className="p-4 shadow-sm rounded-2xl bg-card text-card-foreground min-w-max">
+            {/* UPDATED: Glassy Table Card */}
+            <Card className="p-4 shadow-lg rounded-2xl min-w-max border bg-white/40 dark:bg-slate-900/40 backdrop-blur-md dark:border-white/10">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="bg-muted/50">Class</TableHead>
+                  <TableRow className="border-b border-black/5 dark:border-white/10">
+                    <TableHead className="text-foreground font-bold">Class</TableHead>
                     {subjects.map((s) => (
-                      <TableHead key={s} className="bg-muted/50">
+                      <TableHead key={s} className="text-foreground font-bold">
                         {s}
                       </TableHead>
                     ))}
@@ -230,17 +229,19 @@ export default function ActivitiesTracker() {
                   {classIds.map((cid) => {
                     const cls = classes.find((c) => c.id === cid);
                     return (
-                      <TableRow key={cid} className="hover:bg-muted/30">
+                      <TableRow
+                        key={cid}
+                        className="hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5"
+                      >
                         <TableCell className="font-semibold">
                           {cls?.name ?? "—"}
                         </TableCell>
                         {subjects.map((s) => {
                           const key = `${cid}|${s}`;
-                          const value = activityCountsByKey[key]; // UPDATED
+                          const value = activityCountsByKey[key];
                           return (
                             <TableCell key={s}>
                               {value !== undefined ? (
-                                // UPDATED: Removed the date display
                                 <span className={getColorRelativeToAvg(value, colAvg[s])}>
                                   {value}
                                 </span>
@@ -253,7 +254,7 @@ export default function ActivitiesTracker() {
                       </TableRow>
                     );
                   })}
-                  <TableRow className="bg-muted/40 font-semibold">
+                  <TableRow className="bg-black/5 dark:bg-white/10  font-semibold border-none">
                     <TableCell>Average</TableCell>
                     {subjects.map((s) => (
                       <TableCell key={s}>
@@ -271,51 +272,54 @@ export default function ActivitiesTracker() {
   }
 
   return (
-    <div className="p-6 min-h-screen bg-gradient-to-b from-background to-background/40">
+    // UPDATED: Main background gradient - bluish, deep, gradientish
+    <div className="p-6 min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-slate-950 dark:via-blue-950/30 dark:to-slate-950">
       <Navbar />
 
       <div className="flex items-center justify-between gap-4 mt-4 mb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight">📝 Activities Tracker</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight drop-shadow-sm">
+          📝 Activities Tracker
+        </h1>
         <Button
           variant="outline"
           onClick={() => fetchActivities()}
           disabled={loading || isPending}
-          className="gap-2"
+          className="gap-2 bg-white/10 dark:bg-slate-900/50 backdrop-blur-sm"
         >
           <RefreshCw className={loading ? "animate-spin" : ""} size={16} /> Refresh
         </Button>
       </div>
 
-      {/* Form */}
+      {/* UPDATED: Glassy Form */}
       <form
         onSubmit={handleAdd}
-        className="mb-8 grid grid-cols-1 md:grid-cols-5 gap-3 items-end bg-card p-4 rounded-2xl shadow border"
+        className="mb-8 grid grid-cols-1 md:grid-cols-5 gap-3 items-end p-6 rounded-2xl shadow-lg border bg-white/60 dark:bg-slate-900/60 backdrop-blur-md dark:border-white/10"
       >
         <select
-          className="border rounded-lg p-2 bg-background text-foreground"
+          className="border rounded-lg p-2 text-foreground bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
           value={selectedClass}
           onChange={(e) => setSelectedClass(e.target.value ? Number(e.target.value) : "")}
           required
         >
-          <option value="">Select Class</option>
+          <option value="" className="bg-background">Select Class</option>
           {classes.map((c) => (
-            <option key={c.id} value={c.id}>
+            <option key={c.id} value={c.id} className="bg-background">
               {c.name}
             </option>
           ))}
         </select>
 
         <select
-          className="border rounded-lg p-2 bg-background text-foreground disabled:opacity-50"
+          className="border rounded-lg p-2 text-foreground disabled:opacity-50 bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
           value={selectedSubject}
           onChange={(e) => setSelectedSubject(e.target.value)}
           required
           disabled={!selectedClass}
         >
-          <option value="">Select Subject</option>
+          <option value="" className="bg-background">Select Subject</option>
           {!!selectedClass &&
             getSubjectsForClassId(Number(selectedClass)).map((s) => (
-              <option key={s} value={s}>
+              <option key={s} value={s} className="bg-background">
                 {s}
               </option>
             ))}
@@ -327,43 +331,46 @@ export default function ActivitiesTracker() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           required
-          className="bg-background"
+          // UPDATED: Glassy Input
+          className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
         />
         <Input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="bg-background"
+          // UPDATED: Glassy Input
+          className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
         />
-        <Button type="submit" disabled={isPending} className="gap-2">
+        <Button type="submit" disabled={isPending} className="gap-2 shadow-md">
           {isPending && <Loader2 className="animate-spin" size={16} />} Add Activity
         </Button>
       </form>
 
-      {/* Date Range */}
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-card p-4 rounded-2xl shadow border">
+      {/* UPDATED: Glassy Date Range */}
+      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-3 items-end p-6 rounded-2xl shadow-lg border bg-white/60 dark:bg-slate-900/60 backdrop-blur-md dark:border-white/10">
         <div>
-          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <label className="block text-sm font-medium mb-1 ml-1">Start Date</label>
           <Input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="bg-background"
+            className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">End Date</label>
+          <label className="block text-sm font-medium mb-1 ml-1">End Date</label>
           <Input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="bg-background"
+            className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
           />
         </div>
         <div className="flex gap-2">
           <Button
             type="button"
             variant="secondary"
+            className="bg-muted/80 backdrop-blur-sm"
             onClick={() => {
               setStartDate("");
               setEndDate("");
@@ -371,7 +378,7 @@ export default function ActivitiesTracker() {
           >
             Clear
           </Button>
-          <Button type="button" onClick={() => fetchActivities()}>
+          <Button type="button" onClick={() => fetchActivities()} className="shadow-md">
             Apply
           </Button>
         </div>

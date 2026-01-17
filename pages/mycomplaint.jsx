@@ -157,7 +157,7 @@ export default function MyComplaints() {
         
         {/* Header */}
         <div className="flex flex-col space-y-1.5">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Dashboard</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">Manage complaints assigned to you and view reports involving you.</p>
         </div>
 
@@ -232,7 +232,7 @@ export default function MyComplaints() {
                     const isAssignedToMe = c.assigned_to?.id === user?.id;
                     return (
                         <TableRow key={c.id} className="hover:bg-gray-50 dark:hover:bg-white/5 border-gray-100 dark:border-white/5 transition-colors">
-                        <TableCell className="font-medium text-gray-900 dark:text-gray-100">
+                        <TableCell className="font-medium text-gray-900 dark:text-gray-400">
                             {c.title}
                             <div className="text-xs font-normal text-gray-500 dark:text-gray-400 truncate max-w-[250px] mt-1">{c.complaint_text}</div>
                         </TableCell>
