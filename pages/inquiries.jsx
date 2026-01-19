@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -42,9 +41,7 @@ const BADGE_STYLES = {
 
 const FILTERS = ["All", "Inquiry", "Test Scheduled", "Test Clear", "Admission"];
 
-// --- UPDATED INPUT STYLE (FORCED LIGHT THEME) ---
-// FIX: Removed all 'dark:' classes for bg and text. 
-// This forces the input to always be Light Gray BG with Dark Gray Text, ensuring visibility.
+// --- UPDATED INPUT STYLE ---
 const inputStyles = "w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg px-3 py-2 text-sm font-medium placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all shadow-sm";
 
 // --- REUSABLE MODAL COMPONENT ---
@@ -163,17 +160,38 @@ export default function InquiryManager() {
     fetchInquiries();
   };
 
-  // --- MESSAGE LOGIC ---
+  // --- UPDATED MESSAGE LOGIC ---
   const generateMessageTemplate = (type, inquiry, extraData = {}) => {
     const parent = inquiry.fathername;
     const student = inquiry.name;
-    const schoolName = "DAR-E-ARQAM School";
+    const schoolName = "Dar-e-Arqam School";
     
-    if(type === 'WELCOME') return `Dear ${parent}, Welcome to ${schoolName} regarding ${student}.`;
-    if(type === 'TEST_SCHEDULED') return `Dear Parent, Test scheduled for ${student} on ${extraData.date}.`;
-    if(type === 'TEST_CLEAR') return `Congratulations! ${student} cleared the test.`;
-    if(type === 'ADMISSION') return `Admission confirmed for ${student}.`;
-    if(type === 'FOLLOW_UP') return `Dear Parent, following up on admission for ${student}.`;
+    // Helper to format date nicely for WhatsApp
+    const getFormattedTime = (dateStr) => {
+        if (!dateStr) return "Scheduled Time";
+        return format(new Date(dateStr), "EEEE, MMM do 'at' h:mm a");
+    };
+
+    if(type === 'WELCOME') {
+        return `Respected *${parent}*,\n\nThank you for visiting *${schoolName}*. We have successfully recorded the admission inquiry for *${student}*.\n\nDo you have any specific questions regarding the curriculum or facilities?`;
+    }
+    
+    if(type === 'TEST_SCHEDULED') {
+        return `Respected Parent,\n\nThe admission test for *${student}* has been scheduled.\n\n📅 *When:* ${getFormattedTime(extraData.date)}\n\nPlease ensure punctual arrival at the campus.`;
+    }
+    
+    if(type === 'TEST_CLEAR') {
+        return `🎉 *Congratulations!*\n\nWe are pleased to inform you that *${student}* has successfully cleared the admission test at *${schoolName}*.\n\nPlease visit the administration office for fee submission and final formalities.`;
+    }
+    
+    if(type === 'ADMISSION') {
+        return `✅ *Admission Confirmed*\n\nThe admission process for *${student}* at *${schoolName}* is now complete.\n\nWelcome to the family! 🎓`;
+    }
+    
+    if(type === 'FOLLOW_UP') {
+        return `Respected Parent,\n\nYou recently visited *${schoolName}* regarding the admission application for *${student}*.\n\nWould you like to schedule the *Admission Test* now? Please let us know so we can reserve a slot for you.`;
+    }
+    
     return "";
   };
 
@@ -189,7 +207,7 @@ export default function InquiryManager() {
     const { error } = await supabase.from("messages").insert([{
       number: selectedInquiry.mobilenumber,
       text: messageDraft
-    }]);
+     }]);
     if (error) return alert("Failed to log message");
     const newCount = (selectedInquiry.follow_up_count || 0) + 1;
     await supabase.from("inquiries").update({ follow_up_count: newCount }).eq('id', selectedInquiry.id);
@@ -230,7 +248,7 @@ export default function InquiryManager() {
 
   // --- RENDER HELPERS ---
   const renderTestDate = (dateString) => {
-    if (!dateString) return <span className="text-gray-400 dark:text-gray-600 text-xs">N/A</span>;
+    if (!dateString) return <span className="text-gray-400 dark:text-gray-600 text-xs">Not Scheduled</span>;
     const date = new Date(dateString);
     let colorClass = "text-gray-600 dark:text-gray-400";
     if (isToday(date)) colorClass = "text-amber-700 dark:text-amber-400 font-bold";
@@ -253,14 +271,14 @@ export default function InquiryManager() {
         {/* --- HEADER SECTION --- */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Admissions Dashboard</h1>
-            <p className="text-sm font-medium text-gray-500 dark:text-slate-400 mt-1">Manage student inquiries and testing.</p>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white uppercase">Admission Office</h1>
+            <p className="text-sm font-medium text-gray-500 dark:text-slate-400 mt-1">Dar-e-Arqam School • Student Enrollment Portal</p>
           </div>
           <Button 
             onClick={() => setIsAddOpen(true)} 
             className="w-full sm:w-auto rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-blue-500/20 transition-all font-semibold"
           >
-            <Plus className="mr-2 h-4 w-4" /> New Inquiry
+            <Plus className="mr-2 h-4 w-4" /> New Application
           </Button>
         </div>
 
@@ -268,9 +286,9 @@ export default function InquiryManager() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
                 { label: 'Total Inquiries', val: inquiries.length, icon: Briefcase },
-                { label: 'Pending Tests', val: inquiries.filter(i => i.status === 'Test Scheduled').length, icon: Clock },
-                { label: 'Admissions', val: inquiries.filter(i => i.status === 'Admission').length, icon: CheckCircle2 },
-                { label: 'This Month', val: inquiries.filter(i => new Date(i.created_at || new Date()).getMonth() === new Date().getMonth()).length, icon: Calendar },
+                { label: 'Tests Scheduled', val: inquiries.filter(i => i.status === 'Test Scheduled').length, icon: Clock },
+                { label: 'Confirmed Admissions', val: inquiries.filter(i => i.status === 'Admission').length, icon: CheckCircle2 },
+                { label: 'Current Month', val: inquiries.filter(i => new Date(i.created_at || new Date()).getMonth() === new Date().getMonth()).length, icon: Calendar },
             ].map((stat, idx) => (
                 <div key={idx} className="bg-white dark:bg-white/5 backdrop-blur-xl p-5 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
@@ -292,7 +310,7 @@ export default function InquiryManager() {
                 
                 {/* Segmented Control Filters */}
                 <div className="flex flex-col w-full md:w-auto gap-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Status Filter</label>
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Application Status</label>
                     <div className="flex flex-wrap gap-1 p-1 bg-gray-200 dark:bg-black/40 rounded-lg w-full md:w-fit border border-gray-300 dark:border-white/5">
                     {FILTERS.map(f => (
                         <button
@@ -311,17 +329,11 @@ export default function InquiryManager() {
                     </div>
                 </div>
 
-                {/* Search Box - Using inputStyles here too for consistency, or keep it dark/themed? 
-                    Let's keep the main search themed, but ensure text is visible.
-                */}
+                {/* Search Box */}
                 <div className="w-full md:w-64 space-y-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Search</label>
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Search Records</label>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-slate-500 h-4 w-4" />
-                        {/* Search is NOT in a modal, so we can keep it themed or force it. Let's force it to be consistent with the user request if they want "dark grey text". 
-                            But usually main search bars should adapt. The user specified "in modal".
-                            I will leave this search bar ADAPTIVE (dark bg in dark mode) but ensure text is white.
-                        */}
                         <input 
                             placeholder="Name, Phone, or Father..." 
                             className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-gray-900 dark:text-white rounded-lg px-3 py-2 pl-9 text-sm font-medium placeholder:text-gray-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all shadow-sm"
@@ -337,10 +349,10 @@ export default function InquiryManager() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-slate-400 uppercase text-xs font-bold border-b border-gray-200 dark:border-white/10">
                   <tr>
-                    <th className="px-6 py-4">Student Profile</th>
-                    <th className="px-6 py-4">Guardian Info</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Schedule</th>
+                    <th className="px-6 py-4">Candidate Profile</th>
+                    <th className="px-6 py-4">Guardian Details</th>
+                    <th className="px-6 py-4">Current Status</th>
+                    <th className="px-6 py-4">Test Schedule</th>
                     <th className="px-6 py-4 text-center">Logs</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -349,7 +361,7 @@ export default function InquiryManager() {
                   {loading ? (
                       <tr><td colSpan="6" className="py-12 text-center text-gray-500 dark:text-slate-400"><div className="flex flex-col items-center gap-2"><Loader2 className="animate-spin h-6 w-6"/>Loading records...</div></td></tr>
                   ) : filteredInquiries.length === 0 ? (
-                      <tr><td colSpan="6" className="py-12 text-center text-gray-500 dark:text-slate-400">No students found matching your filters.</td></tr>
+                      <tr><td colSpan="6" className="py-12 text-center text-gray-500 dark:text-slate-400">No student records found matching the criteria.</td></tr>
                   ) : (
                     filteredInquiries.map((inq) => (
                     <tr key={inq.id} className="group hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
@@ -425,23 +437,22 @@ export default function InquiryManager() {
       </div>
 
       {/* --- MODAL: ADD INQUIRY --- */}
-      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="New Inquiry" subtitle="Enter student details below.">
+      <Modal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} title="Registration Form" subtitle="Enter the candidate's details for a new inquiry.">
         <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Student Name</label>
-                    {/* INPUTS FORCED LIGHT: bg-gray-50, text-gray-900 */}
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Candidate Name</label>
                     <Input 
                       className={inputStyles}
-                      placeholder="e.g. Ali Khan"
+                      placeholder="Full Name"
                       value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} 
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Class</label>
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Grade / Class</label>
                     <Input 
                       className={inputStyles}
-                      placeholder="e.g. Grade 1"
+                      placeholder="e.g. Playgroup / Grade 5"
                       value={form.class} onChange={(e) => setForm({ ...form, class: e.target.value })} 
                     />
                 </div>
@@ -449,17 +460,18 @@ export default function InquiryManager() {
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Father Name</label>
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Father's Name</label>
                     <Input 
                       className={inputStyles}
+                      placeholder="Guardian Name"
                       value={form.fathername} onChange={(e) => setForm({ ...form, fathername: e.target.value })} 
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">WhatsApp</label>
+                    <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">WhatsApp Contact</label>
                     <Input 
                       className={`${inputStyles} font-mono`}
-                      placeholder="923001234567"
+                      placeholder="92300xxxxxxx"
                       value={form.mobilenumber} onChange={(e) => setForm({ ...form, mobilenumber: e.target.value })} 
                     />
                 </div>
@@ -492,7 +504,7 @@ export default function InquiryManager() {
       </Modal>
 
       {/* --- MODAL: UPDATE STATUS --- */}
-      <Modal isOpen={isStatusOpen} onClose={() => setIsStatusOpen(false)} title="Update Workflow" subtitle={`Current status: ${selectedInquiry?.status}`}>
+      <Modal isOpen={isStatusOpen} onClose={() => setIsStatusOpen(false)} title="Update Application Stage" subtitle={`Current status: ${selectedInquiry?.status}`}>
          <div className="space-y-6">
             <div className="space-y-3">
                 <label className="text-xs font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wide">Select New Stage</label>
@@ -525,7 +537,6 @@ export default function InquiryManager() {
                         type="datetime-local" 
                         value={testDateDraft} 
                         onChange={(e) => setTestDateDraft(e.target.value)} 
-                        /* FIXED: Forced light bg and dark text for datetime picker */
                         className="w-full bg-gray-50 border border-amber-300 text-gray-900 rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                     />
                 </div>
@@ -540,8 +551,8 @@ export default function InquiryManager() {
                     className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300 dark:border-slate-600 bg-white"
                 />
                 <label htmlFor="notify" className="text-sm select-none cursor-pointer">
-                    <span className="font-bold block text-gray-900 dark:text-slate-200">Notify Parents via WhatsApp</span>
-                    <span className="text-gray-500 dark:text-slate-400 text-xs font-medium">Automatically sends a formatted message based on the status change.</span>
+                    <span className="font-bold block text-gray-900 dark:text-slate-200">Send WhatsApp Notification</span>
+                    <span className="text-gray-500 dark:text-slate-400 text-xs font-medium">Automatically sends a formal update to the parent based on the selected status.</span>
                 </label>
             </div>
 
@@ -555,19 +566,18 @@ export default function InquiryManager() {
       </Modal>
 
       {/* --- MODAL: SEND MESSAGE --- */}
-      <Modal isOpen={isMessageOpen} onClose={() => setIsMessageOpen(false)} title="Compose Message" subtitle="Send WhatsApp via server.">
+      <Modal isOpen={isMessageOpen} onClose={() => setIsMessageOpen(false)} title="Official Correspondence" subtitle="Compose and send a WhatsApp message.">
          <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-200 text-sm rounded-lg border border-blue-200 dark:border-blue-900/30">
                 <User size={16} /> 
-                <span className="font-semibold">To: {selectedInquiry?.mobilenumber} ({selectedInquiry?.fathername})</span>
+                <span className="font-semibold">Recipient: {selectedInquiry?.mobilenumber} ({selectedInquiry?.fathername})</span>
             </div>
             
             <textarea 
-                /* FIXED: Forced bg-gray-50 and text-gray-900 (Dark Grey Text on Light BG) */
                 className="w-full h-32 p-3 text-sm font-medium rounded-lg border border-gray-300 bg-gray-50 text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 outline-none resize-none shadow-inner"
                 value={messageDraft}
                 onChange={(e) => setMessageDraft(e.target.value)}
-                placeholder="Type your message here..."
+                placeholder="Type your official message here..."
             />
             
             <div className="flex justify-end gap-3 border-t border-gray-100 dark:border-slate-800 pt-4">
@@ -582,5 +592,3 @@ export default function InquiryManager() {
     </div>
   );
 }
-
-

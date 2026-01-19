@@ -1,5 +1,5 @@
-"use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link"; // Assuming next/link is used based on context
 import { supabase } from "../utils/supabaseClient";
 import Navbar from "../components/Navbar";
 import {
@@ -12,8 +12,15 @@ import {
 } from "../components/ui/table";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Card } from "../components/ui/card";
-import { Loader2, RefreshCw } from "lucide-react";
+import { 
+  Loader2, 
+  RefreshCw, 
+  Plus, 
+  Calendar as CalendarIcon, 
+  Filter, 
+  LayoutList,
+  BookOpen
+} from "lucide-react";
 
 export default function ActivitiesTracker() {
   const [records, setRecords] = useState([]);
@@ -123,7 +130,7 @@ export default function ActivitiesTracker() {
     setLoading(false);
   }
 
-  // Insert a single activity row (no counts in DB)
+  // Insert a single activity row
   async function handleAdd(e) {
     e.preventDefault();
     if (!selectedClass || !selectedSubject || !description.trim()) {
@@ -179,12 +186,17 @@ export default function ActivitiesTracker() {
 
   function getColorRelativeToAvg(value, avg) {
     if (value === undefined || value === null || avg === undefined)
-      return "text-muted-foreground";
-    if (value >= avg) return "text-green-600 dark:text-green-400 font-semibold";
-    return "text-red-600 dark:text-red-400 font-semibold";
+      return "text-gray-400 dark:text-slate-500";
+    if (value >= avg) return "text-green-600 dark:text-green-400 font-bold drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]";
+    return "text-red-500 dark:text-red-400 font-bold drop-shadow-[0_0_8px_rgba(248,113,113,0.3)]";
   }
 
-  function renderTable(classIds, title) {
+  // Reusable styling classes
+  const glassCardClass = "rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 backdrop-blur-xl shadow-sm dark:shadow-xl";
+  const labelClass = "text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block";
+  const inputClass = "w-full bg-gray-50 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20 rounded-md";
+
+  function renderTable(classIds, title, subtitle) {
     const firstName = classes.find((c) => c.id === classIds[0])?.name;
     const group = getGroupName(firstName);
     const subjects = group ? SUBJECTS_ENUM[group] : [];
@@ -206,65 +218,77 @@ export default function ActivitiesTracker() {
     }
 
     return (
-      <div className="mb-10">
-        <h2 className="text-2xl font-bold mb-4 text-primary drop-shadow-md">{title}</h2>
+      <div className={`${glassCardClass} overflow-hidden`}>
+        <div className="p-4 border-b border-gray-200 dark:border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div>
+                <h2 className="font-semibold text-lg flex items-center gap-2 text-gray-900 dark:text-slate-100">
+                    <LayoutList className="h-5 w-5 text-blue-500" />
+                    {title}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-slate-400">{subtitle}</p>
+            </div>
+        </div>
+
         {subjects.length === 0 ? (
-          <p className="text-muted-foreground italic">No activity entries yet.</p>
+           <div className="flex flex-col items-center justify-center py-12 text-center">
+             <div className="bg-gray-100 dark:bg-white/10 p-4 rounded-full mb-3">
+               <BookOpen className="h-8 w-8 text-gray-400 dark:text-slate-500" />
+             </div>
+             <p className="text-gray-500 dark:text-slate-400 text-sm">No activity entries found.</p>
+           </div>
         ) : (
           <div className="overflow-x-auto">
-            {/* UPDATED: Glassy Table Card */}
-            <Card className="p-4 shadow-lg rounded-2xl min-w-max border bg-white/40 dark:bg-slate-900/40 backdrop-blur-md dark:border-white/10">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-black/5 dark:border-white/10">
-                    <TableHead className="text-foreground font-bold">Class</TableHead>
-                    {subjects.map((s) => (
-                      <TableHead key={s} className="text-foreground font-bold">
-                        {s}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {classIds.map((cid) => {
-                    const cls = classes.find((c) => c.id === cid);
-                    return (
-                      <TableRow
-                        key={cid}
-                        className="hover:bg-black/5 dark:hover:bg-white/5 border-b border-black/5 dark:border-white/5"
-                      >
-                        <TableCell className="font-semibold">
-                          {cls?.name ?? "—"}
-                        </TableCell>
-                        {subjects.map((s) => {
-                          const key = `${cid}|${s}`;
-                          const value = activityCountsByKey[key];
-                          return (
-                            <TableCell key={s}>
-                              {value !== undefined ? (
-                                <span className={getColorRelativeToAvg(value, colAvg[s])}>
-                                  {value}
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                    );
-                  })}
-                  <TableRow className="bg-black/5 dark:bg-white/10  font-semibold border-none">
-                    <TableCell>Average</TableCell>
-                    {subjects.map((s) => (
-                      <TableCell key={s}>
-                        {colAvg[s] ? colAvg[s].toFixed(1) : "—"}
+            <Table>
+              <TableHeader className="bg-gray-50 dark:bg-white/5">
+                <TableRow className="border-b border-gray-200 dark:border-white/10 hover:bg-transparent">
+                  <TableHead className="text-gray-500 dark:text-slate-400 font-semibold uppercase text-xs w-[120px]">Class</TableHead>
+                  {subjects.map((s) => (
+                    <TableHead key={s} className="text-gray-500 dark:text-slate-400 font-semibold uppercase text-xs text-center min-w-[100px]">
+                      {s}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-gray-100 dark:divide-white/5">
+                {classIds.map((cid) => {
+                  const cls = classes.find((c) => c.id === cid);
+                  return (
+                    <TableRow
+                      key={cid}
+                      className="group hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors border-none"
+                    >
+                      <TableCell className="font-medium text-gray-900 dark:text-slate-200 bg-gray-50/50 dark:bg-white/[0.02]">
+                        {cls?.name ?? "—"}
                       </TableCell>
-                    ))}
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </Card>
+                      {subjects.map((s) => {
+                        const key = `${cid}|${s}`;
+                        const value = activityCountsByKey[key];
+                        return (
+                          <TableCell key={s} className="text-center text-base">
+                            {value !== undefined ? (
+                              <span className={getColorRelativeToAvg(value, colAvg[s])}>
+                                {value}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 dark:text-slate-700 text-sm">—</span>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  );
+                })}
+                {/* Average Row */}
+                <TableRow className="bg-gray-100/50 dark:bg-white/5 font-semibold border-t border-gray-200 dark:border-white/10">
+                  <TableCell className="text-gray-900 dark:text-slate-100">Avg</TableCell>
+                  {subjects.map((s) => (
+                    <TableCell key={s} className="text-center text-gray-600 dark:text-slate-300">
+                      {colAvg[s] ? colAvg[s].toFixed(1) : "—"}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
@@ -272,126 +296,180 @@ export default function ActivitiesTracker() {
   }
 
   return (
-    // UPDATED: Main background gradient - bluish, deep, gradientish
-    <div className="p-6 min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-slate-950 dark:via-blue-950/30 dark:to-slate-950">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
       <Navbar />
 
-      <div className="flex items-center justify-between gap-4 mt-4 mb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight drop-shadow-sm">
-          📝 Activities Tracker
-        </h1>
-        <Button
-          variant="outline"
-          onClick={() => fetchActivities()}
-          disabled={loading || isPending}
-          className="gap-2 bg-white/10 dark:bg-slate-900/50 backdrop-blur-sm"
-        >
-          <RefreshCw className={loading ? "animate-spin" : ""} size={16} /> Refresh
-        </Button>
-      </div>
-
-      {/* UPDATED: Glassy Form */}
-      <form
-        onSubmit={handleAdd}
-        className="mb-8 grid grid-cols-1 md:grid-cols-5 gap-3 items-end p-6 rounded-2xl shadow-lg border bg-white/60 dark:bg-slate-900/60 backdrop-blur-md dark:border-white/10"
-      >
-        <select
-          className="border rounded-lg p-2 text-foreground bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-          value={selectedClass}
-          onChange={(e) => setSelectedClass(e.target.value ? Number(e.target.value) : "")}
-          required
-        >
-          <option value="" className="bg-background">Select Class</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id} className="bg-background">
-              {c.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="border rounded-lg p-2 text-foreground disabled:opacity-50 bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-          value={selectedSubject}
-          onChange={(e) => setSelectedSubject(e.target.value)}
-          required
-          disabled={!selectedClass}
-        >
-          <option value="" className="bg-background">Select Subject</option>
-          {!!selectedClass &&
-            getSubjectsForClassId(Number(selectedClass)).map((s) => (
-              <option key={s} value={s} className="bg-background">
-                {s}
-              </option>
-            ))}
-        </select>
-
-        <Input
-          type="text"
-          placeholder="Description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-          // UPDATED: Glassy Input
-          className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-        />
-        <Input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          // UPDATED: Glassy Input
-          className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-        />
-        <Button type="submit" disabled={isPending} className="gap-2 shadow-md">
-          {isPending && <Loader2 className="animate-spin" size={16} />} Add Activity
-        </Button>
-      </form>
-
-      {/* UPDATED: Glassy Date Range */}
-      <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-3 items-end p-6 rounded-2xl shadow-lg border bg-white/60 dark:bg-slate-900/60 backdrop-blur-md dark:border-white/10">
-        <div>
-          <label className="block text-sm font-medium mb-1 ml-1">Start Date</label>
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1 ml-1">End Date</label>
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="bg-white dark:bg-white/10 backdrop-blur-sm dark:border-slate-700"
-          />
-        </div>
-        <div className="flex gap-2">
+      <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-8">
+        
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">Activities Tracker</h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+              Monitor daily class performance and subject coverage.
+            </p>
+          </div>
           <Button
-            type="button"
-            variant="secondary"
-            className="bg-muted/80 backdrop-blur-sm"
-            onClick={() => {
-              setStartDate("");
-              setEndDate("");
-            }}
+            variant="outline"
+            onClick={() => fetchActivities()}
+            disabled={loading || isPending}
+            className="w-full sm:w-auto rounded-full border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 bg-white dark:bg-white/5 text-gray-700 dark:text-slate-300"
           >
-            Clear
-          </Button>
-          <Button type="button" onClick={() => fetchActivities()} className="shadow-md">
-            Apply
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            Refresh Data
           </Button>
         </div>
-      </div>
 
-      {loading ? (
-        <p className="text-center opacity-80">Loading…</p>
-      ) : (
-        <>
-          {renderTable(group1Ids, "PG, Nursery, Prep")}
-          {renderTable(group2Ids, "One to Eight")}
-        </>
-      )}
+        {/* Input Form Card */}
+        <div className={glassCardClass}>
+            <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/10">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-blue-500" /> New Activity Entry
+                </h3>
+            </div>
+            <div className="p-5">
+                <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                    
+                    {/* Class Select */}
+                    <div className="md:col-span-2 space-y-1">
+                        <label className={labelClass}>Class</label>
+                        <select
+                            className={`${inputClass} h-10 px-3`}
+                            value={selectedClass}
+                            onChange={(e) => setSelectedClass(e.target.value)}
+                            required
+                        >
+                            <option value="">Select...</option>
+                            {classes.map((c) => (
+                            <option key={c.id} value={c.id} className="dark:bg-slate-900">
+                                {c.name}
+                            </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Subject Select */}
+                    <div className="md:col-span-2 space-y-1">
+                        <label className={labelClass}>Subject</label>
+                        <select
+                            className={`${inputClass} h-10 px-3 disabled:opacity-50`}
+                            value={selectedSubject}
+                            onChange={(e) => setSelectedSubject(e.target.value)}
+                            required
+                            disabled={!selectedClass}
+                        >
+                            <option value="">Select...</option>
+                            {!!selectedClass &&
+                            getSubjectsForClassId(Number(selectedClass)).map((s) => (
+                                <option key={s} value={s} className="dark:bg-slate-900">
+                                {s}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Description */}
+                    <div className="md:col-span-4 space-y-1">
+                        <label className={labelClass}>Description</label>
+                        <Input
+                            type="text"
+                            placeholder="What was covered?"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            required
+                            className={inputClass}
+                        />
+                    </div>
+
+                    {/* Date */}
+                    <div className="md:col-span-2 space-y-1">
+                        <label className={labelClass}>Date</label>
+                        <div className="relative">
+                            <Input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className={`${inputClass} dark:[color-scheme:dark]`}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="md:col-span-2">
+                        <Button 
+                            type="submit" 
+                            disabled={isPending} 
+                            className="w-full rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/20 transition-all"
+                        >
+                            {isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Plus className="h-4 w-4 mr-2" />} 
+                            Add
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {/* Filters Card */}
+        <div className={`${glassCardClass} p-5`}>
+            <div className="flex flex-col md:flex-row items-end gap-4">
+                <div className="w-full md:w-auto space-y-1">
+                    <label className={labelClass}>
+                        <CalendarIcon className="w-3 h-3 inline mr-1 mb-0.5" /> Start Date
+                    </label>
+                    <Input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className={`${inputClass} w-full md:w-48 dark:[color-scheme:dark]`}
+                    />
+                </div>
+                <div className="w-full md:w-auto space-y-1">
+                    <label className={labelClass}>
+                        <CalendarIcon className="w-3 h-3 inline mr-1 mb-0.5" /> End Date
+                    </label>
+                    <Input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className={`${inputClass} w-full md:w-48 dark:[color-scheme:dark]`}
+                    />
+                </div>
+                <div className="flex gap-2 w-full md:w-auto">
+                     <Button
+                        type="button"
+                        onClick={() => fetchActivities()}
+                        className="flex-1 md:flex-none rounded-md bg-gray-900 text-white hover:bg-black dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white shadow-lg"
+                    >
+                        <Filter className="mr-2 h-4 w-4" /> Apply Filter
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                        }}
+                        className="flex-1 md:flex-none hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:text-slate-400"
+                    >
+                        Clear
+                    </Button>
+                </div>
+            </div>
+        </div>
+
+        {/* Data Tables */}
+        {loading ? (
+           <div className="flex flex-col items-center justify-center py-20">
+             <Loader2 className="h-10 w-10 animate-spin text-blue-600 dark:text-blue-400" />
+             <p className="text-gray-500 dark:text-slate-400 mt-4 animate-pulse">Fetching records...</p>
+           </div>
+        ) : (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {renderTable(group1Ids, "Junior Section", "Performance for PG, Nursery, and Prep")}
+            {renderTable(group2Ids, "Senior Section", "Performance for Classes One to Eight")}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
