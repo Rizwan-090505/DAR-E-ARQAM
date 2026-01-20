@@ -114,7 +114,6 @@ export default function ComplaintsAdmin() {
   }, []);
 
   const fetchComplaints = async () => {
-    // MODIFIED: Added .order('created_at', { ascending: false })
     const { data: cmps, error } = await supabase
       .from("complaints")
       .select(`
@@ -262,16 +261,16 @@ export default function ComplaintsAdmin() {
   ), [complaints, statusFilter]);
 
   const getStatusBadgeStyles = (status) => {
+    // Increased brightness for dark mode text (text-X-300 to text-X-200)
     switch(status) {
       case "Resolved": 
-        return "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300 border-transparent";
+        return "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-200 border-transparent";
       case "Closed": 
-        // High contrast Slate
-        return "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300 border-transparent";
+        return "bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-200 border-transparent";
       case "New": 
-        return "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300 border-transparent";
+        return "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200 border-transparent";
       default: 
-        return "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 border-transparent";
+        return "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200 border-transparent";
     }
   };
 
@@ -283,15 +282,15 @@ export default function ComplaintsAdmin() {
         
         {/* Header */}
         <div className="flex flex-col space-y-1.5">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">Complaints Admin</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Lodge new complaints, assign staff, and track resolutions.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Complaints Admin</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-300">Lodge new complaints, assign staff, and track resolutions.</p>
         </div>
 
         {/* Stats Cards - Glass Style */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Complaints</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Complaints</CardTitle>
               <BarChart2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             </CardHeader>
             <CardContent>
@@ -301,7 +300,7 @@ export default function ComplaintsAdmin() {
 
           <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">New / Unattended</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">New / Unattended</CardTitle>
               <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
             </CardHeader>
             <CardContent>
@@ -311,7 +310,7 @@ export default function ComplaintsAdmin() {
 
           <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">In Progress</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">In Progress</CardTitle>
               <Loader2 className="h-4 w-4 text-purple-600 dark:text-purple-400" />
             </CardHeader>
             <CardContent>
@@ -321,7 +320,7 @@ export default function ComplaintsAdmin() {
 
           <Card className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Resolved</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-300">Resolved</CardTitle>
               <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             </CardHeader>
             <CardContent>
@@ -334,7 +333,7 @@ export default function ComplaintsAdmin() {
         <div className="w-full">
            <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-6">
               <div className="mb-4">
-                <h2 className="text-base font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 flex items-center gap-2 mb-3">
+                <h2 className="text-base font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-200 flex items-center gap-2 mb-3">
                   <Megaphone className="w-5 h-5" /> Lodge New Complaint
                 </h2>
               </div>
@@ -343,18 +342,18 @@ export default function ComplaintsAdmin() {
                 {/* 2 Column Grid for Class/Student */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Select Class</Label>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Select Class</Label>
                     <Select onValueChange={(value) => setSelectedClass(value)} value={selectedClass || ""}>
-                      <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Select Class" /></SelectTrigger>
-                      <SelectContent className="bg-white dark:bg-[#0f172a]"><div className="max-h-[200px] overflow-y-auto">{classes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</div></SelectContent>
+                      <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Select Class" /></SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white"><div className="max-h-[200px] overflow-y-auto">{classes.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</div></SelectContent>
                     </Select>
                   </div>
                   
                   <div className="space-y-1.5 animate-in fade-in zoom-in-95 duration-200">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Select Student</Label>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Select Student</Label>
                     <Select onValueChange={(value) => setSelectedStudent(value)} value={selectedStudent || ""} disabled={!selectedClass}>
-                      <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder={selectedClass ? "Select Student" : "Select Class first"} /></SelectTrigger>
-                      <SelectContent className="bg-white dark:bg-[#0f172a]"><div className="max-h-[200px] overflow-y-auto">{students.map((s) => <SelectItem key={s.studentid} value={String(s.studentid)}>{s.name}</SelectItem>)}</div></SelectContent>
+                      <SelectTrigger className="w-full bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder={selectedClass ? "Select Student" : "Select Class first"} /></SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white"><div className="max-h-[200px] overflow-y-auto">{students.map((s) => <SelectItem key={s.studentid} value={String(s.studentid)}>{s.name}</SelectItem>)}</div></SelectContent>
                     </Select>
                   </div>
                 </div>
@@ -366,30 +365,30 @@ export default function ComplaintsAdmin() {
                           placeholder="Complaint Title" 
                           value={title} 
                           onChange={(e) => setTitle(e.target.value)} 
-                          className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"
+                          className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white dark:placeholder:text-gray-400"
                         />
                         <textarea 
                           placeholder="Detailed description of the issue..." 
                           value={text} 
                           onChange={(e) => setText(e.target.value)} 
-                          className="flex min-h-[80px] w-full rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                          className="flex min-h-[80px] w-full rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
                         />
                     </div>
                     
                     {/* 2 Column Grid for Users */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Against (Staff/User)</Label>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Against (Staff/User)</Label>
                         <Select value={againstUserId} onValueChange={setAgainstUserId}>
-                          <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Select User" /></SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-[#0f172a]">{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>)}</SelectContent>
+                          <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Select User" /></SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Assign Investigation To</Label>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Assign Investigation To</Label>
                         <Select value={assignedToUserId} onValueChange={setAssignedToUserId}>
-                          <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Select User" /></SelectTrigger>
-                          <SelectContent className="bg-white dark:bg-[#0f172a]">{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>)}</SelectContent>
+                          <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Select User" /></SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>)}</SelectContent>
                         </Select>
                       </div>
                     </div>
@@ -414,15 +413,15 @@ export default function ComplaintsAdmin() {
         <div className="w-full">
           <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
             <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5  flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
                 <UserCog className="w-4 h-4 text-blue-500" /> Managed Complaints
               </h2>
               <div className="w-full sm:w-[200px]">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 border-gray-300 dark:border-white/20 text-gray-700 dark:text-gray-300">
+                  <SelectTrigger className="h-8 text-xs bg-white dark:bg-slate-900 border-gray-300 dark:border-white/20 text-gray-700 dark:text-white">
                     <SelectValue placeholder="Filter Status" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#0f172a]">
+                  <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">
                     <SelectItem value="All">All Statuses</SelectItem>
                     {complaintStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
@@ -434,28 +433,28 @@ export default function ComplaintsAdmin() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent border-gray-200 dark:border-white/5">
-                    <TableHead className="w-[200px] text-gray-500 dark:text-gray-400">Issue</TableHead>
-                    <TableHead className="text-gray-500 dark:text-gray-400">Student</TableHead>
-                    <TableHead className="text-gray-500 dark:text-gray-400">Status</TableHead>
-                    <TableHead className="text-gray-500 dark:text-gray-400">Assigned / Against</TableHead>
-                    <TableHead className="text-right text-gray-500 dark:text-gray-400">Action</TableHead>
+                    <TableHead className="w-[200px] text-gray-500 dark:text-gray-300">Issue</TableHead>
+                    <TableHead className="text-gray-500 dark:text-gray-300">Student</TableHead>
+                    <TableHead className="text-gray-500 dark:text-gray-300">Status</TableHead>
+                    <TableHead className="text-gray-500 dark:text-gray-300">Assigned / Against</TableHead>
+                    <TableHead className="text-right text-gray-500 dark:text-gray-300">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredComplaints.length === 0 ? (
                     <TableRow className="hover:bg-transparent border-gray-100 dark:border-white/5">
-                        <TableCell colSpan={5} className="h-24 text-center text-gray-500 dark:text-gray-400">
+                        <TableCell colSpan={5} className="h-24 text-center text-gray-500 dark:text-gray-300">
                             No complaints found matching criteria.
                         </TableCell>
                     </TableRow>
                   ) : (
                     filteredComplaints.map((c) => (
                       <TableRow key={c.id} className="hover:bg-gray-50 dark:hover:bg-white/5 border-gray-100 dark:border-white/5 transition-colors">
-                        <TableCell className="font-medium text-gray-900 dark:text-gray-100">
+                        <TableCell className="font-medium text-gray-900 dark:text-white">
                           {c.title}
-                          <div className="text-[10px] text-gray-400 mt-1 truncate max-w-[250px]">{c.complaint_text}</div>
+                          <div className="text-[10px] text-gray-500 dark:text-gray-300 mt-1 truncate max-w-[250px]">{c.complaint_text}</div>
                         </TableCell>
-                        <TableCell className="text-gray-700 dark:text-gray-300 text-sm">{c.students?.name ?? "N/A"}</TableCell>
+                        <TableCell className="text-gray-700 dark:text-gray-200 text-sm">{c.students?.name ?? "N/A"}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`font-medium shadow-none ${getStatusBadgeStyles(c.status)}`}>
                             {c.status}
@@ -463,16 +462,16 @@ export default function ComplaintsAdmin() {
                         </TableCell>
                         <TableCell>
                            <div className="flex flex-col gap-1">
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-300 flex items-center gap-1">
                                 <UserCog className="w-3 h-3" /> To: {c.assigned_to?.email ?? "Unassigned"}
                               </span>
-                              <span className="text-[10px] text-red-500/70 dark:text-red-400/70 flex items-center gap-1">
+                              <span className="text-[10px] text-red-500/70 dark:text-red-300/80 flex items-center gap-1">
                                 <ShieldAlert className="w-3 h-3" /> Vs: {c.against_user?.email ?? "N/A"}
                               </span>
                            </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="outline" size="sm" onClick={() => openEditModal(c)} className="h-8 border-gray-200 dark:border-white/20 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/10">
+                          <Button variant="outline" size="sm" onClick={() => openEditModal(c)} className="h-8 border-gray-200 dark:border-white/20 text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-white/10">
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
                         </TableCell>
@@ -485,57 +484,59 @@ export default function ComplaintsAdmin() {
           </div>
         </div>
 
-        {/* Edit Dialog */}
+        {/* Edit Dialog - MADE SMALLER (sm:max-w-[425px]) */}
         <Dialog open={!!editingComplaint} onOpenChange={() => setEditingComplaint(null)}>
-          <DialogContent className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 sm:max-w-[500px] p-0 overflow-hidden gap-0 shadow-2xl">
-            <DialogHeader className="p-6 border-b border-gray-100 dark:border-white/5">
-              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">Manage Complaint</DialogTitle>
-              <DialogDescription className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          {/* Changes: max-w updated, padding reduced */}
+          <DialogContent className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white sm:max-w-[425px] p-0 overflow-hidden gap-0 shadow-2xl">
+            <DialogHeader className="p-4 border-b border-gray-100 dark:border-white/5">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">Manage Complaint</DialogTitle>
+              <DialogDescription className="text-xs text-gray-500 dark:text-gray-300 mt-1">
                 Updating: <span className="font-medium text-gray-900 dark:text-white">{editingComplaint?.title}</span>
               </DialogDescription>
             </DialogHeader>
             
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            {/* Reduced padding p-6 to p-4 and space-y-4 to space-y-3 */}
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Complaint Against</Label>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Complaint Against</Label>
                     <Select value={newAgainstUserId} onValueChange={setNewAgainstUserId}>
-                        <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Select User" /></SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-[#0f172a]">{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>))}</SelectContent>
+                        <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Select User" /></SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>))}</SelectContent>
                     </Select>
                 </div>
                 <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Assigned To</Label>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Assigned To</Label>
                     <Select value={newAssignedToUserId} onValueChange={setNewAssignedToUserId}>
-                        <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Assign User" /></SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-[#0f172a]">{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>))}</SelectContent>
+                        <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Assign User" /></SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">{users.map((user) => (<SelectItem key={user.id} value={user.id}>{user.email}</SelectItem>))}</SelectContent>
                     </Select>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Status</Label>
                 <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10"><SelectValue placeholder="Set status" /></SelectTrigger>
-                  <SelectContent className="bg-white dark:bg-[#0f172a]">{complaintStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent>
+                  <SelectTrigger className="bg-white dark:bg-slate-900 border-gray-200 dark:border-white/10 dark:text-white"><SelectValue placeholder="Set status" /></SelectTrigger>
+                  <SelectContent className="bg-white dark:bg-[#0f172a] dark:text-white">{complaintStatuses.map((status) => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Resolution Notes</Label>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-300">Resolution Notes</Label>
                 <textarea 
                   placeholder="Add resolution details..." 
                   value={resolutionNotes} 
                   onChange={(e) => setResolutionNotes(e.target.value)} 
                   rows={4} 
-                  className="flex w-full rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50" 
+                  className="flex w-full rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50" 
                 />
               </div>
             </div>
 
-            <DialogFooter className="p-6 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5 flex justify-end gap-3">
-              <DialogClose asChild><Button variant="ghost" className="text-gray-600 dark:text-gray-400">Cancel</Button></DialogClose>
-              <Button onClick={handleUpdateComplaint} disabled={isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <DialogFooter className="p-4 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5 flex justify-end gap-2">
+              <DialogClose asChild><Button variant="ghost" size="sm" className="text-gray-600 dark:text-gray-300">Cancel</Button></DialogClose>
+              <Button size="sm" onClick={handleUpdateComplaint} disabled={isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
                 {isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
                 Save Changes
               </Button>

@@ -26,7 +26,7 @@ export default function StudentsPage() {
 
   // Modal & Form State
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formData, setFormData] = useState({ name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" })
+  const [formData, setFormData] = useState({ studentid: "", name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" })
   const [editingId, setEditingId] = useState(null)
     
   const [loading, setLoading] = useState(false)
@@ -65,7 +65,7 @@ export default function StudentsPage() {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      filtered = filtered.filter(s => s.name.toLowerCase().includes(q))
+      filtered = filtered.filter(s => s.name.toLowerCase().includes(q) || String(s.studentid).includes(q))
     }
 
     filtered.sort((a, b) => {
@@ -80,6 +80,7 @@ export default function StudentsPage() {
   const openForm = (student = null) => {
     if (student) {
       setFormData({
+        studentid: student.studentid,
         name: student.name,
         fathername: student.fathername,
         mobilenumber: student.mobilenumber,
@@ -88,7 +89,7 @@ export default function StudentsPage() {
       })
       setEditingId(student.studentid)
     } else {
-      setFormData({ name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" }) 
+      setFormData({ studentid: "", name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" }) 
       setEditingId(null)
     }
     setIsFormOpen(true)
@@ -111,7 +112,7 @@ export default function StudentsPage() {
       fetchStudents()
     } catch (error) {
       console.error(error)
-      toast({ title: "Error saving student", variant: "destructive" })
+      toast({ title: "Error saving student", description: error.message, variant: "destructive" })
     }
   }
 
@@ -164,10 +165,10 @@ export default function StudentsPage() {
     )
   }
 
-  // FIXED: Inputs now match the dark navy theme (using dark:bg-white/5 for inputs)
+  // INPUT STYLE - UPDATED: Added h-9 and text-sm for compactness
   const inputClassName = `
-    w-full bg-gray-50 text-gray-900 border-gray-200 
-    focus:ring-blue-500 focus:border-blue-500 
+    w-full h-9 text-sm px-3 bg-gray-50 text-gray-900 border-gray-200 
+    focus:ring-blue-500 focus:border-blue-500 rounded-md
     dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-blue-500 dark:placeholder:text-slate-500
     transition-colors
   `
@@ -176,10 +177,6 @@ export default function StudentsPage() {
     <>
       <Navbar />
       
-      {/* ----------------------------------------------------
-        THE NEW BACKGROUND: Deep Navy Gradient
-        ---------------------------------------------------- 
-      */}
       <div className="min-h-screen transition-colors duration-300
         bg-gradient-to-b from-gray-50 to-gray-200 
         dark:from-[#0b1220] dark:to-[#05070c] 
@@ -198,10 +195,10 @@ export default function StudentsPage() {
               <div className="relative flex-grow sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-slate-500" />
                 <Input
-                  placeholder="Search students..."
+                  placeholder="Search name or ID..."
                   className="pl-10 h-10 rounded-lg 
-                    bg-white border-gray-200 text-gray-900
-                    dark:bg-white/10 dark:border-white/10 dark:text-slate-100 dark:placeholder:text-slate-400"
+                  bg-white border-gray-200 text-gray-900
+                  dark:bg-white/10 dark:border-white/10 dark:text-slate-100 dark:placeholder:text-slate-400"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                 />
@@ -338,10 +335,7 @@ export default function StudentsPage() {
               )}
           </AnimatePresence>
 
-          {/* ----------------------------------------------------
-            THE TABLE CONTAINER: Glassmorphism Effect
-            ---------------------------------------------------- 
-          */}
+          {/* TABLE CONTAINER */}
           <div className="rounded-xl overflow-hidden
             border border-gray-200 dark:border-white/10 
             bg-white dark:bg-white/5 
@@ -378,10 +372,10 @@ export default function StudentsPage() {
                      ) : (
                        students.map(s => (
                          <tr key={s.studentid} className={`group transition-colors 
-                            ${selectedStudents.includes(s.studentid) 
-                              ? "bg-blue-50 dark:bg-blue-900/20" 
-                              : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
-                            }`}>
+                           ${selectedStudents.includes(s.studentid) 
+                             ? "bg-blue-50 dark:bg-blue-900/20" 
+                             : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                           }`}>
                            <td className="py-3 pl-6">
                              <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer dark:border-white/20 dark:bg-white/10 dark:checked:bg-blue-600"
                                checked={selectedStudents.includes(s.studentid)}
@@ -404,20 +398,20 @@ export default function StudentsPage() {
                            
                            <td className="py-3 px-3">
                               <div className="relative inline-block w-full max-w-[100px]">
-                                 {loadingClear === s.studentid ? (
-                                   <Loader small />
-                                 ) : (
-                                   <select
-                                     value={s.Clear ? "TRUE" : "FALSE"}
-                                     onChange={(e) => handleClearChange(s.studentid, e.target.value === "TRUE")}
-                                     className={`w-full bg-transparent font-bold cursor-pointer outline-none focus:ring-0 border-none p-0 pr-2 text-xs ${
-                                       s.Clear ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-                                     }`}
-                                   >
-                                     <option className="bg-white text-gray-900 dark:bg-slate-900 dark:text-gray-100" value="TRUE">Cleared</option>
-                                     <option className="bg-white text-gray-900 dark:bg-slate-900 dark:text-gray-100" value="FALSE">Pending</option>
-                                   </select>
-                                 )}
+                                  {loadingClear === s.studentid ? (
+                                    <Loader small />
+                                  ) : (
+                                    <select
+                                      value={s.Clear ? "TRUE" : "FALSE"}
+                                      onChange={(e) => handleClearChange(s.studentid, e.target.value === "TRUE")}
+                                      className={`w-full bg-transparent font-bold cursor-pointer outline-none focus:ring-0 border-none p-0 pr-2 text-xs ${
+                                        s.Clear ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+                                      }`}
+                                    >
+                                      <option className="bg-white text-gray-900 dark:bg-white/5 dark:text-gray-100" value="TRUE">Cleared</option>
+                                      <option className="bg-white text-gray-900 dark:bg-white/5 dark:text-gray-100" value="FALSE">Pending</option>
+                                    </select>
+                                  )}
                               </div>
                            </td>
                            
@@ -459,13 +453,15 @@ export default function StudentsPage() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }} 
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.95, y: 10 }} 
-              className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100
+              // UPDATED: Changed max-w-lg to max-w-md for smaller width
+              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100
                 dark:bg-slate-900 dark:border-slate-800"
               onClick={(e) => e.stopPropagation()} 
             >
-              <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 
+              {/* UPDATED: Reduced padding (px-5 py-3) */}
+              <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 
                 dark:bg-slate-900 dark:border-slate-800">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">
                   {editingId ? "Edit Student" : "Add New Student"}
                 </h2>
                 <button 
@@ -476,9 +472,25 @@ export default function StudentsPage() {
                 </button>
               </div>
               
-              <div className="p-6 bg-white dark:bg-slate-900">
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* UPDATED: Reduced padding (p-5) */}
+              <div className="p-5 bg-white dark:bg-slate-900">
+                {/* UPDATED: Reduced gap (space-y-4) */}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  
+                  {/* UPDATED: Reduced grid gap (gap-3) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Student ID</label>
+                         <Input 
+                           name="studentid" 
+                           value={formData.studentid} 
+                           onChange={e => setFormData({...formData, studentid: e.target.value})} 
+                           required 
+                           disabled={!!editingId} 
+                           placeholder="e.g. 1001"
+                           className={`${inputClassName} ${editingId ? "opacity-60 cursor-not-allowed bg-gray-100 dark:bg-slate-800" : ""}`} 
+                         />
+                      </div>
                       <div className="space-y-1.5">
                          <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Full Name</label>
                          <Input 
@@ -490,6 +502,9 @@ export default function StudentsPage() {
                            className={inputClassName} 
                          />
                       </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                          <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Father Name</label>
                          <Input 
@@ -501,9 +516,23 @@ export default function StudentsPage() {
                            className={inputClassName} 
                          />
                       </div>
+                      <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Class</label>
+                          {/* UPDATED: Changed h-10 to h-9 */}
+                          <select 
+                            name="class_id" 
+                            value={formData.class_id} 
+                            onChange={e => setFormData({...formData, class_id: e.target.value})} 
+                            className={`flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 ${inputClassName}`} 
+                            required
+                          >
+                            <option value="" className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">Select Class...</option>
+                            {classes.map(c => <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">{c.name}</option>)}
+                          </select>
+                      </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                          <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Mobile Number</label>
                          <Input 
@@ -529,26 +558,12 @@ export default function StudentsPage() {
                       </div>
                   </div>
 
-                  <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Class</label>
-                      <select 
-                        name="class_id" 
-                        value={formData.class_id} 
-                        onChange={e => setFormData({...formData, class_id: e.target.value})} 
-                        className={`flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 ${inputClassName}`} 
-                        required
-                      >
-                        <option value="" className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">Select Class...</option>
-                        {classes.map(c => <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">{c.name}</option>)}
-                      </select>
-                  </div>
-
-                  <div className="pt-4 flex gap-3">
-                    <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} 
-                      className="flex-1 border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800">
+                  <div className="pt-2 flex gap-3">
+                    <Button type="button" size="sm" variant="outline" onClick={() => setIsFormOpen(false)} 
+                      className="flex-1 h-9 border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800">
                       Cancel
                     </Button>
-                    <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md dark:bg-blue-600 dark:hover:bg-blue-500">
+                    <Button type="submit" size="sm" className="flex-1 h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-md dark:bg-blue-600 dark:hover:bg-blue-500">
                       {editingId ? "Save Changes" : "Create Student"}
                     </Button>
                   </div>
