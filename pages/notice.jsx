@@ -295,7 +295,6 @@ export default function BulkMessagePage() {
           </div>
           <div className="space-y-4">
             <div>
-              {/* FIXED: Solid backgrounds to ensure text is visible */}
               <input
                 type="password"
                 value={authKey}
@@ -375,14 +374,17 @@ export default function BulkMessagePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+        {/* FIXED: Changed to md:grid-cols-12 to trigger side-by-side view on smaller laptops/PCs */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           
           {/* Left Col: Student List */}
-          <div className="lg:col-span-7 flex flex-col h-full">
-            <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden h-[600px]">
+          {/* FIXED: Changed lg:col-span-7 to md:col-span-7 */}
+          <div className="md:col-span-7 flex flex-col">
+            {/* FIXED: Synced height with right column (h-[600px] on md+) */}
+            <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden h-[500px] md:h-[600px]">
               
               {/* List Header */}
-              <div className="p-4 border-b border-gray-100 dark:border-white/5 flex items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
+              <div className="p-4 border-b border-gray-100 dark:border-white/5 flex flex-wrap gap-2 items-center justify-between bg-gray-50/50 dark:bg-white/[0.02]">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-blue-500" />
                   <span className="font-semibold text-sm">
@@ -434,7 +436,6 @@ export default function BulkMessagePage() {
                       <li 
                         key={s.studentid} 
                         onClick={() => toggleSelect(s.studentid)}
-                        // COMPACT FIX: Reduced padding to p-2.5 and gap to gap-3
                         className={`group flex items-center gap-3 p-2.5 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-white/5 ${checked ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
                       >
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${checked ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 dark:border-gray-600 text-transparent'}`}>
@@ -442,24 +443,23 @@ export default function BulkMessagePage() {
                         </div>
                         
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2">
                             <span className={`text-sm font-medium truncate ${checked ? 'text-blue-700 dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
                               {s.name}
                             </span>
                             {s.Clear ? 
-                              <span className="text-[10px] inline-flex items-center gap-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full font-medium">
+                              <span className="text-[10px] whitespace-nowrap inline-flex items-center gap-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full font-medium">
                                 <ShieldCheck className="w-3 h-3" /> Clear
                               </span> 
                               : 
-                              <span className="text-[10px] inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-medium">
+                              <span className="text-[10px] whitespace-nowrap inline-flex items-center gap-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-medium">
                                 Pending
                               </span>
                             }
                           </div>
-                          {/* COMPACT FIX: Reduced top margin */}
                           <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                             <span className="truncate">ID: {s.studentid}</span>
-                            <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                            <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0"></span>
                             <span className="truncate">{s.fathername}</span>
                           </div>
                         </div>
@@ -472,8 +472,10 @@ export default function BulkMessagePage() {
           </div>
 
           {/* Right Col: Message Composer */}
-          <div className="lg:col-span-5 flex flex-col h-full">
-             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-[600px] flex flex-col">
+          {/* FIXED: Changed lg:col-span-5 to md:col-span-5 */}
+          <div className="md:col-span-5 flex flex-col">
+             {/* FIXED: Synced height with left column (h-[600px] on md+) */}
+             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-auto min-h-[500px] md:h-[600px] flex flex-col">
                 <div className="mb-4">
                   <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
                     <Sparkles className="w-4 h-4" /> Quick Templates
@@ -495,12 +497,11 @@ export default function BulkMessagePage() {
                   <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
                     <FileText className="w-4 h-4" /> Message Body
                   </label>
-                  {/* FIXED: Solid backgrounds and high contrast colors */}
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your message here... Use {{name}}, {{fathername}} etc."
-                    className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono"
+                    className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono min-h-[200px]"
                   />
                   <div className="mt-2 text-[10px] text-gray-400 flex flex-wrap gap-2">
                     <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{name}}'}</span>
@@ -511,19 +512,19 @@ export default function BulkMessagePage() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                <div className="mt-5 flex flex-wrap gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
                   <Button
                     onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
                     disabled={saving}
                     variant="ghost"
-                    className="flex-1"
+                    className="flex-1 min-w-[100px]"
                   >
                     Reset
                   </Button>
                   <Button
                     onClick={handleSave}
                     disabled={saving || selectedIds.size === 0 || !message.trim()}
-                    className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                    className="flex-[2] min-w-[180px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                     {saving ? 'Sending...' : `Send to ${selectedIds.size} Students`}
