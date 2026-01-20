@@ -77,7 +77,7 @@ export default function BulkMessagePage() {
     },
     {
       name: 'Fee Reminder',
-      text: () => `_Respected Parent_,\n\nThis is a gentle reminder that the school fee for your child, *{{name}}* (Class: {{class}}), is now due. Your timely payment ensures smooth functioning of school operations.\n\n_Kindly ignore this message if the fee has already been paid._\n\nThank you for your cooperation!`
+      text: () => `_Respected Parent_,\n\nThis is a gentle reminder that the school fee for your child, *{{name}}* (Class: {{class}}), is now pending. Your timely payment ensures smooth functioning of school operations.\n\n_Kindly ignore this message if the fee has already been paid._\n\nThank you for your cooperation!`
     },
     {
       name: 'Uniform Notice',
