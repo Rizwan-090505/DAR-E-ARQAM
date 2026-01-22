@@ -17,7 +17,7 @@ import {
   Loader2,
   RefreshCcw,
   Sparkles,
-  Bot, // Added Bot icon for branding
+  Bot, 
   Wand2 
 } from 'lucide-react';
 
@@ -91,9 +91,6 @@ Do not provide conversational text, only the JSON.
 `;
 
 export default function BulkMessagePage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authKey, setAuthKey] = useState('');
-
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
     
@@ -108,17 +105,8 @@ export default function BulkMessagePage() {
   const [isDrafting, setIsDrafting] = useState(false); // Used for AI state
   const [query, setQuery] = useState('');
 
-  const handleAuth = () => {
-    if (authKey === '1234') {
-      setIsAuthenticated(true);
-    } else {
-      alert('Incorrect key. Please try again.');
-    }
-  };
-
+  // Initial fetch for classes
   useEffect(() => {
-    if (!isAuthenticated) return;
-    
     supabase
       .from('classes')
       .select('id, name')
@@ -127,10 +115,11 @@ export default function BulkMessagePage() {
         if (error) console.error('Classes fetch error', error);
         else setClasses(data || []);
       });
-  }, [isAuthenticated]);
+  }, []);
 
+  // Fetch students when class changes
   useEffect(() => {
-    if (!isAuthenticated || !selectedClass) {
+    if (!selectedClass) {
       setStudents([]);
       setSelectedIds(new Set());
       setSelectAll(false);
@@ -158,7 +147,7 @@ export default function BulkMessagePage() {
           setSelectAll(false);
         }
       });
-  }, [selectedClass, isAuthenticated]);
+  }, [selectedClass]);
 
   const filtered = useMemo(() => {
     let result = students;
@@ -347,40 +336,6 @@ export default function BulkMessagePage() {
       setSaving(false);
     }
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] flex items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 p-8 rounded-2xl shadow-xl">
-          <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-              <Lock className="w-6 h-6" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Access</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Enter your authentication key to continue</p>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <input
-                type="password"
-                value={authKey}
-                onChange={(e) => setAuthKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
-                className="block w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                placeholder="Auth Key"
-              />
-            </div>
-            <Button
-              onClick={handleAuth}
-              className="w-full rounded-xl py-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/20 transition-all"
-            >
-              Authenticate
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
