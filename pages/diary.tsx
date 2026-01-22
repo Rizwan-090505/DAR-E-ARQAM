@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import Navbar from '../components/Navbar';
+import Groq from 'groq-sdk';
 import { Button } from '../components/ui/button';
 import { useToast } from '../hooks/use-toast';
 import { 
@@ -13,8 +14,56 @@ import {
   XCircle, 
   ChevronDown, 
   ChevronUp,
-  RefreshCw
+  RefreshCw,
+  Wand2, 
+  Sparkles,
+  Lock
 } from "lucide-react";
+
+// --- AI CONFIGURATION ---
+const groq = new Groq({ 
+  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY, 
+  dangerouslyAllowBrowser: true 
+});
+
+// 1. UPDATED FORMATTER PROMPT (STRICTER SCRIPT-LOCKING)
+const generateFormatPrompt = (className: string, date: string) => `
+You are a 'Script-Frozen' School Diary Formatter. 
+Your goal is to format text, fix spelling, and fix grammar ONLY.
+
+⚠️ CRITICAL DIRECTIVE: "SCRIPT LOCK" ⚠️
+You are FORBIDDEN from changing the script of the input text.
+1. IF Input is English -> Output MUST be English.
+2. IF Input is Urdu -> Output MUST be Urdu.
+3. IF Input is Roman Urdu -> Output MUST be Roman Urdu.
+
+🚫 NEGATIVE CONSTRAINTS (WHAT YOU MUST NOT DO):
+- NEVER transliterate English words to Urdu script (e.g., "Computer" ❌-> "کمپیوٹر").
+- NEVER transliterate Urdu words to English script (e.g., "ریاضی" ❌-> "Math").
+- NEVER translate concepts (e.g., "Holiday" ❌-> "Chutti").
+
+✅ APPROVED TRANSFORMATION EXAMPLES:
+- Input: "maths: do pg 5" -> Output: "📚 Maths: \n📝 Do page 5." (Kept English)
+- Input: "اردو: سبق نمبر 1 یاد کریں" -> Output: "📚 اردو: \n📝 سبق نمبر 1 یاد کریں۔" (Kept Urdu)
+- Input: "Eng: learn ch 1. Urdu: nazam yad karni hai" -> Output: "📚 English: \n📝 Learn Chapter 1.\n\n📚 Urdu: \n📝 Nazam yad karni hai." (Mixed preserved)
+
+FORMATTING RULES:
+1. Start exactly with: "📅 ${date} | 🏫 ${className}"
+2. Use 📚 for Subjects.
+3. Use 📝 for Tasks/Details.
+4. Add a blank line between subjects.
+
+Output ONLY the final formatted text. Do not add conversational filler.
+`;
+
+// 2. POLICY PROMPT (Guardrail)
+const POLICY_SYSTEM_PROMPT = `
+You are a School Compliance AI. Review the diary entry.
+RULES:
+1. Content must be educational.No personal contact details other than 03085333392 or school address.
+2. No abusive language.Nothing bad about school or staff's personal issues.
+3. RETURN JSON ONLY: { "allowed": boolean, "reason": "string" }.
+`;
 
 interface Class {
   id: number;
@@ -34,25 +83,25 @@ export default function DiaryPage() {
   const [classId, setClassId] = useState<string>('');
   const [diary, setDiary] = useState('');
   const [date, setDate] = useState('');
+  
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [isFormatting, setIsFormatting] = useState(false);
+  
   const [expanded, setExpanded] = useState<number | null>(null);
   const { toast } = useToast();
 
   // --- DESIGN TOKENS ---
   const glassCardClass = "rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 backdrop-blur-xl shadow-sm dark:shadow-xl";
   const labelClass = "text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block";
-  const inputClass = "w-full bg-gray-50 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20 rounded-md p-2.5 text-sm";
+  const inputClass = "w-full bg-gray-50 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20 rounded-md p-2.5 text-sm transition-all";
   
-  // Glow Logic
   const glowGreen = "text-green-600 dark:text-green-400 font-bold drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]";
   const glowRed = "text-red-500 dark:text-red-400 font-bold drop-shadow-[0_0_8px_rgba(248,113,113,0.3)]";
 
   useEffect(() => {
-    // Set default date to today
     const today = new Date().toISOString().split('T')[0];
     setDate(today);
-    
     fetchData();
   }, []);
 
@@ -64,11 +113,8 @@ export default function DiaryPage() {
 
   const fetchClasses = async () => {
     const { data, error } = await supabase.from('classes').select('id, name').order('name');
-    if (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch classes' });
-    } else {
-      setClasses(data || []);
-    }
+    if (error) toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch classes' });
+    else setClasses(data || []);
   };
 
   const fetchTodayDiaries = async () => {
@@ -81,43 +127,115 @@ export default function DiaryPage() {
       .gte('created_at', todayStart.toISOString())
       .order('created_at', { ascending: false });
 
-    if (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch diaries' });
+    if (error) toast({ variant: 'destructive', title: 'Error', description: 'Failed to fetch diaries' });
+    else setDiaries(data || []);
+  };
+
+  const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newClassId = e.target.value;
+    setClassId(newClassId);
+
+    if (newClassId) {
+        const selectedClass = classes.find(c => String(c.id) === newClassId);
+        if (selectedClass) {
+            setDiary(`📅 ${date} | 🏫 ${selectedClass.name}\n\n`);
+        }
     } else {
-      setDiaries(data || []);
+        setDiary('');
+    }
+  };
+
+  const handleSmartFormat = async () => {
+    if (!classId) return;
+
+    setIsFormatting(true);
+    const selectedClass = classes.find(c => String(c.id) === classId)?.name || "Class";
+
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                { role: "system", content: generateFormatPrompt(selectedClass, date) },
+                { role: "user", content: diary }
+            ],
+            model: "llama-3.1-8b-instant",
+            // Lowered temperature for stricter adherence to instructions
+            temperature: 0.1, 
+            max_tokens: 600,
+        });
+
+        const formattedText = completion.choices[0]?.message?.content;
+        if (formattedText) setDiary(formattedText);
+        toast({ title: "✨ Formatted", description: "Spelling fixed & Formatting applied (Script Preserved).", className: "bg-purple-600 text-white border-none" });
+    } catch (error) {
+        console.error("AI Error", error);
+        toast({ title: "AI Error", description: "Service busy, please try again.", variant: "destructive" });
+    } finally {
+        setIsFormatting(false);
+    }
+  };
+
+  const checkPolicy = async (textToCheck: string) => {
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [
+                { role: "system", content: POLICY_SYSTEM_PROMPT },
+                { role: "user", content: textToCheck }
+            ],
+            model: "llama-3.1-8b-instant",
+            response_format: { type: "json_object" }
+        });
+        const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
+        return result;
+    } catch (error) {
+        return { allowed: false, reason: "AI Service Unavailable" };
     }
   };
 
   const addDiary = async () => {
     if (!classId || !diary || !date) {
-      toast({ variant: 'destructive', title: 'Error', description: 'All fields are required' });
+      toast({ variant: 'destructive', title: 'Required', description: 'Please fill all fields' });
       return;
     }
 
+    const selectedClass = classes.find(c => String(c.id) === classId);
+    
+    // Local Validation
+    if (selectedClass && !diary.includes(selectedClass.name)) {
+       toast({ variant: 'destructive', title: 'Format Error', description: `Text must contain "${selectedClass.name}". Use AI Format to fix.` });
+       return;
+    }
+
     setSubmitting(true);
+
+    // Policy Check
+    const policy = await checkPolicy(diary);
+    if (!policy.allowed) {
+        setSubmitting(false);
+        toast({ variant: 'destructive', title: 'Policy Violation', description: policy.reason });
+        return;
+    }
+
     const isoDate = new Date(date).toISOString();
 
-    // 1. Insert Diary
+    // Insert Diary
     const { data: inserted, error } = await supabase
       .from('diary')
       .insert([{ class_id: Number(classId), diary, date: isoDate }])
       .select();
 
-    if (error || !inserted || inserted.length === 0) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Diary could not be saved' });
+    if (error || !inserted?.length) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Database save failed' });
       setSubmitting(false);
       return;
     }
 
-    // 2. Fetch Students for Message Queue
-    const { data: students, error: stuError } = await supabase
+    // Queue Messages
+    const { data: students } = await supabase
       .from('students')
-      .select('studentid, mobilenumber, name')
+      .select('studentid, mobilenumber')
       .eq('class_id', classId);
 
-    if (stuError) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Diary saved, but failed to fetch students' });
-    } else if (students && students.length > 0) {
+    if (students?.length) {
       const messages = students.map((s) => ({
         student_id: s.studentid,
         class_id: classId,
@@ -125,17 +243,10 @@ export default function DiaryPage() {
         text: diary,
         created_at: isoDate,
       }));
-
-      const { error: msgError } = await supabase
-        .from('messages')
-        .insert(messages);
-        
-      if (msgError) {
-        toast({ variant: 'destructive', title: 'Warning', description: 'Diary saved but messages failed to queue' });
-      }
+      await supabase.from('messages').insert(messages);
     }
 
-    toast({ variant: 'default', className: "bg-green-600 text-white border-none", title: 'Success', description: 'Diary saved and messages queued' });
+    toast({ variant: 'default', className: "bg-green-600 text-white border-none", title: 'Success', description: 'Diary sent successfully!' });
 
     setDiary('');
     setClassId('');
@@ -148,9 +259,7 @@ export default function DiaryPage() {
     if (!diaryMap.has(d.class_id)) diaryMap.set(d.class_id, d);
   });
 
-  const toggleExpand = (id: number) => {
-    setExpanded(expanded === id ? null : id);
-  };
+  const toggleExpand = (id: number) => setExpanded(expanded === id ? null : id);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors">
@@ -163,7 +272,7 @@ export default function DiaryPage() {
            <div>
              <h1 className="text-3xl font-semibold tracking-tight">Diary Management</h1>
              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
-               Send daily updates to students and track submissions.
+               AI-Assisted Daily Updates & Tracking
              </p>
            </div>
            
@@ -185,7 +294,7 @@ export default function DiaryPage() {
             <div className={glassCardClass}>
               <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/10">
                  <h3 className="font-semibold text-sm flex items-center gap-2">
-                    <Send className="h-4 w-4 text-blue-500" /> New Diary Entry
+                    <Send className="h-4 w-4 text-blue-500" /> Compose Entry
                  </h3>
               </div>
               
@@ -198,7 +307,13 @@ export default function DiaryPage() {
                    <input
                       type="date"
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
+                      onChange={(e) => {
+                          setDate(e.target.value);
+                          if(classId) {
+                              const cls = classes.find(c => String(c.id) === classId)?.name;
+                              if(cls) setDiary(`📅 ${e.target.value} | 🏫 ${cls}\n\n` + diary.split('\n\n').slice(1).join('\n\n'));
+                          }
+                      }}
                       className={inputClass}
                    />
                 </div>
@@ -208,10 +323,10 @@ export default function DiaryPage() {
                    <label className={labelClass}>Class</label>
                    <select
                       value={classId}
-                      onChange={(e) => setClassId(e.target.value)}
+                      onChange={handleClassChange}
                       className={inputClass}
                    >
-                      <option value="">Select a class...</option>
+                      <option value="">Select a class to start...</option>
                       {classes.map((c) => (
                         <option key={c.id} value={c.id} className="dark:bg-slate-900">
                           {c.name}
@@ -220,26 +335,54 @@ export default function DiaryPage() {
                    </select>
                 </div>
 
-                {/* Text Area */}
+                {/* Text Area & AI Button */}
                 <div>
                    <label className={labelClass}>
                       <BookOpen className="w-3 h-3 inline mr-1 mb-0.5" /> Message
                    </label>
-                   <textarea
-                      value={diary}
-                      onChange={(e) => setDiary(e.target.value)}
-                      placeholder="Enter homework or announcement..."
-                      className={`${inputClass} min-h-[150px] resize-y`}
-                   />
+                   
+                   <button
+                     onClick={handleSmartFormat}
+                     disabled={isFormatting || !classId}
+                     className={`
+                        w-full mb-2 flex items-center justify-center gap-2 p-2 rounded-md font-medium text-xs transition-all border
+                        ${!classId 
+                           ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                           : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-transparent shadow-md'
+                        }
+                     `}
+                   >
+                     {isFormatting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                     {isFormatting ? 'AI is Formatting...' : 'AI Format '}
+                   </button>
+                   
+                   <div className="relative">
+                       <textarea
+                          value={diary}
+                          onChange={(e) => setDiary(e.target.value)}
+                          disabled={!classId}
+                          placeholder={!classId ? "⚠️ Select a class above to enable typing..." : "Type details here (Eng or Urdu)..."}
+                          className={`${inputClass} min-h-[160px] resize-y font-mono text-sm leading-relaxed ${!classId ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-900' : ''}`}
+                       />
+                       {!classId && (
+                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                               <Lock className="w-6 h-6 text-gray-400 opacity-20" />
+                           </div>
+                       )}
+                   </div>
+                   
+                   <p className="text-[10px] text-gray-400 mt-1.5 flex justify-between">
+                     <span>* Scripts preserved (Eng stays Eng, Urdu stays Urdu).</span>
+                   </p>
                 </div>
 
                 <Button 
                     onClick={addDiary} 
-                    disabled={submitting}
+                    disabled={submitting || !classId}
                     className="w-full rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-blue-500/20 transition-all h-10"
                 >
                     {submitting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                    Send to Students
+                    {submitting ? 'Verifying Policy...' : 'Send to Students'}
                 </Button>
               </div>
             </div>
@@ -281,10 +424,10 @@ export default function DiaryPage() {
                              >
                                 <div className="flex justify-between items-start">
                                    <div>
-                                      <h4 className="font-medium text-sm text-gray-900 dark:text-slate-100">{c.name}</h4>
-                                      <span className={`text-xs mt-1 block ${entry ? glowGreen : glowRed}`}>
-                                         {entry ? "Sent" : "Pending"}
-                                      </span>
+                                      <h4 className="font-medium text-sm text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                                        {c.name}
+                                        {entry && <span className="text-[10px] bg-green-200 dark:bg-green-900 text-green-800 dark:text-green-200 px-1.5 py-0.5 rounded-full">Sent</span>}
+                                      </h4>
                                    </div>
                                    {entry ? (
                                       <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -293,9 +436,8 @@ export default function DiaryPage() {
                                    )}
                                 </div>
 
-                                {/* Expanded Content */}
                                 {entry && (
-                                   <div className={`mt-3 pt-3 border-t border-green-200 dark:border-green-800/30 text-sm text-gray-600 dark:text-slate-300 ${!isExpanded && 'line-clamp-2'}`}>
+                                   <div className={`mt-3 pt-3 border-t border-green-200 dark:border-green-800/30 text-sm text-gray-600 dark:text-slate-300 font-mono whitespace-pre-wrap ${!isExpanded && 'line-clamp-2'}`}>
                                       {entry.diary}
                                    </div>
                                 )}

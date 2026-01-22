@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import Navbar from '../components/Navbar';
+import Groq from 'groq-sdk';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
 import { 
@@ -11,41 +12,83 @@ import {
   Send, 
   CheckSquare, 
   Square, 
-  X, 
   ShieldCheck, 
   Lock,
   Loader2,
   RefreshCcw,
-  Sparkles
+  Sparkles,
+  Bot, // Added Bot icon for branding
+  Wand2 
 } from 'lucide-react';
 
-// 📝 A styled custom modal component
-const CustomModal = ({ title, description, isOpen, onClose, onAction, children }) => {
-  if (!isOpen) return null;
+// --- CONFIGURATION ---
+const groq = new Groq({ 
+  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY, 
+  dangerouslyAllowBrowser: true 
+});
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-[#0f172a] border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-start p-6 border-b border-gray-100 dark:border-white/5">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-6">
-            {children}
-        </div>
-        <div className="flex justify-end gap-3 p-6 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5">
-          <Button onClick={onClose} variant="ghost" className="text-gray-600 dark:text-gray-400">Cancel</Button>
-          <Button onClick={onAction} className="bg-blue-600 hover:bg-blue-700 text-white">Generate Message</Button>
-        </div>
-      </div>
-    </div>
-  );
-};
+// 1. CONTEXT: Smart Drafter (Replaces simple formatting)
+const AI_DRAFTER_PROMPT = `
+You are the **AI Communications Director** for "DAR-E-ARQAM SCHOOL".
+Your goal is to write professional, polite, and clear SMS broadcasts to parents based on the user's rough input.
+
+### CORE INSTRUCTIONS
+1. **ENGLISH ONLY**: The final output must be in professional English. If the input is in Urdu or Roman Urdu, translate and refine it to English.
+2. **ACTION**: 
+   - If the user provides a topic (e.g., "fee reminder"), write a full message from scratch.
+   - If the user provides a rough draft, polish and fix grammar.
+3. **TONE**: Formal, respectful, and authoritative yet gentle. Use "Respected Parent" as the salutation.
+
+### MANDATORY VARIABLES
+You MUST seamlessly integrate these placeholders where they make sense naturally:
+- {{name}} (Student Name)
+- {{fathername}} (Father's Name) - *Optional, use if flow allows*
+- {{id}} (Student ID) - *Good for official notices*
+- {{class}} (Class Name)
+
+### FORMATTING RULES
+- Do not use "Subject:" lines.
+- Keep it under 400 characters if possible (SMS friendly).
+- Use spacing for readability.
+- Ends with "Regards, 
+Administration".
+
+### EXAMPLE INPUT/OUTPUT
+Input: "tell parents fees is due"
+Output: 
+Respected Parent,
+This is a gentle reminder to submit the pending school fee for your child, {{name}} (Class: {{class}}). Your timely payment ensures smooth school operations. 
+Thank you.
+
+Input: "kal chuti hai barish ki waja se"
+Output: 
+Respected Parent,
+Please be informed that the school will remain closed tomorrow due to heavy rain. Regular classes for {{name}} will resume the following day.
+Regards,
+Administration.
+
+Output **ONLY** the message text. No conversational filler.
+`;
+
+const SCHOOL_POLICY_CONTEXT = `
+You are a strict AI Compliance Officer for a School Administration System. 
+Your task is to review the message text provided by the user to ensure it adheres to school policy.
+
+STRICT OUTPUT FORMAT:
+You must return ONLY a JSON object in this exact format:
+{
+  "allowed": boolean,
+  "reason": "Short explanation if rejected, or 'OK' if allowed"
+}
+
+POLICY RULES:
+1. Language must be professional, polite, and grammatically correct.
+2. No threatening, abusive, or slang language. No bad remarks about the school.
+3. Messages must be relevant to school activities (Fees, Exams, Attendance, Holidays, or moral lessons).
+4. Teachers are not allowed to share personal contacts (Only school address and 03234447292 allowed).
+
+Do not provide conversational text, only the JSON.
+`;
 
 export default function BulkMessagePage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -54,42 +97,16 @@ export default function BulkMessagePage() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
     
-  // State for the filter
-  const [filterClear, setFilterClear] = useState('all'); // Options: 'all', 'true', 'false'
-
+  const [filterClear, setFilterClear] = useState('all'); 
   const [students, setStudents] = useState([]);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false); // Used for Sending state
+  const [isDrafting, setIsDrafting] = useState(false); // Used for AI state
   const [query, setQuery] = useState('');
-
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [currentTemplate, setCurrentTemplate] = useState(null);
-  const [templateInputs, setTemplateInputs] = useState({});
-
-  const templates = [
-    {
-      name: 'PTM Reminder',
-      text: (inputs) => `_Respected Parent_,\n\n*A Parent-Teacher Meeting (PTM) has been scheduled on ${inputs.ptm_date} at ${inputs.ptm_time}*. Please ensure your presence to discuss the academic progress of your child, *{{name}}* (ID: {{id}}).\n\nThank you.`,
-      placeholders: [{ name: 'ptm_date', label: 'PTM Date', type: 'date' }, { name: 'ptm_time', label: 'PTM Time', type: 'time' }]
-    },
-    {
-      name: 'Fee Reminder',
-      text: () => `_Respected Parent_,\n\nThis is a gentle reminder that the school fee for your child, *{{name}}* (Class: {{class}}), is now pending. Your timely payment ensures smooth functioning of school operations.\n\n_Kindly ignore this message if the fee has already been paid._\n\nThank you for your cooperation!`
-    },
-    {
-      name: 'Uniform Notice',
-      text: (inputs) => `_Respected Parent_,\n\nThis is a notice regarding the school uniform. We have observed that *{{name}}* (ID: {{id}}) is not adhering to the uniform code due to _${inputs.uniform_issue}_.\n\nPlease ensure your child wears the correct and clean uniform daily. Thank you.`,
-      placeholders: [{ name: 'uniform_issue', label: 'Issue', type: 'text' }]
-    },
-    {
-      name: 'Holiday Announcement',
-      text: (inputs) => `_Respected Parent_,\n\nPlease note that the school will remain closed on *${inputs.holiday_date}* on account of _${inputs.holiday_reason}_.\n\nRegular classes will resume from the next working day. Thank you.`,
-      placeholders: [{ name: 'holiday_date', label: 'Holiday Date', type: 'date' }, { name: 'holiday_reason', label: 'Reason', type: 'text' }]
-    },
-  ];
 
   const handleAuth = () => {
     if (authKey === '1234') {
@@ -196,24 +213,62 @@ export default function BulkMessagePage() {
     });
   };
 
-  const handleTemplateClick = (template) => {
-    setCurrentTemplate(template);
-    if (template.placeholders) {
-      const initialInputs = template.placeholders.reduce((acc, p) => ({ ...acc, [p.name]: '' }), {});
-      setTemplateInputs(initialInputs);
-      setShowTemplateModal(true);
-    } else {
-      setMessage(template.text());
+  // --- AI FUNCTION 1: SMART DRAFTER (Replaced old Formatter) ---
+  const handleSmartDraft = async () => {
+    if (!message.trim()) {
+      alert("Please type a topic or rough draft first (e.g. 'Exam tomorrow' or 'Fee reminder').");
+      return;
+    }
+    
+    setIsDrafting(true);
+    try {
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: "system", content: AI_DRAFTER_PROMPT },
+          { role: "user", content: `User Input: "${message}"` }
+        ],
+        model: "llama-3.1-8b-instant",
+        temperature: 0.7,
+        max_completion_tokens: 600,
+      });
+
+      const draftedText = chatCompletion.choices[0]?.message?.content;
+      if (draftedText) {
+        setMessage(draftedText); 
+      }
+    } catch (error) {
+      console.error("Drafting failed:", error);
+      alert("AI Service unavailable. Please check internet connection.");
+    } finally {
+      setIsDrafting(false);
     }
   };
 
-  const generateTemplateMessage = () => {
-    if (currentTemplate) {
-      setMessage(currentTemplate.text(templateInputs));
-      setShowTemplateModal(false);
+  // --- AI FUNCTION 2: POLICY CHECKER ---
+  const checkContentPolicy = async (textToCheck) => {
+    try {
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: "system", content: SCHOOL_POLICY_CONTEXT },
+          { role: "user", content: `Message Content: "${textToCheck}"` }
+        ],
+        model: "openai/gpt-oss-120b", 
+        temperature: 0,
+        max_completion_tokens: 2048,
+        response_format: { type: 'json_object' },
+        stream: false 
+      });
+
+      const content = chatCompletion.choices[0]?.message?.content;
+      return JSON.parse(content || '{}');
+
+    } catch (error) {
+      console.error("Policy check failed:", error);
+      return { allowed: false, reason: "Error connecting to Policy Server" };
     }
   };
 
+  // --- MAIN SAVE/SEND HANDLER ---
   const handleSave = async () => {
     if (selectedIds.size === 0) {
       alert('Please select at least one student.');
@@ -235,9 +290,20 @@ export default function BulkMessagePage() {
       return;
     }
 
+    setSaving(true); 
+
+    // --- POLICY CHECK ---
+    const policyResult = await checkContentPolicy(message);
+    
+    if (!policyResult.allowed) {
+      setSaving(false);
+      alert(`⚠️ Policy Violation Detected:\n\n"${policyResult.reason}"\n\nThe message was NOT sent. Please revise.`);
+      return;
+    }
+
+    // --- SUPABASE INSERT ---
     const today = new Date().toLocaleDateString();
 
-    setSaving(true);
     try {
       const payload = selectedArray.map(studentid => {
         const student = students.find(s => s.studentid === studentid);
@@ -269,7 +335,7 @@ export default function BulkMessagePage() {
         console.error('Save error', error);
         alert('Failed to save messages. Check console for details.');
       } else {
-        alert(`Saved personalized message for ${payload.length} student(s).`);
+        alert(`✅ Verified & Saved personalized message for ${payload.length} student(s).`);
         setMessage('');
         setSelectedIds(new Set());
         setSelectAll(false);
@@ -374,13 +440,10 @@ export default function BulkMessagePage() {
           </div>
         </div>
 
-        {/* FIXED: Changed to md:grid-cols-12 to trigger side-by-side view on smaller laptops/PCs */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           
           {/* Left Col: Student List */}
-          {/* FIXED: Changed lg:col-span-7 to md:col-span-7 */}
           <div className="md:col-span-7 flex flex-col">
-            {/* FIXED: Synced height with right column (h-[600px] on md+) */}
             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm flex-1 flex flex-col overflow-hidden h-[500px] md:h-[600px]">
               
               {/* List Header */}
@@ -472,35 +535,39 @@ export default function BulkMessagePage() {
           </div>
 
           {/* Right Col: Message Composer */}
-          {/* FIXED: Changed lg:col-span-5 to md:col-span-5 */}
           <div className="md:col-span-5 flex flex-col">
-             {/* FIXED: Synced height with left column (h-[600px] on md+) */}
-             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-auto min-h-[500px] md:h-[600px] flex flex-col">
+             <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-auto min-h-[500px] md:h-[600px] flex flex-col relative overflow-hidden">
+                
+                {/* --- PROMINENT AI BRANDING AREA --- */}
                 <div className="mb-4">
-                  <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4" /> Quick Templates
-                  </h2>
-                  <div className="grid grid-cols-2 gap-2">
-                    {templates.map((template) => (
-                      <button
-                        key={template.name}
-                        onClick={() => handleTemplateClick(template)}
-                        className="text-xs font-medium px-3 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 hover:bg-blue-50 hover:border-blue-200 dark:hover:bg-blue-900/20 dark:hover:border-blue-800 text-gray-700 dark:text-gray-300 transition-all text-left"
-                      >
-                        {template.name}
-                      </button>
-                    ))}
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                       <Bot className="w-4 h-4 text-purple-500" /> AI Assistant
+                    </h2>
                   </div>
+                  <button 
+                    onClick={handleSmartDraft}
+                    disabled={isDrafting || !message}
+                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 hover:from-purple-700 hover:to-blue-700 text-white p-3 rounded-lg shadow-md transition-all font-medium disabled:opacity-70 disabled:cursor-not-allowed group"
+                  >
+                    {isDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform" />}
+                    {isDrafting ? 'Drafting Professional Message...' : 'Generate Professional Message with AI'}
+                  </button>
+                  <p className="text-[10px] text-gray-400 text-center mt-2">
+                    Type a topic (e.g. "fee reminder") or rough draft below, then click Generate.
+                  </p>
                 </div>
+                {/* ---------------------------------- */}
 
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> Message Body
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4" /> Message Editor
                   </label>
+                  
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Type your message here... Use {{name}}, {{fathername}} etc."
+                    placeholder="1. Type your idea here... (e.g., 'Tell parents school is closed tomorrow')&#10;2. Click the AI button above to draft it."
                     className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono min-h-[200px]"
                   />
                   <div className="mt-2 text-[10px] text-gray-400 flex flex-wrap gap-2">
@@ -527,7 +594,7 @@ export default function BulkMessagePage() {
                     className="flex-[2] min-w-[180px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                    {saving ? 'Sending...' : `Send to ${selectedIds.size} Students`}
+                    {saving ? 'Verifying & Sending...' : `Send to ${selectedIds.size} Students`}
                   </Button>
                 </div>
              </div>
@@ -535,31 +602,6 @@ export default function BulkMessagePage() {
 
         </div>
       </main>
-
-      <CustomModal
-        title={currentTemplate?.name}
-        description="Fill in the specific details for this template."
-        isOpen={showTemplateModal}
-        onClose={() => setShowTemplateModal(false)}
-        onAction={generateTemplateMessage}
-      >
-        <div className="grid gap-5">
-          {currentTemplate?.placeholders?.map((p) => (
-            <div key={p.name} className="space-y-1.5">
-              <label htmlFor={p.name} className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {p.label}
-              </label>
-              <input
-                id={p.name}
-                type={p.type}
-                value={templateInputs[p.name]}
-                onChange={(e) => setTemplateInputs({ ...templateInputs, [p.name]: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-          ))}
-        </div>
-      </CustomModal>
     </div>
   );
 }
