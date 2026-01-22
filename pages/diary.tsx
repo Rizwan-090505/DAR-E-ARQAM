@@ -21,8 +21,14 @@ import {
 } from "lucide-react";
 
 // --- AI CONFIGURATION ---
+const apiKey = process.env.NEXT_PUBLIC_GROQ_API_KEY;
+
+if (!apiKey) {
+  throw new Error("Missing NEXT_PUBLIC_GROQ_API_KEY in .env.local");
+}
+
 const groq = new Groq({ 
-  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY, 
+  apiKey: apiKey, 
   dangerouslyAllowBrowser: true 
 });
 
