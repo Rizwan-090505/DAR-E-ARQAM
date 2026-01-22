@@ -125,10 +125,3 @@
   }
 }
 
-.data-[state=open]:animate-in {
-  animation: slideInFromTop 0.3s ease-out;
-}
-
-.data-[state=closed]:animate-out {
-  animation: slideOutToTop 0.3s ease-in;
-}
