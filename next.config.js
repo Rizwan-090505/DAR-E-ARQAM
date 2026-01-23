@@ -1,16 +1,17 @@
+// next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: {
-    domains: ['localhost'],
+  experimental: {
+    // Required for older Next.js versions using Pages router
+    serverActions: true,
   },
-  // This helps bypass some of the strict Type/Lint errors 
-  // that happen during major upgrades (React 18 -> 19)
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
+
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_GROQ_API_KEY: process.env.NEXT_PUBLIC_GROQ_API_KEY,
   },
 }
 
 module.exports = nextConfig
+
