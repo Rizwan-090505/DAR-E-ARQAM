@@ -12,7 +12,6 @@ import {
 } from 'date-fns';
 import { 
   ArrowLeft, 
-  Loader2, 
   CheckCircle2, 
   XCircle, 
   HelpCircle, 
@@ -26,6 +25,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 import Navbar from '../../components/Navbar';
 import Breadcrumbs from '../../components/Breadcrumbs';
+import Loader from '../../components/Loader';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { useToast } from '../../hooks/use-toast';
@@ -47,7 +47,7 @@ export default function AttendanceRecordPage() {
   const [students, setStudents] = useState([]);
   const [attendanceData, setAttendanceData] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-   
+    
   // UI State
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -318,7 +318,7 @@ export default function AttendanceRecordPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0b1220]">
         <div className="flex flex-col items-center">
-          <Loader2 className="h-10 w-10 text-blue-600 animate-spin mb-4" />
+          <Loader className="h-10 w-10 text-blue-600 animate-spin mb-4" />
           <p className="text-gray-500 text-sm">Loading Attendance Register...</p>
         </div>
       </div>
@@ -501,7 +501,7 @@ export default function AttendanceRecordPage() {
             className="w-full md:w-auto rounded-full px-10 py-6 text-lg font-bold text-black dark:text-white shadow-xl shadow-blue-500/20 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-700 hover:via-indigo-700 hover:to-violet-700 transition-all active:scale-[0.98] border border-white/20"
           >
             {isSubmitting ? (
-              <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Saving...</>
+              <><Loader className="mr-2 h-5 w-5 animate-spin" /> Saving...</>
             ) : (
               <><Save className="mr-2 h-5 w-5" /> Save Attendance</>
             )}

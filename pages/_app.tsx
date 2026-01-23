@@ -5,6 +5,8 @@ import { Toaster } from "../components/ui/toaster"
 import { useEffect, useState } from 'react'
 import { supabase } from '../utils/supabaseClient'
 import { useRouter } from 'next/router'
+// 1. Import your Loader component
+import Loader from '../components/Loader' 
 
 const useAuth = () => {
   const [user, setUser] = useState<any | null>(null)
@@ -37,19 +39,18 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     const openRoutes = ['/login','/parents_portal', '/auth/callback','/datesheets','/res','/res1'];
-if (!loading && !user) {
-  if (!openRoutes.some(route => router.pathname.startsWith(route))) {
-    router.push('/login')
-  }
-}
-
+    if (!loading && !user) {
+      if (!openRoutes.some(route => router.pathname.startsWith(route))) {
+        router.push('/login')
+      }
+    }
   }, [user, loading, router])
 
   if (loading) {
-    // Prevent redirect flash
+    // 2. Replace the text with your Loader component
     return (
-      <div className="flex h-screen items-center justify-center text-lg">
-        Checking session...
+      <div className="flex h-screen items-center justify-center">
+        <Loader />
       </div>
     )
   }

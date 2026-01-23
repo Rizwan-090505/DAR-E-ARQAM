@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import Navbar from '../components/Navbar';
 import Groq from 'groq-sdk';
+import Loader from '../components/Loader'; // Imported Loader component
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
 import { 
@@ -13,12 +14,10 @@ import {
   CheckSquare, 
   Square, 
   ShieldCheck, 
-  Lock,
-  Loader2,
-  RefreshCcw,
-  Sparkles,
-  Bot, 
-  Wand2 
+  Loader2, // Kept for buttons
+  RefreshCcw, 
+  Sparkles, 
+  Bot 
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -435,10 +434,9 @@ export default function BulkMessagePage() {
               {/* Scrollable List */}
               <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10">
                 {loading && (
-                  <div className="flex flex-col items-center justify-center h-40 gap-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                    <span className="text-sm text-gray-500">Fetching student data...</span>
-                  </div>
+                   <div className="flex flex-col items-center justify-center h-40">
+                      <Loader />
+                   </div>
                 )}
                 
                 {!loading && filtered.length === 0 && (
