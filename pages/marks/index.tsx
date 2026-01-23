@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '../../utils/supabaseClient'
 import { Button } from '../../components/ui/button'
@@ -55,8 +55,13 @@ export default function MarksDashboard() {
   }, [])
 
   /* ---------------- Fetch Tests ---------------- */
-  const fetchTests = async () => {
-    if (!selectedClass) return
+  // Wrapped in useCallback so it can be used in useEffect dependencies if needed
+  const fetchTests = useCallback(async () => {
+    // If no class selected, clear tests and return
+    if (!selectedClass) {
+        setTests([])
+        return
+    }
 
     setLoading(true)
     setTests([])
@@ -67,7 +72,8 @@ export default function MarksDashboard() {
       .eq('class_id', selectedClass)
       .order('date', { ascending: false })
 
-    if (selectedType) {
+    // Only apply type filter if selected
+    if (selectedType && selectedType !== 'all') {
       query = query.eq('test_type', selectedType)
     }
 
@@ -100,11 +106,21 @@ export default function MarksDashboard() {
     )
 
     setLoading(false)
-  }
+  }, [selectedClass, selectedType])
 
-  /* ---------------- Apply Filters ---------------- */
+  /* ---------------- Auto-Fetch on Class Change ---------------- */
+  // This effect runs immediately when selectedClass changes
+  useEffect(() => {
+    fetchTests()
+    // We intentionally disable the exhaustive-deps rule here.
+    // We ONLY want to auto-fetch when the Class changes.
+    // We do NOT want to auto-fetch when 'selectedType' changes 
+    // (users should still click "Apply Filters" for type changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass])
+
+  /* ---------------- Apply Filters (Manual Trigger) ---------------- */
   const applyFilters = () => {
-    if (!selectedClass) return
     fetchTests()
   }
 
