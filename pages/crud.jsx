@@ -386,7 +386,11 @@ export default function StudentsPage() {
                            <td className="py-3 px-3 font-semibold text-gray-900 dark:text-slate-200">{s.name}</td>
                            <td className="py-3 px-3 text-gray-600 dark:text-slate-400">{s.fathername}</td>
                            <td className="py-3 px-3 text-gray-600 dark:text-slate-400 font-mono text-xs">{s.mobilenumber}</td>
-                           <td className="py-3 px-3 text-gray-600 dark:text-slate-400 font-mono text-xs">{s.dob || "-"}</td>
+                           
+                           {/* UPDATED: Date Format Change */}
+                           <td className="py-3 px-3 text-gray-600 dark:text-slate-400 font-mono text-xs">
+                             {s.dob ? new Date(s.dob).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "-"}
+                           </td>
 
                            <td className="py-3 px-3">
                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium 
