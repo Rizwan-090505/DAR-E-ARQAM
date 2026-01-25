@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO } from 'date-fns'
 import { 
   Plus, 
-  Trash2, 
   ArrowLeft, 
   Calendar as CalendarIcon, 
   UserPlus, 
@@ -13,12 +12,15 @@ import {
   XCircle, 
   Search,
   Users,
-  Cake
+  Cake,
+  MessageCircle, 
+  Send
 } from 'lucide-react'
 
 import { supabase } from '../../utils/supabaseClient'
 import Navbar from '../../components/Navbar'
 import Breadcrumbs from '../../components/Breadcrumbs'
+import Loader from '../../components/Loader' // Imported Loader
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog'
@@ -40,13 +42,11 @@ export default function ClassPage() {
   const [classData, setClassData] = useState(null)
   const [students, setStudents] = useState([])
   const [attendanceData, setAttendanceData] = useState([])
-  
+   
   // UI State
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isAddStudentDialogOpen, setIsAddStudentDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deletestudentid, setDeletestudentid] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
   // Form State
@@ -144,23 +144,6 @@ export default function ClassPage() {
     }
   }
 
-  const deleteStudent = async () => {
-    if (!deletestudentid) return
-    const { error } = await supabase
-      .from('students')
-      .delete()
-      .eq('studentid', deletestudentid)
-
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to delete student." })
-    } else {
-      setStudents(students.filter(s => s.studentid !== deletestudentid))
-      toast({ variant: "default", title: "Deleted", description: "Student removed." })
-    }
-    setDeletestudentid(null)
-    setIsDeleteDialogOpen(false)
-  }
-
   /* ---------------- Render Helpers ---------------- */
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -176,7 +159,7 @@ export default function ClassPage() {
     }
   }
 
-  /* ---------------- FIXED CALENDAR RENDER ---------------- */
+  /* ---------------- CALENDAR RENDER ---------------- */
   const renderCalendar = () => {
     const start = startOfMonth(selectedDate)
     const end = endOfMonth(selectedDate)
@@ -195,7 +178,6 @@ export default function ClassPage() {
           <CalendarIcon className="w-4 h-4 text-gray-400" />
         </div>
         
-        {/* FIXED: Using inline styles for grid columns to bypass Tailwind config issues */}
         <div 
           className="grid gap-1 mb-2 text-center" 
           style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
@@ -205,7 +187,6 @@ export default function ClassPage() {
           ))}
         </div>
         
-        {/* FIXED: Using inline styles for grid columns to bypass Tailwind config issues */}
         <div 
           className="grid gap-1"
           style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}
@@ -241,21 +222,15 @@ export default function ClassPage() {
     )
   }
 
+  // Use the Loader component here
   if (isLoading && !classData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0b1220]">
-        <div className="animate-pulse flex flex-col items-center">
-          <div className="h-8 w-8 bg-blue-600 rounded-full mb-4 animate-bounce"></div>
-          <p className="text-gray-500 text-sm">Loading Class Data...</p>
-        </div>
-      </div>
-    )
+    return <Loader />
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100 transition-colors pb-20">
       <Navbar />
-      
+       
       <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-6">
         
         {/* Breadcrumbs */}
@@ -290,6 +265,12 @@ export default function ClassPage() {
 
             {/* Actions Bar */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <Link href={`/notice?class=${id}`} className="flex-1 md:flex-none">
+                <Button variant="outline" className="w-full md:w-auto rounded-full border-gray-200 dark:border-white/10 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-white/10">
+                  <Send className="mr-2 h-4 w-4" /> Send Notice
+                </Button>
+              </Link>
+
               <Link href={`/attendance-record/${id}`} className="flex-1 md:flex-none">
                 <Button className="w-full md:w-auto rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow hover:shadow-blue-500/20 transition-all">
                   <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Attendance
@@ -351,7 +332,7 @@ export default function ClassPage() {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
+           
           {/* Left Column: Calendar */}
           <GlassCard className="lg:col-span-1 p-5">
              {renderCalendar()}
@@ -382,7 +363,7 @@ export default function ClassPage() {
                 </Button>
               </Link>
             </div>
-            
+             
             <div className="flex-1 overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-slate-400 uppercase text-xs font-semibold">
@@ -443,7 +424,7 @@ export default function ClassPage() {
               <Users className="h-5 w-5 text-purple-500" />
               Student Directory
             </h2>
-            
+             
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input 
@@ -493,17 +474,15 @@ export default function ClassPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-8 w-8 rounded-full p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          onClick={() => {
-                            setDeletestudentid(student.studentid)
-                            setIsDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <Link href={`/notice?student=${student.studentid}`}>
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            className="rounded-full text-xs font-medium"
+                          >
+                            <MessageCircle className="w-3 h-3 mr-1.5" /> Message
+                          </Button>
+                        </Link>
                       </td>
                     </tr>
                   ))
@@ -513,30 +492,6 @@ export default function ClassPage() {
           </div>
         </GlassCard>
       </div>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] rounded-xl border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" /> Delete Student
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p className="text-gray-600 dark:text-slate-300">
-              Are you sure you want to delete this student? This action cannot be undone and will remove all associated attendance records.
-            </p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className="rounded-full">
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deleteStudent} className="rounded-full bg-red-600 hover:bg-red-700">
-              Confirm Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

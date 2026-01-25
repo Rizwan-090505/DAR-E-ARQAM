@@ -1,9 +1,10 @@
 // pages/bulk-message.jsx
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/router';
 import { supabase } from '../utils/supabaseClient';
 import Navbar from '../components/Navbar';
 import Groq from 'groq-sdk';
-import Loader from '../components/Loader'; // Imported Loader component
+import Loader from '../components/Loader'; 
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../components/ui/select';
 import { 
@@ -14,7 +15,7 @@ import {
   CheckSquare, 
   Square, 
   ShieldCheck, 
-  Loader2, // Kept for buttons
+  Loader2, 
   RefreshCcw, 
   Sparkles, 
   Bot 
@@ -26,7 +27,7 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true 
 });
 
-// 1. CONTEXT: Smart Drafter (Replaces simple formatting)
+// 1. CONTEXT: Smart Drafter
 const AI_DRAFTER_PROMPT = `
 You are the **AI Communications Director** for "DAR-E-ARQAM SCHOOL".
 Your goal is to write professional, polite, and clear SMS broadcasts to parents based on the user's rough input.
@@ -90,6 +91,10 @@ Do not provide conversational text, only the JSON.
 `;
 
 export default function BulkMessagePage() {
+  const router = useRouter();
+  
+  const { student: urlStudentId, class: urlClassId } = router.query;
+
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
     
@@ -100,11 +105,19 @@ export default function BulkMessagePage() {
   
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false); // Used for Sending state
-  const [isDrafting, setIsDrafting] = useState(false); // Used for AI state
+  const [saving, setSaving] = useState(false); 
+  const [isDrafting, setIsDrafting] = useState(false); 
   const [query, setQuery] = useState('');
 
-  // Initial fetch for classes
+  // Handle URL Params (Set Class) - Only if student ID is NOT present
+  // If student ID is present, we ignore the class selector logic to prevent conflicts
+  useEffect(() => {
+    if (router.isReady && urlClassId && !urlStudentId) {
+      setSelectedClass(String(urlClassId));
+    }
+  }, [router.isReady, urlClassId, urlStudentId]);
+
+  // Initial fetch for classes list (for the dropdown)
   useEffect(() => {
     supabase
       .from('classes')
@@ -116,41 +129,80 @@ export default function BulkMessagePage() {
       });
   }, []);
 
-  // Fetch students when class changes
+  // --- MODIFIED: Main Data Fetching Logic ---
   useEffect(() => {
-    if (!selectedClass) {
+    if (!router.isReady) return;
+
+    const fetchStudents = async () => {
+      setLoading(true);
       setStudents([]);
       setSelectedIds(new Set());
       setSelectAll(false);
-      return;
-    }
 
-    setLoading(true);
-    supabase
-      .from('students')
-      .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
-      .eq('class_id', selectedClass)
-      .order('name', { ascending: true })
-      .then(({ data, error }) => {
-        setLoading(false);
-        if (error) {
-          console.error('Students fetch error', error);
-          setStudents([]);
-        } else {
+      try {
+        // CASE A: Direct Student Selection (Bypass Class Query)
+        if (urlStudentId) {
+          const { data, error } = await supabase
+            .from('students')
+            .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
+            .eq('studentid', urlStudentId)
+            // We use .maybeSingle() or just handle the array. 
+            // Since the UI expects an array, we'll keep it as a list of 1.
+            .limit(1);
+
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            const formatted = data.map(s => ({
+              ...s,
+              class: s.classes?.name || ''
+            }));
+            
+            setStudents(formatted);
+            // Auto-select the student
+            setSelectedIds(new Set([formatted[0].studentid]));
+            // Update UI class dropdown to match student (visual only)
+            setSelectedClass(String(formatted[0].class_id));
+          }
+        } 
+        
+        // CASE B: Class Selection (Standard Bulk Mode)
+        else if (selectedClass) {
+          const { data, error } = await supabase
+            .from('students')
+            .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
+            .eq('class_id', selectedClass)
+            .order('name', { ascending: true });
+
+          if (error) throw error;
+
           const withClass = (data || []).map(s => ({
             ...s,
             class: s.classes?.name || ''
           }));
           setStudents(withClass);
-          setSelectedIds(new Set());
-          setSelectAll(false);
         }
-      });
-  }, [selectedClass]);
 
+      } catch (error) {
+        console.error('Error fetching students:', error);
+        setStudents([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudents();
+
+  }, [selectedClass, urlStudentId, router.isReady]);
+
+
+  // Filtering Logic (Search bar / Status)
   const filtered = useMemo(() => {
     let result = students;
 
+    // Even if we fetched a single student via URL, we allow the search bar 
+    // to filter that single result (though likely unnecessary, keeps logic consistent)
+    
     if (filterClear === 'true') {
       result = result.filter(s => s.Clear === true);
     } else if (filterClear === 'false') {
@@ -201,7 +253,7 @@ export default function BulkMessagePage() {
     });
   };
 
-  // --- AI FUNCTION 1: SMART DRAFTER (Replaced old Formatter) ---
+  // --- AI FUNCTION 1: SMART DRAFTER ---
   const handleSmartDraft = async () => {
     if (!message.trim()) {
       alert("Please type a topic or rough draft first (e.g. 'Exam tomorrow' or 'Fee reminder').");
@@ -325,8 +377,12 @@ export default function BulkMessagePage() {
       } else {
         alert(`✅ Verified & Saved personalized message for ${payload.length} student(s).`);
         setMessage('');
-        setSelectedIds(new Set());
-        setSelectAll(false);
+        
+        // Don't clear selection if in 'student' URL mode
+        if (!urlStudentId) {
+          setSelectedIds(new Set());
+          setSelectAll(false);
+        }
       }
     } catch (err) {
       console.error('Unexpected save error', err);
@@ -355,42 +411,63 @@ export default function BulkMessagePage() {
         {/* Filter Bar */}
         <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="md:col-span-4">
-              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Select Class</label>
-              <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
-                <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
-                  <SelectValue placeholder="Select Class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-3">
-              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Status</label>
-              <Select value={filterClear} onValueChange={setFilterClear}>
-                <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Students</SelectItem>
-                  <SelectItem value="true">Cleared Only</SelectItem>
-                  <SelectItem value="false">Not Cleared</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Search</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by name, ID or mobile..."
-                  className="w-full pl-9 pr-4 py-2 rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
-                />
+            
+            {/* If class param is present, HIDE the selector (Clean UI) */}
+            {(!urlClassId && !urlStudentId) && (
+              <div className="md:col-span-4">
+                <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Select Class</label>
+                <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
+                  <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                    <SelectValue placeholder="Select Class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
+            )}
+
+            {/* If student param is present, HIDE filters (Clean UI - we are focusing on one student) */}
+            {!urlStudentId && (
+              <>
+                <div className={`${urlClassId ? 'md:col-span-4' : 'md:col-span-3'}`}>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Status</label>
+                  <Select value={filterClear} onValueChange={setFilterClear}>
+                    <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
+                      <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Students</SelectItem>
+                      <SelectItem value="true">Cleared Only</SelectItem>
+                      <SelectItem value="false">Not Cleared</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className={`${urlClassId ? 'md:col-span-8' : 'md:col-span-5'}`}>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Search</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search by name, ID or mobile..."
+                      className="w-full pl-9 pr-4 py-2 rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* If we have params and UI is cleaned, show a context badge */}
+            {(urlClassId || urlStudentId) && (
+               <div className="md:col-span-12 flex items-center gap-2 text-sm text-blue-500 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-lg border border-blue-200 dark:border-blue-800">
+                 <span className="font-semibold">Mode:</span> 
+                 {urlStudentId 
+                    ? <span>Direct Student Messaging (ID: {urlStudentId})</span>
+                    : <span>Single Class Context</span>
+                 }
+               </div>
+            )}
           </div>
         </div>
 
@@ -408,27 +485,30 @@ export default function BulkMessagePage() {
                     {loading ? 'Loading...' : `${filtered.length} Students`}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={toggleSelectAll} 
-                    disabled={!students.length} 
-                    className="h-8 text-xs border-gray-200 dark:border-white/10"
-                  >
-                    {selectAll ? <CheckSquare className="w-3 h-3 mr-1" /> : <Square className="w-3 h-3 mr-1" />}
-                    {selectAll ? 'Unselect All' : 'Select All'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={invertSelection} 
-                    disabled={!students.length}
-                    className="h-8 text-xs border-gray-200 dark:border-white/10"
-                  >
-                    <RefreshCcw className="w-3 h-3 mr-1" /> Invert
-                  </Button>
-                </div>
+                {/* Hide selection tools if targeting single student via URL */}
+                {!urlStudentId && (
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={toggleSelectAll} 
+                      disabled={!students.length} 
+                      className="h-8 text-xs border-gray-200 dark:border-white/10"
+                    >
+                      {selectAll ? <CheckSquare className="w-3 h-3 mr-1" /> : <Square className="w-3 h-3 mr-1" />}
+                      {selectAll ? 'Unselect All' : 'Select All'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={invertSelection} 
+                      disabled={!students.length}
+                      className="h-8 text-xs border-gray-200 dark:border-white/10"
+                    >
+                      <RefreshCcw className="w-3 h-3 mr-1" /> Invert
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Scrollable List */}
@@ -490,66 +570,66 @@ export default function BulkMessagePage() {
           {/* Right Col: Message Composer */}
           <div className="md:col-span-5 flex flex-col">
              <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl shadow-sm p-5 h-auto min-h-[500px] md:h-[600px] flex flex-col relative overflow-hidden">
-                
-                {/* --- PROMINENT AI BRANDING AREA --- */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                       <Bot className="w-4 h-4 text-purple-500" /> AI Assistant
-                    </h2>
-                  </div>
-                  <button 
-                    onClick={handleSmartDraft}
-                    disabled={isDrafting || !message}
-                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 hover:from-purple-700 hover:to-blue-700 text-white p-3 rounded-lg shadow-md transition-all font-medium disabled:opacity-70 disabled:cursor-not-allowed group"
-                  >
-                    {isDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform" />}
-                    {isDrafting ? 'Drafting Professional Message...' : 'Generate Professional Message with AI'}
-                  </button>
-                  <p className="text-[10px] text-gray-400 text-center mt-2">
-                    Type a topic (e.g. "fee reminder") or rough draft below, then click Generate.
-                  </p>
-                </div>
-                {/* ---------------------------------- */}
+               
+               {/* --- PROMINENT AI BRANDING AREA --- */}
+               <div className="mb-4">
+                 <div className="flex items-center justify-between mb-2">
+                   <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                      <Bot className="w-4 h-4 text-purple-500" /> AI Assistant
+                   </h2>
+                 </div>
+                 <button 
+                   onClick={handleSmartDraft}
+                   disabled={isDrafting || !message}
+                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 hover:from-purple-700 hover:to-blue-700 text-white p-3 rounded-lg shadow-md transition-all font-medium disabled:opacity-70 disabled:cursor-not-allowed group"
+                 >
+                   {isDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 group-hover:scale-110 transition-transform" />}
+                   {isDrafting ? 'Drafting Professional Message...' : 'Generate Professional Message with AI'}
+                 </button>
+                 <p className="text-[10px] text-gray-400 text-center mt-2">
+                   Type a topic (e.g. "fee reminder") or rough draft below, then click Generate.
+                 </p>
+               </div>
+               {/* ---------------------------------- */}
 
-                <div className="flex-1 flex flex-col min-h-0">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4" /> Message Editor
-                  </label>
-                  
-                  <textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="1. Type your idea here... (e.g., 'Tell parents school is closed tomorrow')&#10;2. Click the AI button above to draft it."
-                    className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono min-h-[200px]"
-                  />
-                  <div className="mt-2 text-[10px] text-gray-400 flex flex-wrap gap-2">
-                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{name}}'}</span>
-                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{fathername}}'}</span>
-                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{id}}'}</span>
-                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{class}}'}</span>
-                    <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{date}}'}</span>
-                  </div>
-                </div>
+               <div className="flex-1 flex flex-col min-h-0">
+                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-2 mb-2">
+                   <FileText className="w-4 h-4" /> Message Editor
+                 </label>
+                 
+                 <textarea
+                   value={message}
+                   onChange={(e) => setMessage(e.target.value)}
+                   placeholder="1. Type your idea here... (e.g., 'Tell parents school is closed tomorrow')&#10;2. Click the AI button above to draft it."
+                   className="flex-1 w-full p-4 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none font-mono min-h-[200px]"
+                 />
+                 <div className="mt-2 text-[10px] text-gray-400 flex flex-wrap gap-2">
+                   <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{name}}'}</span>
+                   <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{fathername}}'}</span>
+                   <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{id}}'}</span>
+                   <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{class}}'}</span>
+                   <span className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded">{'{{date}}'}</span>
+                 </div>
+               </div>
 
-                <div className="mt-5 flex flex-wrap gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
-                  <Button
-                    onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
-                    disabled={saving}
-                    variant="ghost"
-                    className="flex-1 min-w-[100px]"
-                  >
-                    Reset
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={saving || selectedIds.size === 0 || !message.trim()}
-                    className="flex-[2] min-w-[180px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
-                  >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-                    {saving ? 'Verifying & Sending...' : `Send to ${selectedIds.size} Students`}
-                  </Button>
-                </div>
+               <div className="mt-5 flex flex-wrap gap-3 pt-4 border-t border-gray-100 dark:border-white/5">
+                 <Button
+                   onClick={() => { setSelectedIds(new Set()); setSelectAll(false); setMessage(''); }}
+                   disabled={saving}
+                   variant="ghost"
+                   className="flex-1 min-w-[100px]"
+                 >
+                   Reset
+                 </Button>
+                 <Button
+                   onClick={handleSave}
+                   disabled={saving || selectedIds.size === 0 || !message.trim()}
+                   className="flex-[2] min-w-[180px] bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+                 >
+                   {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                   {saving ? 'Verifying & Sending...' : `Send to ${selectedIds.size} Students`}
+                 </Button>
+               </div>
              </div>
           </div>
 

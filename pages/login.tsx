@@ -43,7 +43,7 @@ export default function AuthPage() {
     if (error) {
       setError(error.message)
     } else if (data?.user) {
-      router.push('/dashboard')
+      router.push('/')
     }
     setLoading(false)
   }
