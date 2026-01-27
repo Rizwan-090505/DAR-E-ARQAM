@@ -66,7 +66,7 @@ Output ONLY the final formatted text. Do not add conversational filler.
 const POLICY_SYSTEM_PROMPT = `
 You are a School Compliance AI. Review the diary entry.
 RULES:
-1. Content must be educational.No personal contact details other than 03085333392 or school address.
+1. Content must be educational.No personal contact details other than 03234447292 or school address.
 2. No abusive language.Nothing bad about school or staff's personal issues.
 3. RETURN JSON ONLY: { "allowed": boolean, "reason": "string" }.
 `;
