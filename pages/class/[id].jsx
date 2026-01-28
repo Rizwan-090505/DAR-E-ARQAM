@@ -14,13 +14,16 @@ import {
   Users,
   Cake,
   MessageCircle, 
-  Send
+  Send,
+  AlertCircle, 
+  Loader2,
+  Flame 
 } from 'lucide-react'
 
 import { supabase } from '../../utils/supabaseClient'
 import Navbar from '../../components/Navbar'
 import Breadcrumbs from '../../components/Breadcrumbs'
-import Loader from '../../components/Loader' // Imported Loader
+import Loader from '../../components/Loader' 
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../components/ui/dialog'
@@ -43,6 +46,10 @@ export default function ClassPage() {
   const [students, setStudents] = useState([])
   const [attendanceData, setAttendanceData] = useState([])
    
+  // Streak State (Lazy Loaded)
+  const [absentStreaks, setAbsentStreaks] = useState({}) 
+  const [loadingStreaks, setLoadingStreaks] = useState(true)
+
   // UI State
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -68,6 +75,12 @@ export default function ClassPage() {
       fetchAttendance()
     }
   }, [id, students, selectedDate])
+
+  useEffect(() => {
+    if (id) {
+      fetchAbsentStreaks()
+    }
+  }, [id])
 
   const fetchClassData = async () => {
     setIsLoading(true)
@@ -113,6 +126,55 @@ export default function ClassPage() {
     }
   }
 
+  // ---- LAZY LOAD FUNCTION FOR STREAKS ----
+  const fetchAbsentStreaks = async () => {
+    setLoadingStreaks(true)
+    
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('studentid, status, date')
+      .eq('class_id', id)
+      .order('date', { ascending: false })
+      .range(0, 2999) 
+
+    if (error) {
+      console.error("Streak fetch error:", error);
+    } 
+    
+    if (data && data.length > 0) {
+      const streakMap = {}
+
+      const groupedByStudent = data.reduce((acc, curr) => {
+        const sId = curr.studentid;
+        if (!acc[sId]) acc[sId] = [];
+        acc[sId].push(curr);
+        return acc;
+      }, {});
+
+      Object.keys(groupedByStudent).forEach(studentId => {
+        const records = groupedByStudent[studentId].sort((a, b) => 
+          new Date(b.date) - new Date(a.date)
+        );
+        
+        let streak = 0;
+        
+        for (let record of records) {
+          const status = record.status ? record.status.toLowerCase() : '';
+          
+          if (status === 'absent') {
+            streak++;
+          } else if (status === 'present') {
+            break;
+          }
+        }
+        streakMap[studentId] = streak;
+      });
+
+      setAbsentStreaks(streakMap)
+    }
+    setLoadingStreaks(false)
+  }
+
   /* ---------------- Actions ---------------- */
   const addStudent = async () => {
     if (!newStudentName || !newstudentid) {
@@ -144,20 +206,24 @@ export default function ClassPage() {
     }
   }
 
-  /* ---------------- Render Helpers ---------------- */
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.studentid.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
-  const formatDOB = (dateString) => {
-    if (!dateString) return '-';
-    try {
-      return format(parseISO(dateString), 'd MMM yyyy');
-    } catch (e) {
-      return dateString;
-    }
-  }
+  /* ---------------- Render Helpers (UPDATED SORTING) ---------------- */
+  const processedStudents = students
+    .filter(s => 
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      s.studentid.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Sort by Absent Streak (Highest First)
+      const streakA = absentStreaks[a.studentid] || 0;
+      const streakB = absentStreaks[b.studentid] || 0;
+      
+      if (streakB !== streakA) {
+        return streakB - streakA;
+      }
+      
+      // Secondary Sort: Alphabetical
+      return a.name.localeCompare(b.name);
+    });
 
   /* ---------------- CALENDAR RENDER ---------------- */
   const renderCalendar = () => {
@@ -222,7 +288,6 @@ export default function ClassPage() {
     )
   }
 
-  // Use the Loader component here
   if (isLoading && !classData) {
     return <Loader />
   }
@@ -232,7 +297,7 @@ export default function ClassPage() {
       <Navbar />
        
       <div className="container mx-auto max-w-6xl p-4 md:p-8 space-y-6">
-        
+       
         {/* Breadcrumbs */}
         <div className="hidden md:block">
           <Breadcrumbs items={[
@@ -243,7 +308,6 @@ export default function ClassPage() {
 
         {/* Header Section */}
         <div className="flex flex-col gap-6">
-          {/* Back & Title */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
             <div className="space-y-2 w-full">
               <Button 
@@ -263,7 +327,6 @@ export default function ClassPage() {
               </p>
             </div>
 
-            {/* Actions Bar */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <Link href={`/notice?class=${id}`} className="flex-1 md:flex-none">
                 <Button variant="outline" className="w-full md:w-auto rounded-full border-gray-200 dark:border-white/10 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-white/10">
@@ -290,7 +353,6 @@ export default function ClassPage() {
                   </Button>
                 </DialogTrigger>
                 
-                {/* Add Student Dialog */}
                 <DialogContent className="sm:max-w-md rounded-2xl border-gray-200 dark:border-white/10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-0 overflow-hidden">
                   <DialogHeader className="px-6 py-4 border-b border-gray-100 dark:border-white/5">
                     <DialogTitle>Add New Student</DialogTitle>
@@ -444,35 +506,52 @@ export default function ClassPage() {
                   <th className="px-6 py-4">ID</th>
                   <th className="px-6 py-4">Name</th>
                   <th className="px-6 py-4">Father Name</th>
-                  <th className="px-6 py-4 hidden sm:table-cell">Date of Birth</th>
+                  {/* Removed Separate Streak Column */}
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-white/5">
-                {filteredStudents.length === 0 ? (
+                {processedStudents.length === 0 ? (
                    <tr>
-                     <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                     <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                        No students found matching your search.
                      </td>
                    </tr>
                 ) : (
-                  filteredStudents.map(student => (
+                  processedStudents.map(student => {
+                    const streakCount = absentStreaks[student.studentid] || 0;
+                    
+                    return (
                     <tr key={student.studentid} className="group hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors">
                       <td className="px-6 py-4 text-xs font-mono text-gray-500 dark:text-slate-500">
                         {student.studentid}
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900 dark:text-slate-200">
-                        {student.name}
+                      
+                      {/* Name Column with Inline Badge */}
+                      <td className="px-6 py-4">
+                         <div className="flex items-center gap-3">
+                            <span className="font-medium text-gray-900 dark:text-slate-200">
+                                {student.name}
+                            </span>
+                            
+                            {/* Streak Badge (Only shows if > 0) */}
+                            {!loadingStreaks && streakCount > 0 && (
+                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide ${
+                                    streakCount >= 3 
+                                    ? 'bg-red-50 text-red-600 border-red-200 dark:bg-black/5 dark:text-red-400 dark:border-red-900/50' 
+                                    : 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900/50'
+                                }`}>
+                                    {streakCount >= 3 ? <Flame className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                    {streakCount}d Absent
+                                </div>
+                            )}
+                         </div>
                       </td>
+
                       <td className="px-6 py-4 text-gray-600 dark:text-slate-400">
                         {student.fathername || '-'}
                       </td>
-                      <td className="px-6 py-4 hidden sm:table-cell text-gray-600 dark:text-slate-400">
-                        <div className="flex items-center gap-2">
-                          <Cake className="w-3.5 h-3.5 text-gray-400" />
-                          {formatDOB(student.dob)}
-                        </div>
-                      </td>
+                      
                       <td className="px-6 py-4 text-right">
                         <Link href={`/notice?student=${student.studentid}`}>
                           <Button 
@@ -485,7 +564,7 @@ export default function ClassPage() {
                         </Link>
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>
