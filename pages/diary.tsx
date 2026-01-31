@@ -32,37 +32,51 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true 
 });
 
-// 1. UPDATED FORMATTER PROMPT (STRICTER SCRIPT-LOCKING)
+// 1. UPDATED FORMATTER PROMPT (MECHANISM UPDATE: SCRIPT LOCK)
 const generateFormatPrompt = (className: string, date: string) => `
-You are a 'Script-Frozen' School Diary Formatter. 
-Your goal is to format text, fix spelling, and fix grammar ONLY.
+You are a Text Layout Engine. You are NOT a translator.
+Your ONLY function is to structure raw text into a list format with emojis.
 
-⚠️ CRITICAL DIRECTIVE: "SCRIPT LOCK" ⚠️
-You are FORBIDDEN from changing the script of the input text.
-1. IF Input is English -> Output MUST be English.
-2. IF Input is Urdu -> Output MUST be Urdu.
-3. IF Input is Roman Urdu -> Output MUST be Roman Urdu.
+### CRITICAL SECURITY PROTOCOL: SCRIPT PRESERVATION
+You must strictly adhere to the "Input Script = Output Script" rule.
+1. If input is **English** -> Output MUST remain **English**.
+2. If input is **Urdu (Nastaliq)** -> Output MUST remain **Urdu**.
+3. If input is **Roman Urdu** (e.g., "kal ana") -> Output MUST remain **Roman Urdu**.
 
-🚫 NEGATIVE CONSTRAINTS (WHAT YOU MUST NOT DO):
-- NEVER transliterate English words to Urdu script (e.g., "Computer" ❌-> "کمپیوٹر").
-- NEVER transliterate Urdu words to English script (e.g., "ریاضی" ❌-> "Math").
-- NEVER translate concepts (e.g., "Holiday" ❌-> "Chutti").
+### 🚫 STRICT PROHIBITIONS
+- DO NOT translate. (Example: "Chutti" must NOT become "Holiday").
+- DO NOT transliterate. (Example: "Computer" must NOT become "کمپیوٹر").
+- DO NOT fix grammar if it risks changing the language.
 
-✅ APPROVED TRANSFORMATION EXAMPLES:
-- Input: "maths: do pg 5" -> Output: "📚 Maths: \n📝 Do page 5." (Kept English)
-- Input: "اردو: سبق نمبر 1 یاد کریں" -> Output: "📚 اردو: \n📝 سبق نمبر 1 یاد کریں۔" (Kept Urdu)
-- Input: "Eng: learn ch 1. Urdu: nazam yad karni hai" -> Output: "📚 English: \n📝 Learn Chapter 1.\n\n📚 Urdu: \n📝 Nazam yad karni hai." (Mixed preserved)
+### EXPECTED FORMATTING
+Start with: "📅 ${date} | 🏫 ${className}"
+Then convert the message into a clean list.
 
-FORMATTING RULES:
-1. Start exactly with: "📅 ${date} | 🏫 ${className}"
-2. Use 📚 for Subjects.
-3. Use 📝 for Tasks/Details.
-4. Add a blank line between subjects.
+### EXAMPLES (Follow this pattern exactly)
+Input: "maths pg 5 learn. urdu nazam read"
+Output:
+📅 ${date} | 🏫 ${className}
 
-FAILURE CONDITION:
-  You fail if you change Urdu text to English and vice versa
+📚 Maths:
+📝 Do page 5 learn.
 
-Output ONLY the final formatted text. Do not add conversational filler.
+📚 Urdu:
+📝 Nazam read.
+
+Input: "kal chutti hai because of rain"
+Output:
+📅 ${date} | 🏫 ${className}
+
+📝 Kal chutti hai because of rain.
+
+Input: "اسلامیات کا سبق نمبر 1 یاد کریں"
+Output:
+📅 ${date} | 🏫 ${className}
+
+📚 اسلامیات:
+📝 سبق نمبر 1 یاد کریں۔
+
+PROCESS THE TEXT BELOW AND RETURN ONLY THE FORMATTED STRING:
 `;
 
 // 2. POLICY PROMPT (Guardrail)
@@ -167,14 +181,15 @@ export default function DiaryPage() {
                 { role: "user", content: diary }
             ],
             model: "llama-3.1-8b-instant",
-            // Lowered temperature for stricter adherence to instructions
-            temperature: 0.1, 
-            max_tokens: 600,
+            // UPDATED: Strict parameters to prevent creativity/hallucination
+            temperature: 0, 
+            top_p: 0.1,
+            max_tokens: 1024,
         });
 
         const formattedText = completion.choices[0]?.message?.content;
         if (formattedText) setDiary(formattedText);
-        toast({ title: "✨ Formatted", description: "Spelling fixed & Formatting applied (Script Preserved).", className: "bg-purple-600 text-white border-none" });
+        toast({ title: "✨ Formatted", description: "Layout applied (Script Preserved).", className: "bg-purple-600 text-white border-none" });
     } catch (error) {
         console.error("AI Error", error);
         toast({ title: "AI Error", description: "Service busy, please try again.", variant: "destructive" });
@@ -191,6 +206,7 @@ export default function DiaryPage() {
                 { role: "user", content: textToCheck }
             ],
             model: "llama-3.1-8b-instant",
+            temperature:0,
             response_format: { type: "json_object" }
         });
         const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
@@ -410,8 +426,8 @@ export default function DiaryPage() {
                 <div className="p-5">
                    {loading ? (
                       <div className="flex flex-col items-center justify-center py-20">
-                         <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-                         <p className="text-gray-500 dark:text-slate-400 mt-2 text-sm">Loading status...</p>
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                          <p className="text-gray-500 dark:text-slate-400 mt-2 text-sm">Loading status...</p>
                       </div>
                    ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
