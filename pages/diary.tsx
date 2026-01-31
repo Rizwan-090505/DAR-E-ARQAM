@@ -59,6 +59,9 @@ FORMATTING RULES:
 3. Use 📝 for Tasks/Details.
 4. Add a blank line between subjects.
 
+FAILURE CONDITION:
+  You fail if you change Urdu text to English and vice versa
+
 Output ONLY the final formatted text. Do not add conversational filler.
 `;
 
