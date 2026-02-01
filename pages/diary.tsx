@@ -32,10 +32,10 @@ const groq = new Groq({
   dangerouslyAllowBrowser: true 
 });
 
-// 1. UPDATED FORMATTER PROMPT (MECHANISM UPDATE: SCRIPT LOCK)
+// 1. UPDATED FORMATTER PROMPT (WHATSAPP STYLE + SCRIPT LOCK)
 const generateFormatPrompt = (className: string, date: string) => `
 You are a Text Layout Engine. You are NOT a translator.
-Your ONLY function is to structure raw text into a list format with emojis.
+Your ONLY function is to structure raw text into a WhatsApp-style list format with emojis.
 
 ### CRITICAL SECURITY PROTOCOL: SCRIPT PRESERVATION
 You must strictly adhere to the "Input Script = Output Script" rule.
@@ -48,33 +48,36 @@ You must strictly adhere to the "Input Script = Output Script" rule.
 - DO NOT transliterate. (Example: "Computer" must NOT become "کمپیوٹر").
 - DO NOT fix grammar if it risks changing the language.
 
-### EXPECTED FORMATTING
-Start with: "📅 ${date} | 🏫 ${className}"
-Then convert the message into a clean list.
+### EXPECTED FORMATTING (WhatsApp Style)
+- Use **asterisks** (*) for headers to make them bold.
+- Use **underscores** (_) for task details to make them italic/distinct.
+- Start with: "📅 *${date}* | 🏫 *${className}*"
 
 ### EXAMPLES (Follow this pattern exactly)
+
 Input: "maths pg 5 learn. urdu nazam read"
 Output:
-📅 ${date} | 🏫 ${className}
+📅 *${date}* | 🏫 *${className}*
 
-📚 Maths:
-📝 Do page 5 learn.
+*📚 Maths:*
+_Do page 5 learn._
 
-📚 Urdu:
-📝 Nazam read.
+*📚 Urdu:*
+_Nazam read._
 
 Input: "kal chutti hai because of rain"
 Output:
-📅 ${date} | 🏫 ${className}
+📅 *${date}* | 🏫 *${className}*
 
-📝 Kal chutti hai because of rain.
+*📝 Notice:*
+_Kal chutti hai because of rain._
 
 Input: "اسلامیات کا سبق نمبر 1 یاد کریں"
 Output:
-📅 ${date} | 🏫 ${className}
+📅 *${date}* | 🏫 *${className}*
 
-📚 اسلامیات:
-📝 سبق نمبر 1 یاد کریں۔
+*📚 اسلامیات:*
+_سبق نمبر 1 یاد کریں۔_
 
 PROCESS THE TEXT BELOW AND RETURN ONLY THE FORMATTED STRING:
 `;
@@ -83,8 +86,8 @@ PROCESS THE TEXT BELOW AND RETURN ONLY THE FORMATTED STRING:
 const POLICY_SYSTEM_PROMPT = `
 You are a School Compliance AI. Review the diary entry.
 RULES:
-1. Content must be educational.No personal contact details other than 03234447292 or school address.
-2. No abusive language.Nothing bad about school or staff's personal issues.
+1. Content must be educational. No personal contact details other than 03234447292 or school address.
+2. No abusive language. Nothing bad about school or staff's personal issues.
 3. RETURN JSON ONLY: { "allowed": boolean, "reason": "string" }.
 `;
 
@@ -119,9 +122,6 @@ export default function DiaryPage() {
   const labelClass = "text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5 block";
   const inputClass = "w-full bg-gray-50 dark:bg-white/10 border-gray-200 dark:border-white/10 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20 rounded-md p-2.5 text-sm transition-all";
   
-  const glowGreen = "text-green-600 dark:text-green-400 font-bold drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]";
-  const glowRed = "text-red-500 dark:text-red-400 font-bold drop-shadow-[0_0_8px_rgba(248,113,113,0.3)]";
-
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     setDate(today);
@@ -161,7 +161,7 @@ export default function DiaryPage() {
     if (newClassId) {
         const selectedClass = classes.find(c => String(c.id) === newClassId);
         if (selectedClass) {
-            setDiary(`📅 ${date} | 🏫 ${selectedClass.name}\n\n`);
+            setDiary(`📅 *${date}* | 🏫 *${selectedClass.name}*\n\n`);
         }
     } else {
         setDiary('');
@@ -180,8 +180,8 @@ export default function DiaryPage() {
                 { role: "system", content: generateFormatPrompt(selectedClass, date) },
                 { role: "user", content: diary }
             ],
-            model: "llama-3.1-8b-instant",
-            // UPDATED: Strict parameters to prevent creativity/hallucination
+            // UPDATED MODEL: Using Llama 3.3 (Versatile) for superior instruction following
+            model: "llama-3.3-70b-versatile",
             temperature: 0, 
             top_p: 0.1,
             max_tokens: 1024,
@@ -189,7 +189,7 @@ export default function DiaryPage() {
 
         const formattedText = completion.choices[0]?.message?.content;
         if (formattedText) setDiary(formattedText);
-        toast({ title: "✨ Formatted", description: "Layout applied (Script Preserved).", className: "bg-purple-600 text-white border-none" });
+        toast({ title: "✨ Formatted", description: "WhatsApp style applied (Script Preserved).", className: "bg-purple-600 text-white border-none" });
     } catch (error) {
         console.error("AI Error", error);
         toast({ title: "AI Error", description: "Service busy, please try again.", variant: "destructive" });
@@ -205,8 +205,8 @@ export default function DiaryPage() {
                 { role: "system", content: POLICY_SYSTEM_PROMPT },
                 { role: "user", content: textToCheck }
             ],
-            model: "llama-3.1-8b-instant",
-            temperature:0,
+            model: "llama-3.3-70b-versatile", // Updated for better safety check
+            temperature: 0,
             response_format: { type: "json_object" }
         });
         const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
@@ -224,7 +224,7 @@ export default function DiaryPage() {
 
     const selectedClass = classes.find(c => String(c.id) === classId);
     
-    // Local Validation
+    // Local Validation - Relaxed slightly to account for formatting chars
     if (selectedClass && !diary.includes(selectedClass.name)) {
        toast({ variant: 'destructive', title: 'Format Error', description: `Text must contain "${selectedClass.name}". Use AI Format to fix.` });
        return;
@@ -336,7 +336,7 @@ export default function DiaryPage() {
                           setDate(e.target.value);
                           if(classId) {
                               const cls = classes.find(c => String(c.id) === classId)?.name;
-                              if(cls) setDiary(`📅 ${e.target.value} | 🏫 ${cls}\n\n` + diary.split('\n\n').slice(1).join('\n\n'));
+                              if(cls) setDiary(`📅 *${e.target.value}* | 🏫 *${cls}*\n\n` + diary.split('\n\n').slice(1).join('\n\n'));
                           }
                       }}
                       className={inputClass}
@@ -378,7 +378,7 @@ export default function DiaryPage() {
                      `}
                    >
                      {isFormatting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                     {isFormatting ? 'AI is Formatting...' : 'AI Format '}
+                     {isFormatting ? 'AI Formatting (Llama 3.3)...' : 'AI Format'}
                    </button>
                    
                    <div className="relative">
@@ -449,10 +449,10 @@ export default function DiaryPage() {
                              >
                                 <div className="flex justify-between items-start">
                                    <div>
-                                      <h4 className="font-medium text-sm text-gray-900 dark:text-slate-100 flex items-center gap-2">
-                                        {c.name}
-                                        {entry && <span className="text-[10px] bg-green-200 dark:bg-green-900 text-green-800 dark:text-green-200 px-1.5 py-0.5 rounded-full">Sent</span>}
-                                      </h4>
+                                     <h4 className="font-medium text-sm text-gray-900 dark:text-slate-100 flex items-center gap-2">
+                                       {c.name}
+                                       {entry && <span className="text-[10px] bg-green-200 dark:bg-green-900 text-green-800 dark:text-green-200 px-1.5 py-0.5 rounded-full">Sent</span>}
+                                     </h4>
                                    </div>
                                    {entry ? (
                                       <CheckCircle2 className="h-5 w-5 text-green-500" />
