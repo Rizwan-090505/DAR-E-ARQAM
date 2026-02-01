@@ -38,6 +38,7 @@ Your goal is to write professional, polite, and clear SMS broadcasts to parents 
    - If the user provides a topic (e.g., "fee reminder"), write a full message from scratch.
    - If the user provides a rough draft, polish and fix grammar.
 3. **TONE**: Formal, respectful, and authoritative yet gentle. Use "Respected Parent" as the salutation.
+4. **FORMAT**: Add 1-2 emojis (like calendar,school,pencil etc) per message and MUST use ** and _ _ for bold and italic very often
 
 ### MANDATORY VARIABLES
 You MUST seamlessly integrate these placeholders where they make sense naturally:
@@ -354,8 +355,6 @@ export default function BulkMessagePage() {
           .replace(/{{id}}/g, student?.studentid || '')
           .replace(/{{class}}/g, student?.class || '')
           .replace(/{{date}}/g, today)
-          .replace(/_/g, '')
-          .replace(/\*/g, '');
 
         return {
           student_id: studentid,
