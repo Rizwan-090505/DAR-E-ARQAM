@@ -13,7 +13,8 @@ import { printReceipt } from "../../../utils/printReceipt"
 import { 
   ArrowLeft, Printer, CreditCard, 
   CheckCircle, Ban, ArrowRight, 
-  History, User, Wallet
+  History, User, Wallet, Search,
+  FileQuestion // Added this icon
 } from "lucide-react"
 
 function PayInvoiceContent() {
@@ -33,33 +34,50 @@ function PayInvoiceContent() {
     
   // Blocking State
   const [newerInvoiceId, setNewerInvoiceId] = useState(null)
+  const [notFound, setNotFound] = useState(false) // <--- NEW STATE
     
   // Data Maps
   const [paidHistoryMap, setPaidHistoryMap] = useState({}) 
   const [paymentInputs, setPaymentInputs] = useState({}) 
   const [notes, setNotes] = useState("")
 
+  // Manual Entry State
+  const [manualIdInput, setManualIdInput] = useState("")
+
   // --- Fetch Data ---
   useEffect(() => {
     if (!invoiceId) {
-      router.push("/admin/invoices")
+      setLoading(false)
+      // Reset states when URL param is cleared
+      setNotFound(false) 
       return
     }
+    // Reset not found state when ID changes
+    setNotFound(false) 
     fetchInvoiceData()
   }, [invoiceId])
 
   const fetchInvoiceData = async () => {
     try {
       setLoading(true)
-       
+        
       // 1. Fetch Current Invoice
+      // CHANGED: used .maybeSingle() instead of .single() to handle 0 results gracefully
       const { data: invData, error: invError } = await supabase
         .from("fee_invoices")
         .select("*")
         .eq("id", invoiceId)
-        .single()
-       
+        .maybeSingle() 
+        
       if (invError) throw invError
+
+      // CHECK: If no data returned, trigger Not Found UI
+      if (!invData) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+
       setInvoice(invData)
 
       // 2. Fetch Student
@@ -135,7 +153,7 @@ function PayInvoiceContent() {
 
   let totalPayingNow = 0
   let isAnyItemOverpaying = false
-   
+    
   const calculatedDetails = details.map(item => {
     const totalAmount = item.amount || 0
     const alreadyPaid = paidHistoryMap[item.id] || 0
@@ -163,6 +181,13 @@ function PayInvoiceContent() {
   const globalBalance = grandTotal - totalPreviouslyPaid
 
   // --- Handlers ---
+  const handleManualIdSubmit = (e) => {
+    e.preventDefault()
+    if (!manualIdInput.trim()) return
+    // Push to URL to trigger existing fetch logic
+    router.push(`?invoice_id=${manualIdInput.trim()}`)
+  }
+
   const handlePaymentSubmit = async () => {
     if (totalPayingNow <= 0 || isAnyItemOverpaying) return
     setSubmitting(true)
@@ -216,13 +241,105 @@ function PayInvoiceContent() {
     setTimeout(() => router.push("/admin/invoices"), 1000)
   }
 
-  if (loading) return <div className="h-screen flex items-center justify-center"><Loader /></div>
-
   // --- Styles ---
   const glassCardClass = "relative overflow-hidden rounded-2xl border border-white/20 bg-white/40 dark:bg-black/40 backdrop-blur-xl shadow-xl p-6 transition-all"
-  // Fixed: Added explicit text colors to inputs to prevent white-on-white issues
   const glassInputClass = "bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-500/70 text-gray-900 dark:text-white"
   const gradientBg = "min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718] p-4 md:p-8 transition-colors duration-500"
+
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader /></div>
+
+  // --- NOT FOUND VIEW (NEW) ---
+  if (notFound) {
+    return (
+      <>
+        <Navbar />
+        <div className={gradientBg + " flex items-center justify-center"}>
+            <div className={`${glassCardClass} max-w-lg w-full text-center space-y-6 border-orange-200/30 bg-orange-50/20`}>
+                <div className="w-20 h-20 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto backdrop-blur-md border border-orange-500/20">
+                    <FileQuestion className="w-10 h-10 text-orange-600 dark:text-orange-400" />
+                </div>
+                
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Invoice Not Found</h1>
+                    <p className="text-gray-600 dark:text-gray-300">
+                        We couldn't locate an invoice with ID <strong>#{invoiceId}</strong>. 
+                        It may have been deleted or the ID is incorrect.
+                    </p>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-4">
+                    <Button 
+                        size="lg" 
+                        onClick={() => router.push('/admin/fee/pay')}
+                        className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg"
+                    >
+                        Try Another ID
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        onClick={() => router.push('/admin/invoices')}
+                        className="text-gray-500 hover:bg-white/20 dark:text-gray-400 dark:hover:bg-white/10"
+                    >
+                        Return to Dashboard
+                    </Button>
+                </div>
+            </div>
+        </div>
+      </>
+    )
+  }
+
+  // --- MANUAL ENTRY VIEW (When no ID in URL) ---
+  if (!invoiceId) {
+    return (
+        <>
+            <Navbar />
+            <div className={gradientBg + " flex items-center justify-center"}>
+                <div className={`${glassCardClass} max-w-md w-full text-center space-y-6`}>
+                    <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto backdrop-blur-md border border-blue-500/20">
+                        <Search className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Find Invoice</h1>
+                        <p className="text-gray-600 dark:text-gray-300 text-sm">
+                            Please enter the Invoice ID to proceed with fee collection.
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleManualIdSubmit} className="space-y-4 pt-2">
+                        <div className="space-y-2 text-left">
+                            <Label className="text-xs uppercase font-bold text-gray-500">Invoice ID</Label>
+                            <Input 
+                                autoFocus
+                                placeholder="e.g. 1024"
+                                value={manualIdInput}
+                                onChange={(e) => setManualIdInput(e.target.value)}
+                                className={glassInputClass + " h-12 text-lg tracking-wider"}
+                            />
+                        </div>
+                        <Button 
+                            type="submit" 
+                            size="lg" 
+                            disabled={!manualIdInput}
+                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg h-12"
+                        >
+                            Search Invoice <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                        <Button 
+                            type="button"
+                            variant="ghost" 
+                            onClick={() => router.push('/admin/invoices')}
+                            className="w-full text-gray-500 dark:text-gray-400"
+                        >
+                            Cancel
+                        </Button>
+                    </form>
+                </div>
+            </div>
+        </>
+    )
+  }
 
   // --- BLOCKING UI VIEW (Glassmorphic) ---
   if (newerInvoiceId) {
@@ -268,7 +385,7 @@ function PayInvoiceContent() {
       <Navbar />
       <div className={gradientBg + " pb-32"}>
         <div className="max-w-7xl mx-auto space-y-6">
-           
+            
           {/* HEADER */}
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-full h-10 w-10 bg-white/30 backdrop-blur border-white/20 hover:bg-white/50 dark:hover:bg-white/10">
@@ -284,7 +401,7 @@ function PayInvoiceContent() {
 
             {/* LEFT COLUMN: Student & Summary */}
             <div className="w-full lg:w-1/3 space-y-6 lg:sticky lg:top-24">
-               
+                
               {/* Student Card */}
               <div className={glassCardClass}>
                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">

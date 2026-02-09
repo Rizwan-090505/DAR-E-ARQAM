@@ -128,7 +128,7 @@ function InvoicesPageContent() {
   const handlePrint = (id) => {
     // Navigate to /invoice/print and pass the ID as an array in query params
     const idArray = JSON.stringify([id])
-    router.push(`/invoice/print?invoices=${idArray}`)
+    router.push(`/admin/invoice/print?invoices=${idArray}`)
   }
 
   const getFeeMonth = (dateStr) => {

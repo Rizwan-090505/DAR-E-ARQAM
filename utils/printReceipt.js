@@ -1,113 +1,214 @@
-import jsPDF from "jspdf"
-import autoTable from "jspdf-autotable"
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 /**
- * Generates and downloads a PDF receipt for fee payment.
- * * @param {Object} data - The data object.
- * @param {Object} data.student - Student details (name, id, etc).
- * @param {string} data.invoiceId - The invoice ID number.
- * @param {Array} data.items - Array of fee details. expected to have { fee_type, payingNow }.
- * @param {number} data.totalPaidNow - The total sum being paid in this transaction.
- * @param {number} data.balanceAfterPayment - The remaining balance after this payment.
+ * Generates and downloads a PDF receipt using the "School Invoice" design.
  */
 export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceAfterPayment }) => {
-  const doc = new jsPDF()
-  const pageWidth = doc.internal.pageSize.getWidth()
-  
-  // -- Branding Colors --
-  const primaryColor = [37, 99, 235] // Blue-600
-  const grayColor = [100, 116, 139]  // Slate-500
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 15; // Approx equivalent to 50pt in original design
 
-  // -- Header --
-  doc.setFont("helvetica", "bold")
-  doc.setFontSize(22)
-  doc.setTextColor(...primaryColor)
-  doc.text("DAR-E-ARQAM SCHOOL", pageWidth / 2, 20, { align: "center" })
-  
-  doc.setFontSize(10)
-  doc.setTextColor(...grayColor)
-  doc.setFont("helvetica", "normal")
-  doc.text("Payment Receipt / Official Copy", pageWidth / 2, 26, { align: "center" })
+  // --- 1. COLOR PALETTE (Converted from Hex to RGB) ---
+  const COLORS = {
+    brand: [31, 41, 55],    // #1F2937 (Dark Charcoal)
+    accent: [185, 28, 28],  // #B91C1C (Red)
+    sub_bg: [249, 250, 251],// #F9FAFB (Very Light Grey)
+    text: [55, 65, 81],     // #374151 (Dark Grey)
+    border: [229, 231, 235] // #E5E7EB (Light Border)
+  };
 
-  // -- Separator Line --
-  doc.setDrawColor(200, 200, 200)
-  doc.line(15, 32, pageWidth - 15, 32)
+  // --- 2. HEADER BACKGROUND ---
+  // Large dark strip at the top (approx 140pt -> ~50mm)
+  doc.setFillColor(...COLORS.brand);
+  doc.rect(0, 0, pageWidth, 50, 'F');
 
-  // -- Info Grid --
-  doc.setFontSize(10)
-  doc.setTextColor(0)
-  
-  // Left Side (Student)
-  doc.setFont("helvetica", "bold")
-  doc.text("Student Details:", 15, 42)
-  doc.setFont("helvetica", "normal")
-  doc.text(`Name: ${student?.name || 'N/A'}`, 15, 48)
-  doc.text(`ID/Roll No: ${student?.studentid || 'N/A'}`, 15, 54)
-  doc.text(`Father Name: ${student?.fathername || 'N/A'}`, 15, 60)
+  // --- 3. HEADER TEXT ---
+  // Left: School Info
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20); // 24pt -> ~20 equivalent
+  doc.setTextColor(255, 255, 255);
+  doc.text("DAR-E-ARQAM SCHOOL", margin, 20);
 
-  // Right Side (Invoice)
-  doc.setFont("helvetica", "bold")
-  doc.text("Transaction Details:", 130, 42)
-  doc.setFont("helvetica", "normal")
-  doc.text(`Receipt ID: #${invoiceId}-${Date.now().toString().slice(-4)}`, 130, 48)
-  doc.text(`Invoice Ref: #${invoiceId}`, 130, 54)
-  doc.text(`Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 130, 60)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(209, 213, 219); // Light gray text
+  doc.text("Q MODEL TOWN CAMPUS", margin, 27);
+  doc.text("Phone: +92 323 4447292", margin, 32);
 
-  // -- Filter Items --
-  // We only want to show items where money is actually being paid, 
-  // OR show the full list if you prefer. 
-  // Here we filter for items being paid > 0 to make the receipt cleaner.
+  // Right: Badge
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text("PAYMENT RECEIPT", pageWidth - margin, 20, { align: "right" });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(156, 163, 175);
+  doc.text("OFFICIAL COPY", pageWidth - margin, 27, { align: "right" });
+
+  // --- 4. FLOATING METADATA BOX ---
+  // White box with border/shadow effect overlapping the header
+  const boxY = 40;
+  const boxHeight = 35;
+  const boxWidth = pageWidth - (margin * 2);
+
+  doc.setDrawColor(...COLORS.border);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(margin, boxY, boxWidth, boxHeight, 2, 2, 'FD');
+
+  // Box Content - Column 1 (Student)
+  const col1X = margin + 5;
+  const textYStart = boxY + 8;
+  const lineHeight = 7;
+
+  doc.setTextColor(...COLORS.text);
+  doc.setFontSize(9);
+
+  // Row 1
+  doc.setFont("helvetica", "bold");
+  doc.text("Student Name:", col1X, textYStart);
+  doc.setFont("helvetica", "normal");
+  doc.text(student?.name || 'N/A', col1X + 30, textYStart);
+
+  // Row 2
+  doc.setFont("helvetica", "bold");
+  doc.text("Father Name:", col1X, textYStart + lineHeight);
+  doc.setFont("helvetica", "normal");
+  doc.text(student?.fathername || 'N/A', col1X + 30, textYStart + lineHeight);
+
+  // Row 3
+  doc.setFont("helvetica", "bold");
+  doc.text("ID / Roll No:", col1X, textYStart + (lineHeight * 2));
+  doc.setFont("helvetica", "normal");
+  doc.text(student?.studentid || 'N/A', col1X + 30, textYStart + (lineHeight * 2));
+
+  // Box Content - Column 2 (Transaction)
+  const col2X = pageWidth / 2 + 10;
+
+  // Row 1
+  doc.setFont("helvetica", "bold");
+  doc.text("Receipt ID:", col2X, textYStart);
+  doc.setFont("helvetica", "normal");
+  doc.text(`#${invoiceId}-${Date.now().toString().slice(-4)}`, col2X + 25, textYStart);
+
+  // Row 2
+  doc.setFont("helvetica", "bold");
+  doc.text("Ref Invoice:", col2X, textYStart + lineHeight);
+  doc.setFont("helvetica", "normal");
+  doc.text(`#${invoiceId}`, col2X + 25, textYStart + lineHeight);
+
+  // Row 3 (Date - Red Accent)
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...COLORS.accent);
+  doc.text("Date Paid:", col2X, textYStart + (lineHeight * 2));
+  doc.text(new Date().toLocaleDateString(), col2X + 25, textYStart + (lineHeight * 2));
+
+  // --- 5. FEE TABLE ---
+  const tableStartY = boxY + boxHeight + 10;
+
+  // Filter items like in your original code
   const receiptRows = items
-    .filter(item => item.payingNow > 0) 
+    .filter(item => item.payingNow > 0)
     .map(item => [
       item.fee_type,
       item.totalAmount.toLocaleString(),
       item.payingNow.toLocaleString()
-    ])
+    ]);
 
-  // If nothing paid (edge case or 0 payment), show empty message or all items
-  if (receiptRows.length === 0) {
-      receiptRows.push(["No payment recorded", "-", "0"])
+  if (receiptRows.length === 0) receiptRows.push(["No payment recorded", "-", "0"]);
+
+  autoTable(doc, {
+    startY: tableStartY,
+    head: [['DESCRIPTION', 'TOTAL FEE', 'PAID NOW (PKR)']],
+    body: receiptRows,
+    theme: 'plain', // We construct the style manually to match design
+    margin: { left: margin, right: margin },
+    headStyles: {
+      fillColor: COLORS.brand,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 9,
+      halign: 'left',
+      cellPadding: 3
+    },
+    bodyStyles: {
+      textColor: COLORS.text,
+      fontSize: 9,
+      cellPadding: 3
+    },
+    columnStyles: {
+      0: { cellWidth: 'auto' }, // Description
+      1: { cellWidth: 40, halign: 'right' }, // Total Fee
+      2: { cellWidth: 40, halign: 'right' }  // Paid Now
+    },
+    didParseCell: function (data) {
+      // Align the header for amounts to the right manually if needed, 
+      // but columnStyles usually handles it.
+      if (data.section === 'head' && data.column.index > 0) {
+        data.cell.styles.halign = 'right';
+      }
+    },
+    willDrawCell: function (data) {
+      // Zebra Striping manually to match the #F9FAFB look
+      if (data.section === 'body' && data.row.index % 2 === 0) {
+        doc.setFillColor(...COLORS.sub_bg);
+        doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+      }
+    }
+  });
+
+  // --- 6. TOTALS SECTION ---
+  const finalY = doc.lastAutoTable.finalY + 5;
+
+  // Separator Line
+  doc.setDrawColor(...COLORS.brand);
+  doc.setLineWidth(0.5);
+  doc.line(margin, finalY, pageWidth - margin, finalY);
+
+  const totalY = finalY + 8;
+
+  // Total Label (Brand Color)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...COLORS.brand);
+  doc.text("TOTAL PAID", margin + 5, totalY);
+
+  // Total Amount (Red Accent)
+  doc.setFontSize(12);
+  doc.setTextColor(...COLORS.accent);
+  doc.text(`Rs. ${totalPaidNow.toLocaleString()}`, pageWidth - margin, totalY, { align: "right" });
+
+  // Balance (Small Text)
+  if (balanceAfterPayment > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.text);
+    doc.text(`Remaining Balance: Rs. ${balanceAfterPayment.toLocaleString()}`, pageWidth - margin, totalY + 6, { align: "right" });
   }
 
-  // -- Table --
-  autoTable(doc, {
-    startY: 70,
-    head: [['Fee Description', 'Total Fee Amount', 'Paid Now (PKR)']],
-    body: receiptRows,
-    theme: 'grid',
-    headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 10, cellPadding: 3 },
-    columnStyles: {
-        0: { cellWidth: 'auto' },
-        1: { cellWidth: 40, halign: 'right' },
-        2: { cellWidth: 40, halign: 'right', fontStyle: 'bold' }
-    }
-  })
+  // --- 7. FOOTER / INSTRUCTIONS ---
+  const footerY = pageHeight - 40;
 
-  // -- Totals --
-  const finalY = doc.lastAutoTable.finalY + 10
-  
-  // Box for totals
-  doc.setDrawColor(200, 200, 200)
-  doc.setFillColor(248, 250, 252) // Light gray bg
-  doc.rect(120, finalY - 5, 75, 25, 'FD')
+  // Footer Line
+  doc.setDrawColor(...COLORS.border);
+  doc.setLineWidth(0.1);
+  doc.line(margin, footerY, pageWidth - margin, footerY);
 
-  doc.setFont("helvetica", "bold")
-  doc.setTextColor(0)
-  doc.text("Total Paid:", 125, finalY + 2)
-  doc.text(`${totalPaidNow.toLocaleString()}`, 190, finalY + 2, { align: "right" })
-  
-  doc.setTextColor(...grayColor)
-  doc.setFontSize(9)
-  doc.text("Remaining Balance:", 125, finalY + 12)
-  doc.text(`${balanceAfterPayment.toLocaleString()}`, 190, finalY + 12, { align: "right" })
+  // Instructions
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...COLORS.brand);
+  doc.text("Instructions:", margin, footerY + 5);
 
-  // -- Footer Note --
-  doc.setFontSize(8)
-  doc.setTextColor(150)
-  doc.text("System Generated Receipt. Signature not required.", pageWidth / 2, 280, { align: "center" })
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(107, 114, 128); // Gray-500
+  doc.text("1. Please keep this receipt for your records.", margin, footerY + 10);
+  doc.text("2. Any discrepancies must be reported within 7 days.", margin, footerY + 14);
+  doc.text("3. This is a computer-generated receipt and requires no signature.", margin, footerY + 18);
 
-  // Save
-  doc.save(`Receipt_${student?.name}_${new Date().toISOString().split('T')[0]}.pdf`)
-}
+  // --- SAVE ---
+  const safeName = (student?.name || "Student").replace(/[^a-z0-9]/gi, '_');
+  doc.save(`Receipt_${safeName}_${invoiceId}.pdf`);
+};
