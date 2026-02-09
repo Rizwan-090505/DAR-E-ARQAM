@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabaseClient';
-import Navbar from '../components/Navbar';
+import { supabase } from '../../utils/supabaseClient';
+import Navbar from '../../components/Navbar';
 import { 
   Users, 
   Filter, 

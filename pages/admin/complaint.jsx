@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useTransition } from "react";
-import { supabase } from "../utils/supabaseClient";
-import Navbar from "../components/Navbar";
+import { supabase } from "../../utils/supabaseClient";
+import Navbar from "../../components/Navbar";
 
 // UI component imports
 import {
@@ -11,10 +11,10 @@ import {
   TableHead,
   TableBody,
   TableCell,
-} from "../components/ui/table";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+} from "../../components/ui/table";
+import { Input } from "../../components/ui/input";
+import { Button } from "../../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { 
   Loader2, 
   Plus, 
@@ -36,16 +36,16 @@ import {
   DialogFooter,
   DialogClose,
   DialogDescription,
-} from "../components/ui/dialog";
+} from "../../components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../components/ui/select";
-import { Label } from "../components/ui/label";
-import { Badge } from "../components/ui/badge";
+} from "../../components/ui/select";
+import { Label } from "../../components/ui/label";
+import { Badge } from "../../components/ui/badge";
 
 export default function ComplaintsAdmin() {
   // State management
