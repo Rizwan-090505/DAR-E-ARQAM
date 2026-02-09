@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { supabase } from "../utils/supabaseClient";
-import Navbar from "../components/Navbar";
-import { Input } from "../components/ui/input";
-import { Button } from "../components/ui/button";
+import { supabase } from "../../utils/supabaseClient";
+import Navbar from "../../components/Navbar";
+import { Input } from "../../components/ui/input";
+import { Button } from "../../components/ui/button";
 import { format, isPast, isToday, isTomorrow } from "date-fns";
 import { 
   MessageSquare, 

@@ -1,15 +1,19 @@
+"use client"
+
 import { useState, useEffect } from "react"
-import { supabase } from "../utils/supabaseClient"
-import Navbar from "../components/Navbar"
-import Loader from "../components/Loader"
-import { Button } from "../components/ui/button"
-import { Input } from "../components/ui/input"
-import { Plus, Edit, Trash2, X, Filter, Search, ChevronDown, CheckCircle2, Check, XCircle } from "lucide-react"
+import { useRouter } from "next/navigation" // Changed from react-router-dom
+import { supabase } from "../../utils/supabaseClient"
+import Navbar from "../../components/Navbar"
+import Loader from "../../components/Loader"
+import { Button } from "../../components/ui/button"
+import { Input } from "../../components/ui/input"
+import { Plus, Edit, Trash2, Filter, Search, ChevronDown, CheckCircle2, Check, XCircle } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useToast } from "../hooks/use-toast"
+import { useToast } from "../../hooks/use-toast"
 
 export default function StudentsPage() {
   const { toast } = useToast()
+  const router = useRouter() // Initialize Next.js router
 
   // --- State ---
   const [students, setStudents] = useState([])
@@ -23,11 +27,6 @@ export default function StudentsPage() {
   // Selection & Bulk Action State
   const [selectedStudents, setSelectedStudents] = useState([])
   const [bulkLoading, setBulkLoading] = useState(false)
-
-  // Modal & Form State
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formData, setFormData] = useState({ studentid: "", name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" })
-  const [editingId, setEditingId] = useState(null)
     
   const [loading, setLoading] = useState(false)
   const [loadingClear, setLoadingClear] = useState(null)
@@ -76,43 +75,14 @@ export default function StudentsPage() {
     setStudents(filtered)
   }, [filterClasses, filterClear, searchQuery, allStudents])
 
-  // --- Actions ---
-  const openForm = (student = null) => {
-    if (student) {
-      setFormData({
-        studentid: student.studentid,
-        name: student.name,
-        fathername: student.fathername,
-        mobilenumber: student.mobilenumber,
-        class_id: student.class_id,
-        dob: student.dob || "", 
-      })
-      setEditingId(student.studentid)
+  // --- Navigation Action (Next.js) ---
+  const handleManageRedirect = (id = null) => {
+    if (id) {
+      // Edit mode: pass ID as query param
+      router.push(`/admin/managestudent?id=${id}`)
     } else {
-      setFormData({ studentid: "", name: "", fathername: "", mobilenumber: "", class_id: "", dob: "" }) 
-      setEditingId(null)
-    }
-    setIsFormOpen(true)
-  }
-
-  const handleSubmit = async e => {
-    e.preventDefault()
-    try {
-      if (editingId) {
-        const { error } = await supabase.from("students").update(formData).eq("studentid", editingId)
-        if (error) throw error
-        toast({ title: "Updated successfully ✅" })
-      } else {
-        const { error } = await supabase.from("students").insert([formData])
-        if (error) throw error
-        toast({ title: "Student added 🎉" })
-      }
-      setIsFormOpen(false)
-      setEditingId(null)
-      fetchStudents()
-    } catch (error) {
-      console.error(error)
-      toast({ title: "Error saving student", description: error.message, variant: "destructive" })
+      // Add mode
+      router.push('/admin/managestudent')
     }
   }
 
@@ -165,14 +135,6 @@ export default function StudentsPage() {
     )
   }
 
-  // INPUT STYLE - UPDATED: Added h-9 and text-sm for compactness
-  const inputClassName = `
-    w-full h-9 text-sm px-3 bg-gray-50 text-gray-900 border-gray-200 
-    focus:ring-blue-500 focus:border-blue-500 rounded-md
-    dark:bg-slate-900 dark:border-slate-700 dark:text-white dark:focus:ring-blue-500 dark:placeholder:text-slate-500
-    transition-colors
-  `
-
   return (
     <>
       <Navbar />
@@ -205,7 +167,7 @@ export default function StudentsPage() {
               </div>
               
               <Button 
-                onClick={() => openForm()} 
+                onClick={() => handleManageRedirect()} 
                 className="bg-blue-600 hover:bg-blue-700 text-white shadow hover:shadow-blue-500/20 rounded-full sm:rounded-lg h-10 px-6 transition-all"
               >
                 <Plus className="w-4 h-4 mr-2" /> Add Student
@@ -387,7 +349,6 @@ export default function StudentsPage() {
                            <td className="py-3 px-3 text-gray-600 dark:text-slate-400">{s.fathername}</td>
                            <td className="py-3 px-3 text-gray-600 dark:text-slate-400 font-mono text-xs">{s.mobilenumber}</td>
                            
-                           {/* UPDATED: Date Format Change */}
                            <td className="py-3 px-3 text-gray-600 dark:text-slate-400 font-mono text-xs">
                              {s.dob ? new Date(s.dob).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "-"}
                            </td>
@@ -421,7 +382,7 @@ export default function StudentsPage() {
                            
                            <td className="py-3 pr-6 text-right">
                              <div className="flex justify-end gap-2">
-                               <button onClick={() => openForm(s)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/30" title="Edit">
+                               <button onClick={() => handleManageRedirect(s.studentid)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/30" title="Edit">
                                  <Edit className="w-4 h-4" />
                                </button>
                                <button onClick={() => handleDelete(s.studentid)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors dark:text-slate-400 dark:hover:text-red-400 dark:hover:bg-red-900/30" title="Delete">
@@ -439,144 +400,6 @@ export default function StudentsPage() {
           </div>
         </div>
       </div>
-
-      {/* --- MODAL --- */}
-      <AnimatePresence>
-        {isFormOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              exit={{ opacity: 0 }} 
-              onClick={() => setIsFormOpen(false)} 
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            />
-
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
-              animate={{ opacity: 1, scale: 1, y: 0 }} 
-              exit={{ opacity: 0, scale: 0.95, y: 10 }} 
-              // UPDATED: Changed max-w-lg to max-w-md for smaller width
-              className="relative w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100
-                dark:bg-slate-900 dark:border-slate-800"
-              onClick={(e) => e.stopPropagation()} 
-            >
-              {/* UPDATED: Reduced padding (px-5 py-3) */}
-              <div className="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 
-                dark:bg-slate-900 dark:border-slate-800">
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">
-                  {editingId ? "Edit Student" : "Add New Student"}
-                </h2>
-                <button 
-                  onClick={() => setIsFormOpen(false)} 
-                  className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full p-1 transition-colors dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              {/* UPDATED: Reduced padding (p-5) */}
-              <div className="p-5 bg-white dark:bg-slate-900">
-                {/* UPDATED: Reduced gap (space-y-4) */}
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  
-                  {/* UPDATED: Reduced grid gap (gap-3) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Student ID</label>
-                         <Input 
-                           name="studentid" 
-                           value={formData.studentid} 
-                           onChange={e => setFormData({...formData, studentid: e.target.value})} 
-                           required 
-                           disabled={!!editingId} 
-                           placeholder="e.g. 1001"
-                           className={`${inputClassName} ${editingId ? "opacity-60 cursor-not-allowed bg-gray-100 dark:bg-slate-800" : ""}`} 
-                         />
-                      </div>
-                      <div className="space-y-1.5">
-                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Full Name</label>
-                         <Input 
-                           name="name" 
-                           value={formData.name} 
-                           onChange={e => setFormData({...formData, name: e.target.value})} 
-                           required 
-                           placeholder="e.g. Ali Khan"
-                           className={inputClassName} 
-                         />
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Father Name</label>
-                         <Input 
-                           name="fathername" 
-                           value={formData.fathername} 
-                           onChange={e => setFormData({...formData, fathername: e.target.value})} 
-                           required 
-                           placeholder="e.g. Ahmed Khan"
-                           className={inputClassName} 
-                         />
-                      </div>
-                      <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Class</label>
-                          {/* UPDATED: Changed h-10 to h-9 */}
-                          <select 
-                            name="class_id" 
-                            value={formData.class_id} 
-                            onChange={e => setFormData({...formData, class_id: e.target.value})} 
-                            className={`flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 ${inputClassName}`} 
-                            required
-                          >
-                            <option value="" className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">Select Class...</option>
-                            {classes.map(c => <option key={c.id} value={c.id} className="bg-white text-gray-900 dark:bg-slate-900 dark:text-white">{c.name}</option>)}
-                          </select>
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Mobile Number</label>
-                         <Input 
-                           name="mobilenumber" 
-                           value={formData.mobilenumber} 
-                           onChange={e => setFormData({...formData, mobilenumber: e.target.value})} 
-                           required 
-                           placeholder="0300..."
-                           className={inputClassName} 
-                         />
-                      </div>
-                      
-                      <div className="space-y-1.5">
-                         <label className="text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Date of Birth</label>
-                         <Input 
-                           type="date"
-                           name="dob" 
-                           value={formData.dob} 
-                           onChange={e => setFormData({...formData, dob: e.target.value})} 
-                           required 
-                           className={`${inputClassName} dark:[color-scheme:dark]`} 
-                         />
-                      </div>
-                  </div>
-
-                  <div className="pt-2 flex gap-3">
-                    <Button type="button" size="sm" variant="outline" onClick={() => setIsFormOpen(false)} 
-                      className="flex-1 h-9 border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-transparent dark:text-slate-300 dark:hover:bg-slate-800">
-                      Cancel
-                    </Button>
-                    <Button type="submit" size="sm" className="flex-1 h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-md dark:bg-blue-600 dark:hover:bg-blue-500">
-                      {editingId ? "Save Changes" : "Create Student"}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </>
   )
 }
