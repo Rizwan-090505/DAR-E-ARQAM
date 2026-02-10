@@ -19,7 +19,7 @@ function FeeReceiptsContent() {
   const router = useRouter()
   const { toast } = useToast()
 
-  // --- State ---
+  // --- State (NO CHANGES) ---
   const [loading, setLoading] = useState(true)
   const [printingId, setPrintingId] = useState(null)
   const [receipts, setReceipts] = useState([])
@@ -40,7 +40,7 @@ function FeeReceiptsContent() {
   
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  // --- Initialization ---
+  // --- Initialization (NO CHANGES) ---
   useEffect(() => {
     fetchClasses()
   }, [])
@@ -62,7 +62,7 @@ function FeeReceiptsContent() {
     setClasses(data || [])
   }
 
-  // --- 1. FETCH LIST OF PAYMENTS (UPDATED) ---
+  // --- 1. FETCH LIST OF PAYMENTS (NO CHANGES) ---
   const fetchReceipts = useCallback(async () => {
     setLoading(true)
     try {
@@ -72,7 +72,6 @@ function FeeReceiptsContent() {
       const hasDeepFilter = debouncedSearch || filters.classId;
       const joinType = hasDeepFilter ? "!inner" : "";
 
-      // ADDED: fee_invoice_details (fee_type) to get the specific label
       let query = supabase
         .from("fee_payments")
         .select(`
@@ -127,7 +126,7 @@ function FeeReceiptsContent() {
   }, [page, filters.classId, filters.startDate, filters.endDate, debouncedSearch])
 
 
-  // --- 2. PRINT LOGIC (UPDATED LABEL) ---
+  // --- 2. PRINT LOGIC (NO CHANGES) ---
   const handlePrintReceipt = async (payment) => {
     setPrintingId(payment.id)
     try {
@@ -155,8 +154,7 @@ function FeeReceiptsContent() {
       const totalPaidHistory = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
       const balance = Math.max(0, (invoiceData.total_amount || 0) - totalPaidHistory);
 
-      // D. Determine the Label (The Fix)
-      // If we found a linked detail, use its fee_type. Otherwise default to "Invoice Payment".
+      // D. Determine the Label
       const feeReason = payment.fee_invoice_details?.fee_type 
         ? payment.fee_invoice_details.fee_type 
         : "General Fee Payment";
@@ -165,7 +163,6 @@ function FeeReceiptsContent() {
 
       const receiptItems = [
         {
-          // We combine the reason + the method + the ID for clarity
           fee_type: `${feeReason} (${payment.payment_method || 'Cash'})`, 
           totalAmount: invoiceData.total_amount, 
           payingNow: payment.amount 
@@ -176,8 +173,8 @@ function FeeReceiptsContent() {
       printReceipt({
         student: studentData,
         invoiceId: invoiceId,
-        paymentId: payment.id, // Pass ID separately if needed by utility, otherwise it's in the text
-        items: receiptItems,      
+        paymentId: payment.id, 
+        items: receiptItems,       
         totalPaidNow: payment.amount,
         balanceAfterPayment: balance
       })
@@ -196,81 +193,103 @@ function FeeReceiptsContent() {
     return name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
   }
 
-  // --- Styles ---
-  const glassPanel = "bg-white/70 dark:bg-white/5 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-xl shadow-indigo-100/20 dark:shadow-none rounded-2xl"
-  const glassInput = "bg-white/50 dark:bg-white/5 border-indigo-100 dark:border-white/10 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 transition-all duration-300 placeholder:text-slate-400 text-sm"
-  const tableHead = "px-6 py-4 text-left text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-indigo-50/50 dark:bg-white/5 backdrop-blur-sm sticky top-0 z-20"
-   
+  // --- New Styling Constants ---
+  // Background: Clean white (light) vs Dark Gradient (dark)
+  const pageBackground = "min-h-screen bg-slate-50 dark:bg-[#0f172a] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-slate-900 dark:via-[#0a0f1d] dark:to-black text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-500/30 transition-colors duration-300"
+  
+  // Panels: Solid white with border (light) vs Glass (dark)
+  const panelStyle = "bg-white border border-slate-200 shadow-sm rounded-xl dark:bg-white/5 dark:backdrop-blur-md dark:border-white/10 dark:shadow-none transition-all duration-300"
+  
+  // Inputs: Solid white/border (light) vs Glass (dark)
+  const inputStyle = "bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-blue-500 placeholder:text-slate-400 dark:bg-white/5 dark:border-white/10 dark:text-slate-100 dark:focus:ring-white/20 dark:focus:border-white/20 transition-all duration-300"
+  
+  // Table Headers
+  const thStyle = "px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300 sticky top-0 z-20 border-b border-slate-200 dark:border-white/10"
+
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-[conic-gradient(at_top_left,_var(--tw-gradient-stops))] from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0f172a] dark:via-[#1e1b4b] dark:to-[#17101f] p-4 md:p-8 font-sans">
+      <div className={pageBackground}>
         
-        <div className="w-full max-w-7xl mx-auto space-y-6">
+        <div className="w-full max-w-7xl mx-auto p-4 md:p-8 space-y-8">
 
           {/* --- HEADER --- */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-white/10 dark:text-white shadow-sm">
                   <FileText className="h-5 w-5" />
                 </span>
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Payment Receipts</h1>
+                <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                  Payment Receipts
+                </h1>
               </div>
               <p className="text-slate-500 dark:text-slate-400 font-medium ml-1">
-                Transaction history and receipt generation.
+                View transaction history and generate print receipts.
               </p>
             </div>
             
             <div className="flex flex-wrap gap-3">
               <Button 
                 onClick={() => router.push('/admin/fee/pay')}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 border-0"
+                className="bg-blue-600 hover:bg-blue-700 text-white border-0 shadow-md dark:bg-emerald-600 dark:hover:bg-emerald-700 dark:shadow-emerald-900/20"
               >
                 <Banknote className="w-4 h-4 mr-2" />
                 Pay Fee
               </Button>
-              <Button variant="ghost" onClick={fetchReceipts} className="h-10 w-10 p-0 rounded-full bg-white/40 hover:bg-white/80 border border-white/40 shadow-sm transition-all">
-                <RefreshCcw className="w-4 h-4 text-slate-600" />
+              
+              <Button 
+                variant="ghost" 
+                onClick={fetchReceipts} 
+                className="h-10 w-10 p-0 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 dark:text-slate-300 shadow-sm"
+              >
+                <RefreshCcw className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
           {/* --- MAIN CARD --- */}
-          <div className={`${glassPanel} flex flex-col overflow-hidden`}>
+          <div className={`${panelStyle} flex flex-col overflow-hidden`}>
             
             {/* FILTERS */}
-            <div className="p-5 border-b border-indigo-100 dark:border-white/5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-center bg-white/30 dark:bg-black/20">
+            <div className="p-5 border-b border-slate-200 dark:border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-center bg-slate-50/50 dark:bg-transparent">
+              
+              {/* Search */}
               <div className="lg:col-span-6 relative group">
-                <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400 group-focus-within:text-blue-500 dark:group-focus-within:text-white transition-colors" />
                 <Input 
                   placeholder="Search student name or payment ID..." 
-                  className={`pl-10 h-10 ${glassInput}`}
+                  className={`pl-10 h-10 ${inputStyle}`}
                   value={filters.search}
                   onChange={(e) => setFilters({...filters, search: e.target.value})}
                 />
               </div>
 
+              {/* Class Filter */}
               <div className="lg:col-span-2">
                 <select 
-                  className={`h-10 w-full rounded-xl px-3 text-sm outline-none cursor-pointer ${glassInput}`}
+                  className={`h-10 w-full rounded-md px-3 text-sm outline-none cursor-pointer ${inputStyle}`}
                   value={filters.classId}
                   onChange={(e) => {
                     setFilters({...filters, classId: e.target.value});
                     setPage(0);
                   }}
                 >
-                  <option value="">All Classes</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="" className="text-slate-900 dark:text-slate-900">All Classes</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id} className="text-slate-900 dark:text-slate-900">
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
+              {/* Date Filters */}
               <div className="lg:col-span-4 flex gap-2">
                 <div className="relative flex-1">
-                  <Calendar className="absolute left-3 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
-                   <Input 
+                  <Input 
                     type="date" 
-                    className={`pl-9 h-10 text-xs ${glassInput} [color-scheme:light]`} 
+                    className={`h-10 text-xs ${inputStyle} [color-scheme:light] dark:[color-scheme:dark]`} 
                     value={filters.startDate}
                     onChange={(e) => {
                       setFilters({...filters, startDate: e.target.value});
@@ -279,9 +298,9 @@ function FeeReceiptsContent() {
                   />
                 </div>
                 <div className="relative flex-1">
-                   <Input 
+                    <Input 
                     type="date" 
-                    className={`px-3 h-10 text-xs ${glassInput} [color-scheme:light]`} 
+                    className={`h-10 text-xs ${inputStyle} [color-scheme:light] dark:[color-scheme:dark]`} 
                     value={filters.endDate}
                     onChange={(e) => {
                       setFilters({...filters, endDate: e.target.value});
@@ -293,25 +312,25 @@ function FeeReceiptsContent() {
             </div>
 
             {/* TABLE */}
-            <div className="overflow-x-auto min-h-[500px] relative">
+            <div className="overflow-x-auto min-h-[500px] relative bg-white dark:bg-transparent">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className={`${tableHead} w-24`}>ID</th>
-                    <th className={tableHead}>Student Information</th>
-                    <th className={tableHead}>Payment For</th>
-                    <th className={`${tableHead} text-right`}>Amount Paid</th>
-                    <th className={`${tableHead} text-center`}>Method</th>
-                    <th className={`${tableHead} text-right pr-8`}>Actions</th>
+                    <th className={`${thStyle} w-24`}>ID</th>
+                    <th className={thStyle}>Student Information</th>
+                    <th className={thStyle}>Payment For</th>
+                    <th className={`${thStyle} text-right`}>Amount Paid</th>
+                    <th className={`${thStyle} text-center`}>Method</th>
+                    <th className={`${thStyle} text-right pr-8`}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-transparent text-slate-600 dark:text-slate-300">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/5">
                   {loading ? (
                     <tr>
                       <td colSpan="6" className="h-64">
                           <div className="flex flex-col items-center justify-center h-full gap-3">
                              <Loader small={false} />
-                             <p className="text-sm text-slate-400 animate-pulse">Loading payments...</p>
+                             <p className="text-sm text-slate-500 dark:text-slate-400">Loading records...</p>
                           </div>
                       </td>
                     </tr>
@@ -319,40 +338,40 @@ function FeeReceiptsContent() {
                     <tr>
                       <td colSpan="6" className="h-64 text-center">
                         <div className="flex flex-col items-center justify-center opacity-60">
-                           <Filter className="w-12 h-12 text-slate-300 mb-2" />
-                           <p className="text-lg font-medium text-slate-500">No payments found</p>
+                           <Filter className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-2" />
+                           <p className="text-lg font-medium text-slate-500 dark:text-slate-400">No payments found</p>
                         </div>
                       </td>
                     </tr>
                   ) : receipts.map((rcpt) => {
                     const student = rcpt.fee_invoices?.students;
                     const className = student?.classes?.name;
-                    // Helper to get the fee label safely
                     const feeLabel = rcpt.fee_invoice_details?.fee_type || "General Payment";
 
                     return (
-                      <tr key={rcpt.id} className="group border-b border-indigo-50/50 dark:border-white/5 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all duration-200">
+                      <tr key={rcpt.id} className="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-150">
                         
                         {/* ID */}
-                        <td className="px-6 py-5 text-xs font-mono text-slate-400">
+                        <td className="px-6 py-5 text-xs font-mono text-slate-500 dark:text-slate-400">
                           #{rcpt.id}
                         </td>
 
                         {/* Student Info */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shadow-sm ring-2 ring-white dark:ring-white/10 bg-gradient-to-br from-emerald-100 to-teal-200 text-teal-700">
+                            <div className="h-9 w-9 rounded bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300 flex items-center justify-center text-sm font-bold border border-slate-200 dark:border-white/5">
                               {getInitials(student?.name)}
                             </div>
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-800 dark:text-slate-100 text-[15px]">
+                              <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
                                 {student?.name || "Unknown"}
                               </span>
-                              <span className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                                <span className="bg-slate-100 dark:bg-white/10 px-1.5 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5">
+                              <span className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                                <span className="text-blue-600 dark:text-blue-400 font-medium">
                                   {className || "N/A"}
                                 </span>
-                                <span>F: {student?.fathername}</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                <span>{student?.fathername}</span>
                               </span>
                             </div>
                           </div>
@@ -361,10 +380,10 @@ function FeeReceiptsContent() {
                         {/* Payment For / Date */}
                         <td className="px-6 py-4">
                           <div className="flex flex-col text-sm">
-                            <span className="text-slate-800 dark:text-white font-semibold">
+                            <span className="text-slate-700 dark:text-slate-200 font-medium">
                               {feeLabel}
                             </span>
-                            <span className="text-xs text-slate-400 mt-0.5">
+                            <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                               {new Date(rcpt.paid_at).toLocaleDateString()}
                             </span>
                           </div>
@@ -373,7 +392,7 @@ function FeeReceiptsContent() {
                         {/* Amount */}
                         <td className="px-6 py-4 text-right">
                             <div className="flex flex-col items-end">
-                              <span className="font-bold text-lg tracking-tight text-emerald-700 dark:text-emerald-400">
+                              <span className="font-bold text-base text-slate-900 dark:text-white">
                                 {Number(rcpt.amount).toLocaleString()}
                               </span>
                               <span className="text-[10px] uppercase font-bold text-slate-400">PKR</span>
@@ -382,7 +401,7 @@ function FeeReceiptsContent() {
 
                         {/* Method */}
                         <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/10 dark:text-slate-300 dark:border-white/5">
                               {rcpt.payment_method || "Cash"}
                             </span>
                         </td>
@@ -394,7 +413,7 @@ function FeeReceiptsContent() {
                             variant="outline" 
                             onClick={() => handlePrintReceipt(rcpt)}
                             disabled={printingId === rcpt.id}
-                            className="h-8 text-xs font-medium border-emerald-200 hover:border-emerald-300 text-emerald-700 hover:bg-emerald-50 shadow-sm rounded-lg"
+                            className="h-8 text-xs font-medium border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-white/20 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
                           >
                             {printingId === rcpt.id ? (
                               <Loader small />
@@ -413,8 +432,8 @@ function FeeReceiptsContent() {
             </div>
 
             {/* --- PAGINATION --- */}
-            <div className="px-6 py-4 border-t border-indigo-100 dark:border-white/5 bg-white/40 dark:bg-black/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-               <div className="text-xs text-slate-500 font-medium order-2 sm:order-1">
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+               <div className="text-xs text-slate-500 dark:text-slate-400 font-medium order-2 sm:order-1">
                  Showing <span className="text-slate-900 dark:text-white font-bold">{receipts.length > 0 ? page * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="text-slate-900 dark:text-white font-bold">{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)}</span> of <span className="text-slate-900 dark:text-white font-bold">{totalCount}</span>
                </div>
                
@@ -423,18 +442,18 @@ function FeeReceiptsContent() {
                    variant="outline" size="sm" 
                    onClick={() => setPage(p => Math.max(0, p - 1))}
                    disabled={page === 0 || loading}
-                   className="h-8 text-xs bg-white/50 hover:bg-white border-transparent shadow-sm"
+                   className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
                  >
                    Previous
                  </Button>
-                 <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-md min-w-[3rem] text-center dark:bg-indigo-900/30 dark:text-indigo-300">
+                 <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded min-w-[3rem] text-center dark:bg-white/10 dark:text-white dark:border-white/5">
                     {page + 1}
                  </span>
                  <Button 
                    variant="outline" size="sm" 
                    onClick={() => setPage(p => p + 1)}
                    disabled={(page + 1) * ITEMS_PER_PAGE >= totalCount || loading}
-                   className="h-8 text-xs bg-white/50 hover:bg-white border-transparent shadow-sm"
+                   className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
                  >
                    Next
                  </Button>
@@ -450,8 +469,9 @@ function FeeReceiptsContent() {
 
 export default function FeeReceiptsPage() {
   return (
-    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-indigo-50"><Loader /></div>}>
+    <Suspense fallback={<div className="h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-[#0f172a]"><Loader /></div>}>
       <FeeReceiptsContent />
     </Suspense>
   )
 }
+
