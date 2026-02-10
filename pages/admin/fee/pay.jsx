@@ -592,3 +592,4 @@ export default function PayInvoicePage() {
     </Suspense>
   )
 }
+

@@ -1,16 +1,16 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, Suspense, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "../../utils/supabaseClient"
-import { printReceipt } from "../../utils/printReceipt"
+import { printReceipt } from "../../utils/printReceipt" 
 import Navbar from "../../components/Navbar"
 import Loader from "../../components/Loader"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
 import { 
   Search, FileText, 
-  Calendar, CheckCircle2, RefreshCcw,
+  Calendar, RefreshCcw,
   Filter, Printer, Banknote
 } from "lucide-react"
 import { useToast } from "../../hooks/use-toast"
@@ -25,7 +25,7 @@ function FeeReceiptsContent() {
   const [receipts, setReceipts] = useState([])
   const [classes, setClasses] = useState([])
     
-  // Pagination State
+  // Pagination
   const [page, setPage] = useState(0)
   const ITEMS_PER_PAGE = 20
   const [totalCount, setTotalCount] = useState(0)
@@ -37,6 +37,8 @@ function FeeReceiptsContent() {
     startDate: "",
     endDate: ""
   })
+  
+  const [debouncedSearch, setDebouncedSearch] = useState("")
 
   // --- Initialization ---
   useEffect(() => {
@@ -44,42 +46,44 @@ function FeeReceiptsContent() {
   }, [])
 
   useEffect(() => {
-    fetchReceipts()
-  }, [page, filters.classId, filters.startDate, filters.endDate]) 
-
-  // Debounce search
-  useEffect(() => {
     const timer = setTimeout(() => {
-      if (filters.search !== undefined) {
-        setPage(0)
-        fetchReceipts()
-      }
+      setDebouncedSearch(filters.search)
+      if(filters.search !== debouncedSearch) setPage(0)
     }, 500)
     return () => clearTimeout(timer)
   }, [filters.search])
+
+  useEffect(() => {
+    fetchReceipts()
+  }, [page, filters.classId, filters.startDate, filters.endDate, debouncedSearch]) 
 
   const fetchClasses = async () => {
     const { data } = await supabase.from("classes").select("id, name")
     setClasses(data || [])
   }
 
-  const fetchReceipts = async () => {
+  // --- 1. FETCH LIST OF PAYMENTS (UPDATED) ---
+  const fetchReceipts = useCallback(async () => {
     setLoading(true)
     try {
       const from = page * ITEMS_PER_PAGE
       const to = from + ITEMS_PER_PAGE - 1
 
-      // UPDATED QUERY: Fetching from fee_payments instead of fee_invoices
-      // We use !inner joins to ensure we can filter by class or student name
+      const hasDeepFilter = debouncedSearch || filters.classId;
+      const joinType = hasDeepFilter ? "!inner" : "";
+
+      // ADDED: fee_invoice_details (fee_type) to get the specific label
       let query = supabase
         .from("fee_payments")
         .select(`
           *,
-          fee_invoices!inner (
+          fee_invoice_details (
+            fee_type
+          ),
+          fee_invoices${joinType} (
             id,
-            status,
             invoice_date,
-            students!inner (
+            students${joinType} (
               studentid,
               name,
               fathername,
@@ -91,23 +95,19 @@ function FeeReceiptsContent() {
         .order('paid_at', { ascending: false })
         .range(from, to)
 
-      // Apply Filters
       if (filters.startDate) query = query.gte("paid_at", filters.startDate)
       if (filters.endDate) query = query.lte("paid_at", filters.endDate)
       
-      // Filter by nested Class ID
       if (filters.classId) {
         query = query.eq("fee_invoices.students.class_id", filters.classId)
       }
 
-      // Filter by Search (Payment ID or Student Name)
-      if (filters.search) {
-        if (!isNaN(filters.search)) {
-          // If number, search exact Payment ID
-          query = query.eq("id", filters.search)
+      if (debouncedSearch) {
+        const isNumeric = !isNaN(debouncedSearch) && !isNaN(parseFloat(debouncedSearch));
+        if (isNumeric) {
+          query = query.or(`id.eq.${debouncedSearch},fee_invoices.students.name.ilike.%${debouncedSearch}%`)
         } else {
-          // If text, search Student Name
-          query = query.ilike("fee_invoices.students.name", `%${filters.search}%`)
+          query = query.ilike("fee_invoices.students.name", `%${debouncedSearch}%`)
         }
       }
 
@@ -124,39 +124,69 @@ function FeeReceiptsContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, filters.classId, filters.startDate, filters.endDate, debouncedSearch])
 
-  // --- PRINT LOGIC ---
+
+  // --- 2. PRINT LOGIC (UPDATED LABEL) ---
   const handlePrintReceipt = async (payment) => {
     setPrintingId(payment.id)
     try {
-      // Get the invoice ID from the payment record
       const invoiceId = payment.invoice_id
-      const studentData = payment.fee_invoices?.students
+      if (!invoiceId) throw new Error("Invoice data missing");
 
-      // Fetch line items specifically for this invoice
-      const { data: items, error } = await supabase
-        .from("fee_invoice_details")
-        .select("*")
+      // A. Fetch Invoice Total Amount
+      const { data: invoiceData, error: invError } = await supabase
+        .from("fee_invoices")
+        .select("total_amount")
+        .eq("id", invoiceId)
+        .single()
+      
+      if (invError) throw invError;
+
+      // B. Fetch ALL payments to calculate balance
+      const { data: allPayments, error: payError } = await supabase
+        .from("fee_payments")
+        .select("amount")
         .eq("invoice_id", invoiceId)
 
-      if (error) throw error
+      if (payError) throw payError;
 
-      const printData = {
+      // C. Calculate Totals
+      const totalPaidHistory = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const balance = Math.max(0, (invoiceData.total_amount || 0) - totalPaidHistory);
+
+      // D. Determine the Label (The Fix)
+      // If we found a linked detail, use its fee_type. Otherwise default to "Invoice Payment".
+      const feeReason = payment.fee_invoice_details?.fee_type 
+        ? payment.fee_invoice_details.fee_type 
+        : "General Fee Payment";
+
+      const studentData = payment.fee_invoices?.students || {};
+
+      const receiptItems = [
+        {
+          // We combine the reason + the method + the ID for clarity
+          fee_type: `${feeReason} (${payment.payment_method || 'Cash'})`, 
+          totalAmount: invoiceData.total_amount, 
+          payingNow: payment.amount 
+        }
+      ]
+
+      // E. Execute Print
+      printReceipt({
         student: studentData,
-        invoiceId: invoiceId, // Using Invoice ID for reference
-        receiptId: payment.id, // Passing Payment ID specifically
-        items: items || [],
-        totalPaidNow: payment.amount, // Using the specific payment amount
-        balanceAfterPayment: 0 // You might want to calculate this if needed
-      }
+        invoiceId: invoiceId,
+        paymentId: payment.id, // Pass ID separately if needed by utility, otherwise it's in the text
+        items: receiptItems,      
+        totalPaidNow: payment.amount,
+        balanceAfterPayment: balance
+      })
 
-      printReceipt(printData)
-      toast({ title: "Receipt downloaded successfully" })
+      toast({ title: "Receipt generated" })
 
     } catch (error) {
       console.error("Print Error:", error)
-      toast({ title: "Failed to generate receipt", variant: "destructive" })
+      toast({ title: "Failed to generate receipt", description: error.message, variant: "destructive" })
     } finally {
       setPrintingId(null)
     }
@@ -188,7 +218,7 @@ function FeeReceiptsContent() {
                 <h1 className="text-3xl font-bold text-slate-800 dark:text-white tracking-tight">Payment Receipts</h1>
               </div>
               <p className="text-slate-500 dark:text-slate-400 font-medium ml-1">
-                View and download transaction history.
+                Transaction history and receipt generation.
               </p>
             </div>
             
@@ -214,7 +244,7 @@ function FeeReceiptsContent() {
               <div className="lg:col-span-6 relative group">
                 <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                 <Input 
-                  placeholder="Search student or payment ID..." 
+                  placeholder="Search student name or payment ID..." 
                   className={`pl-10 h-10 ${glassInput}`}
                   value={filters.search}
                   onChange={(e) => setFilters({...filters, search: e.target.value})}
@@ -225,7 +255,10 @@ function FeeReceiptsContent() {
                 <select 
                   className={`h-10 w-full rounded-xl px-3 text-sm outline-none cursor-pointer ${glassInput}`}
                   value={filters.classId}
-                  onChange={(e) => setFilters({...filters, classId: e.target.value})}
+                  onChange={(e) => {
+                    setFilters({...filters, classId: e.target.value});
+                    setPage(0);
+                  }}
                 >
                   <option value="">All Classes</option>
                   {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -239,7 +272,10 @@ function FeeReceiptsContent() {
                     type="date" 
                     className={`pl-9 h-10 text-xs ${glassInput} [color-scheme:light]`} 
                     value={filters.startDate}
-                    onChange={(e) => setFilters({...filters, startDate: e.target.value})}
+                    onChange={(e) => {
+                      setFilters({...filters, startDate: e.target.value});
+                      setPage(0);
+                    }}
                   />
                 </div>
                 <div className="relative flex-1">
@@ -247,7 +283,10 @@ function FeeReceiptsContent() {
                     type="date" 
                     className={`px-3 h-10 text-xs ${glassInput} [color-scheme:light]`} 
                     value={filters.endDate}
-                    onChange={(e) => setFilters({...filters, endDate: e.target.value})}
+                    onChange={(e) => {
+                      setFilters({...filters, endDate: e.target.value});
+                      setPage(0);
+                    }}
                   />
                 </div>
               </div>
@@ -258,10 +297,10 @@ function FeeReceiptsContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className={`${tableHead} w-24`}>Payment #</th>
+                    <th className={`${tableHead} w-24`}>ID</th>
                     <th className={tableHead}>Student Information</th>
-                    <th className={tableHead}>Payment Date</th>
-                    <th className={`${tableHead} text-right`}>Amount</th>
+                    <th className={tableHead}>Payment For</th>
+                    <th className={`${tableHead} text-right`}>Amount Paid</th>
                     <th className={`${tableHead} text-center`}>Method</th>
                     <th className={`${tableHead} text-right pr-8`}>Actions</th>
                   </tr>
@@ -286,9 +325,10 @@ function FeeReceiptsContent() {
                       </td>
                     </tr>
                   ) : receipts.map((rcpt) => {
-                    // Extract nested student data for cleaner code in JSX
                     const student = rcpt.fee_invoices?.students;
                     const className = student?.classes?.name;
+                    // Helper to get the fee label safely
+                    const feeLabel = rcpt.fee_invoice_details?.fee_type || "General Payment";
 
                     return (
                       <tr key={rcpt.id} className="group border-b border-indigo-50/50 dark:border-white/5 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 transition-all duration-200">
@@ -318,14 +358,14 @@ function FeeReceiptsContent() {
                           </div>
                         </td>
 
-                        {/* Date - Using paid_at */}
+                        {/* Payment For / Date */}
                         <td className="px-6 py-4">
                           <div className="flex flex-col text-sm">
-                            <span className="text-slate-700 dark:text-slate-300 font-medium">
-                              {new Date(rcpt.paid_at).toLocaleDateString()}
+                            <span className="text-slate-800 dark:text-white font-semibold">
+                              {feeLabel}
                             </span>
                             <span className="text-xs text-slate-400 mt-0.5">
-                              {new Date(rcpt.paid_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              {new Date(rcpt.paid_at).toLocaleDateString()}
                             </span>
                           </div>
                         </td>
@@ -340,7 +380,7 @@ function FeeReceiptsContent() {
                             </div>
                         </td>
 
-                        {/* Payment Method */}
+                        {/* Method */}
                         <td className="px-6 py-4 text-center">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200">
                               {rcpt.payment_method || "Cash"}
