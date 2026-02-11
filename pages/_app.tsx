@@ -7,7 +7,7 @@ import { supabase } from '../utils/supabaseClient'
 import { useRouter } from 'next/router'
 import Loader from '../components/Loader'
 
-// Define routes outside to prevent re-creation
+// 1. Define Public Routes (Speed Optimization)
 const OPEN_ROUTES = [
   '/login',
   '/parents_portal',
@@ -19,35 +19,21 @@ const OPEN_ROUTES = [
 
 const useAuth = () => {
   const [user, setUser] = useState<any | null>(null)
-  const [role, setRole] = useState<string | null>(null)
+  // Removed role state to speed up loading
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
 
-    const fetchRole = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
-      
-      if (mounted) {
-        setRole(error ? null : data?.role ?? null)
-      }
-    }
+    // Removed fetchRole function entirely for speed
 
     const initializeAuth = async () => {
-      // getSession is faster than getUser as it checks local storage first
       const { data: { session } } = await supabase.auth.getSession()
       
       if (mounted) {
         if (session?.user) {
           setUser(session.user)
-          await fetchRole(session.user.id)
-        } else {
-          setUser(null)
-          setRole(null)
+          // No longer fetching role - access is now open to all logged in users
         }
         setLoading(false)
       }
@@ -57,14 +43,9 @@ const useAuth = () => {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        const currentUser = session?.user || null
         if (mounted) {
+          const currentUser = session?.user ?? null
           setUser(currentUser)
-          if (currentUser) {
-            await fetchRole(currentUser.id)
-          } else {
-            setRole(null)
-          }
           setLoading(false)
         }
       }
@@ -76,45 +57,36 @@ const useAuth = () => {
     }
   }, [])
 
-  return { user, role, loading }
+  // We only return user and loading now
+  return { user, loading }
 }
 
 function MyApp({ Component, pageProps }: AppProps) {
-  const { user, role, loading } = useAuth()
+  const { user, loading } = useAuth()
   const router = useRouter()
   
-  // Check public route status immediately
+  // Check if current page is public
   const isPublicRoute = OPEN_ROUTES.some(route => router.pathname.startsWith(route))
 
   useEffect(() => {
+    // Wait for auth to finish loading before deciding to redirect
     if (loading) return
 
-    // 1. Unauthenticated Redirect
+    // 1. SECURITY: If not logged in & not on a public route -> Go to Login
+    // We keep this to ensure the app doesn't crash due to missing 'user' object
     if (!user && !isPublicRoute) {
-      router.replace('/login') // 'replace' is faster/cleaner than 'push' for redirects
+      router.replace('/login')
       return
     }
 
-    // 2. Admin Logic
-    if (user) {
-      // Redirect Admin from Home to Dashboard
-      if (role === 'admin' && router.pathname === '/') {
-        router.replace('/admin')
-        return
-      }
+    // REMOVED: The Admin/Role specific redirects. 
+    // Now, anyone who is logged in can stay on /admin routes.
 
-      // Security: Block non-admins from /admin
-      if (router.pathname.startsWith('/admin') && role !== 'admin') {
-        router.replace('/')
-        return
-      }
-    }
+  }, [user, loading, router, isPublicRoute])
 
-  }, [user, role, loading, router, isPublicRoute])
+  // --- RENDERING LOGIC ---
 
-  // 3. SPEED OPTIMIZATION:
-  // Render immediately if public (don't wait for auth check).
-  // Only show Loader if we are on a protected route AND still loading.
+  // A. If we are waiting for Auth AND we are on a protected route, show Loader.
   if (loading && !isPublicRoute) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -123,6 +95,9 @@ function MyApp({ Component, pageProps }: AppProps) {
     )
   }
 
+  // REMOVED: The Security Check block that prevented rendering /admin content
+
+  // C. Render the Application
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Component {...pageProps} />
