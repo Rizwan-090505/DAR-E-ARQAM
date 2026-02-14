@@ -10,6 +10,7 @@ import Loader from '../components/Loader'
 // 1. Define Public Routes (Speed Optimization)
 const OPEN_ROUTES = [
   '/login',
+  '/admission',
   '/parents_portal',
   '/auth/callback',
   '/datesheets',
