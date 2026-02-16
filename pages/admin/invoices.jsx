@@ -24,7 +24,7 @@ function InvoicesPageContent() {
   const [loading, setLoading] = useState(true)
   const [invoices, setInvoices] = useState([])
   const [classes, setClasses] = useState([])
-   
+    
   // Pagination State
   const [page, setPage] = useState(0)
   const ITEMS_PER_PAGE = 20
@@ -172,13 +172,13 @@ function InvoicesPageContent() {
                 <RefreshCcw className="w-4 h-4 text-slate-600" />
               </Button>
               <Link href="/admin/fee/pay">
-                <Button variant="outline" className={`${glassPanel} hover:bg-white border-white/60 text-slate-700 font-semibold shadow-sm`}>
+                <Button variant="outline" className={`${glassPanel} hover:bg-white border-white/60 dark:text-white text-slate-700 font-semibold shadow-sm`}>
                   <Users className="w-4 h-4 mr-2" />
-                  Quick Pay
+                  Record Payment
                 </Button>
               </Link>
               <Link href="/admin/fee/generate">
-                <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/30 border-0 h-10 px-6 rounded-xl font-medium transition-all hover:scale-105 active:scale-95">
+                <Button className="bg-blue-600 hover:from-indigo-700 hover:to-purple-700 dark:hover:bg-white/5 text-white shadow-lg shadow-indigo-500/30 border-0 h-10 px-6 rounded-xl font-medium transition-all hover:scale-105 active:scale-95">
                   <PlusCircle className="w-4 h-4 mr-2" /> 
                   Generate Batch
                 </Button>
@@ -224,6 +224,7 @@ function InvoicesPageContent() {
                 >
                   <option value="all">All Status</option>
                   <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
                   <option value="unpaid">Unpaid</option>
                   <option value="expired">Expired</option>
                 </select>
@@ -337,7 +338,7 @@ function InvoicesPageContent() {
                            <span className="text-slate-700 dark:text-slate-300 font-medium">
                              {new Date(inv.invoice_date).toLocaleDateString()}
                            </span>
-                           {inv.status === 'unpaid' && (
+                           {(inv.status === 'unpaid' || inv.status === 'partial') && (
                              <span className="text-xs text-rose-500 font-medium mt-0.5">
                                Due: {new Date(inv.due_date).toLocaleDateString()}
                              </span>
@@ -363,15 +364,19 @@ function InvoicesPageContent() {
                       {/* Status */}
                       <td className="px-6 py-4 text-center">
                         {inv.status === 'paid' ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100/80 text-emerald-700 border border-emerald-200 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold  text-green-600 dark:text-green-400 shadow-sm">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Paid
+                          </span>
+                        ) : inv.status === 'partial' ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange text-amber-400 dark:text-amber-400 shadow-sm">
+                            <AlertCircle className="w-3.5 h-3.5" /> Partial
                           </span>
                         ) : inv.status === 'expired' ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200 shadow-sm dark:bg-white/5 dark:text-slate-400 dark:border-white/10">
                               <AlertCircle className="w-3.5 h-3.5" /> Expired
                             </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white text-rose-600 border border-rose-200 shadow-sm dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red text-red-600 shadow-sm">
                             <XCircle className="w-3.5 h-3.5" /> Unpaid
                           </span>
                         )}

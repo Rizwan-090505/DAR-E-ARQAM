@@ -305,8 +305,8 @@ export default function PayInvoiceContent() {
     dark:bg-white/5 dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none`
 
   const inputClass = `h-10 w-full rounded-md px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
-    bg-white border-gray-300 text-gray-100 focus:border-blue-500
-    dark:bg-black/20 dark:border-white/10 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-blue-500/50`
+    bg-white border-gray-300 text-black dark:text-white focus:border-blue-500
+    dark:bg-white/20 dark:border-white/10 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-blue-500/50`
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0f172a]"><Loader /></div>
 
@@ -510,7 +510,7 @@ export default function PayInvoiceContent() {
                                     <th className="p-5 text-right">Total</th>
                                     <th className="p-5 text-right">Paid</th>
                                     <th className="p-5 text-right w-32">Balance</th>
-                                    <th className="p-5 w-48 bg-blue-50 text-blue-700 dark:bg-blue-600/20 dark:text-white">Pay Now</th>
+                                    <th className="p-5 w-48 bg-blue-50 text-blue-700 dark:bg-blue-500/20 dark:text-white">Pay Now</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-white/5">
@@ -523,7 +523,7 @@ export default function PayInvoiceContent() {
                                         <td className="p-5 text-right font-mono text-gray-500 dark:text-blue-400">{item.totalAmount.toLocaleString()}</td>
                                         <td className="p-5 text-right font-mono text-green-600 dark:text-green-400">{item.alreadyPaid > 0 ? item.alreadyPaid.toLocaleString() : '-'}</td>
                                         <td className="p-5 text-right font-mono font-bold text-gray-900 dark:text-blue-100">{item.remainingBalance.toLocaleString()}</td>
-                                        <td className={`p-4 bg-blue-50 dark:bg-blue-900/10 ${item.isOver ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                                        <td className={`p-4 bg-blue-50 dark:bg-blue-800 ${item.isOver ? 'bg-red-50 dark:bg-red-800' : ''}`}>
                                             <Input 
                                                 type="number" 
                                                 disabled={item.remainingBalance <= 0}
