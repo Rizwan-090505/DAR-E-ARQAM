@@ -17,7 +17,7 @@ import {
   FileQuestion, Banknote, Smartphone
 } from "lucide-react"
 
-function PayInvoiceContent() {
+export default function PayInvoiceContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const invoiceId = searchParams.get("invoice_id")
@@ -46,6 +46,9 @@ function PayInvoiceContent() {
 
   // Manual Entry State
   const [manualIdInput, setManualIdInput] = useState("")
+
+  // Notification Toggle State (Checked by default)
+  const [sendMessageToParent, setSendMessageToParent] = useState(true)
 
   // --- Fetch Data ---
   useEffect(() => {
@@ -81,7 +84,7 @@ function PayInvoiceContent() {
       if (invData.student_id) {
         const { data: stuData } = await supabase
           .from("students")
-          .select("*")
+          .select("*") // Fetches mobilenumber automatically
           .eq("studentid", invData.student_id)
           .single()
         setStudent(stuData)
@@ -210,6 +213,67 @@ function PayInvoiceContent() {
 
       await supabase.from("fee_invoices").update({ status: newStatus }).eq("id", invoiceId)
 
+      // ==========================================
+      // NEW ADDITION: CLEAR STUDENT IF FULLY PAID
+      // ==========================================
+      if (totalPaidAfter >= grandTotal && student?.studentid) {
+        const { error: studentUpdateError } = await supabase
+          .from("students")
+          .update({ Clear: true })
+          .eq("studentid", student.studentid);
+          
+        if (studentUpdateError) {
+          console.error("Failed to update student clear status:", studentUpdateError);
+        }
+      }
+      // ==========================================
+
+      // ==========================================
+      // GENERATE & INSERT WHATSAPP MESSAGE (Conditional)
+      // ==========================================
+      if (sendMessageToParent) {
+        let receiptText = `🏫 *FEE PAYMENT RECEIPT* 🏫\n`;
+        receiptText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
+        receiptText += `👤 *Student:* ${student?.name}\n`;
+        receiptText += `🆔 *ID:* ${student?.studentid}\n`;
+        receiptText += `📚 *Class:* ${student?.class_id}\n`;
+        receiptText += `📄 *Invoice #:* ${invoiceId}\n\n`;
+        
+        receiptText += `*💰 FEE BREAKDOWN (PAID)*\n`;
+        receiptText += `-------------------------\n`;
+        
+        calculatedDetails.forEach(item => {
+          if (item.payingNow > 0) {
+            receiptText += `🔹 ${item.fee_type}: *${item.payingNow.toLocaleString()} PKR*\n`;
+          }
+        });
+
+        receiptText += `-------------------------\n`;
+        receiptText += `✅ *Total Received:* ${totalPayingNow.toLocaleString()} PKR\n`;
+        receiptText += `💳 *Method:* ${paymentMethod.toUpperCase()}\n\n`;
+        
+        const newBalance = globalBalance - totalPayingNow;
+        receiptText += `⚖️ *Remaining Balance:* ${newBalance.toLocaleString()} PKR\n\n`;
+        receiptText += `_Thank you for your payment!_`;
+
+        // Fetching mobilenumber column specifically 
+        const parentPhone = student?.mobilenumber || "00000000000";
+
+        const { error: msgError } = await supabase.from("messages").insert({
+          student_id: student?.studentid,
+          class_id: student?.class_id,
+          text: receiptText,
+          number: parentPhone
+        });
+
+        if (msgError) {
+          console.error("Message Table Insert Error:", msgError);
+          // Displaying a soft toast so it doesn't interrupt the actual payment success flow
+          toast({ title: "Note", description: "Payment recorded, but failed to queue the WhatsApp notification.", variant: "default" });
+        }
+      }
+      // ==========================================
+
       setSubmitting(false)
       setShowPrintModal(true)
 
@@ -243,7 +307,7 @@ function PayInvoiceContent() {
 
   const inputClass = `h-10 w-full rounded-md px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
     bg-white border-gray-300 text-gray-100 focus:border-blue-500
-    dark:bg-black/20 dark:border-white/10 dark:text-whitedark:placeholder:text-gray-600 dark:focus:border-blue-500/50`
+    dark:bg-black/20 dark:border-white/10 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-blue-500/50`
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0f172a]"><Loader /></div>
 
@@ -344,14 +408,29 @@ function PayInvoiceContent() {
       <div className={pageBackground}>
         <div className="max-w-7xl mx-auto space-y-6 p-4 md:p-8">
             
-          {/* HEADER */}
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-full bg-white dark:bg-white/10 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Fee Collection</h1>
-              <p className="text-gray-500 dark:text-slate-400 text-sm font-medium">Processing Invoice #{invoiceId}</p>
+          {/* HEADER WITH TOGGLE CHECKBOX */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-full bg-white dark:bg-white/10 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/20">
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Fee Collection</h1>
+                <p className="text-gray-500 dark:text-slate-400 text-sm font-medium">Processing Invoice #{invoiceId}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 bg-white dark:bg-white/20 px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
+              <input 
+                type="checkbox" 
+                id="sendNotification" 
+                checked={sendMessageToParent}
+                onChange={(e) => setSendMessageToParent(e.target.checked)}
+                className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
+              />
+              <Label htmlFor="sendNotification" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                Send SMS/WhatsApp to Parent
+              </Label>
             </div>
           </div>
 
@@ -426,14 +505,12 @@ function PayInvoiceContent() {
                     
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            {/* Fixed Table Header Colors */}
                             <thead className="bg-gray-50 dark:bg-white/10 text-xs uppercase text-gray-500 dark:text-blue-300 font-medium">
                                 <tr>
                                     <th className="p-5">Fee Head</th>
                                     <th className="p-5 text-right">Total</th>
                                     <th className="p-5 text-right">Paid</th>
                                     <th className="p-5 text-right w-32">Balance</th>
-                                    {/* Pay Now Header background fixed for dark mode contrast */}
                                     <th className="p-5 w-48 bg-blue-50 text-blue-700 dark:bg-blue-600/20 dark:text-white">Pay Now</th>
                                 </tr>
                             </thead>
@@ -454,7 +531,6 @@ function PayInvoiceContent() {
                                                 value={paymentInputs[item.id] === 0 ? '' : paymentInputs[item.id]}
                                                 onChange={(e) => handleAmountChange(item.id, e.target.value)}
                                                 placeholder={item.remainingBalance > 0 ? item.remainingBalance.toString() : '-'}
-                                                // Fixed Input class to include dark mode specific styles for the table context
                                                 className={`text-right h-10 ${inputClass} 
                                                   ${item.isOver 
                                                     ? 'border-red-500 text-red-600 dark:text-red-400 focus:ring-red-500' 
@@ -468,7 +544,7 @@ function PayInvoiceContent() {
                     </div>
                 </div>
 
-                {/* STATIC BOTTOM ACTION SECTION (Formerly Sticky) */}
+                {/* STATIC BOTTOM ACTION SECTION */}
                 <div className={`${cardClass} p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6`}>
                     
                     {/* Total Display */}
@@ -573,11 +649,11 @@ function PayInvoiceContent() {
                 </div>
 
                 <div className="flex flex-col w-full gap-3">
-                  <Button onClick={handlePrint} className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12 text-lg font-semibold">
-                    <Printer className="w-5 h-5 mr-2" /> Print Receipt
+                  <Button onClick={handlePrint} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                    <Printer className="w-4 h-4 mr-2" /> Print Receipt
                   </Button>
-                  <Button variant="ghost" onClick={() => router.push("/admin/invoices")} className="w-full text-gray-500 hover:bg-gray-100 dark:text-blue-400 dark:hover:bg-white/10">
-                    Skip & Return to Dashboard
+                  <Button variant="outline" onClick={() => router.push("/admin/invoices")} className="w-full">
+                    Return to Dashboard
                   </Button>
                 </div>
               </div>
@@ -586,13 +662,5 @@ function PayInvoiceContent() {
         )}
       </div>
     </>
-  )
-}
-
-export default function PayInvoicePage() {
-  return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader /></div>}>
-      <PayInvoiceContent />
-    </Suspense>
   )
 }
