@@ -25,13 +25,28 @@ const COLORS = {
   text: "#111827",     // Near Black
   border: "#9CA3AF",   // Mid Grey
   white: "#FFFFFF",
-  light_grey_bar: "#E5E7EB",
-  total_bg: "#D1D5DB"
+  total_bg: "#D1D5DB"  // Darker Grey for Totals
 }
 
 // --- HELPER: FORMAT CURRENCY ---
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-PK', { style: 'decimal', minimumFractionDigits: 0 }).format(amount || 0)
+}
+
+// --- HELPER: LOAD IMAGE TO BASE64 FOR JSPDF ---
+const loadImageBase64 = async (url) => {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => resolve(reader.result)
+      reader.readAsDataURL(blob)
+    })
+  } catch (err) {
+    console.warn("Logo not found or could not be loaded:", err)
+    return null
+  }
 }
 
 function PrintInvoicesContent() {
@@ -81,11 +96,10 @@ function PrintInvoicesContent() {
     
     if (data && data.length > 0) {
       setInvoices(data)
-      // Small delay to ensure state updates before generating
       setTimeout(() => generatePDF(data, true), 500) 
     } else {
       toast({ title: "No invoices found", variant: "destructive" })
-      setAutoPrintMode(false) // Fallback to manual view
+      setAutoPrintMode(false) 
     }
   }
 
@@ -116,7 +130,6 @@ function PrintInvoicesContent() {
 
     setLoading(true)
     try {
-      // Get Students in Class
       const { data: students } = await supabase
         .from("students").select("studentid").eq("class_id", selectedClassId)
 
@@ -127,7 +140,6 @@ function PrintInvoicesContent() {
         return
       }
 
-      // Get Invoices
       const { data, error } = await supabase
         .from("fee_invoices")
         .select(`
@@ -154,200 +166,223 @@ function PrintInvoicesContent() {
     }
   }
 
-  // --- 3. HEAVY CORPORATE DESIGN PDF GENERATOR (FIXED) ---
-  const generatePDF = (dataToPrint = invoices, autoClose = false) => {
+  // --- 3. HEAVY CORPORATE DESIGN PDF GENERATOR ---
+  const generatePDF = async (dataToPrint = invoices, autoClose = false) => {
     if (!dataToPrint || dataToPrint.length === 0) return
 
     setProcessingPdf(true)
     
     try {
-      // Landscape A4
+      const logoBase64 = await loadImageBase64('/lg.png')
       const doc = new jsPDF('l', 'mm', 'a4') 
       const pageWidth = 297
       const pageHeight = 210
       const margin = 10 
       const stripWidth = (pageWidth - (margin * 2)) / 3
       const stripHeight = pageHeight - 20
-      
-      // Dimensions for layout
-      const contentWidth = stripWidth - 6 
       const startY = 10
 
       dataToPrint.forEach((inv, invIndex) => {
         if (invIndex > 0) doc.addPage()
 
-        // Loop for 3 copies (Bank, School, Parent)
         COPIES.forEach((copyType, copyIndex) => {
-          const startX = margin + (copyIndex * stripWidth) + 3 // +3 for padding inside strip
+          const startX = margin + (copyIndex * stripWidth)
           
-          let yCursor = startY
+          // Container bounds
+          const innerBoxX = startX + 2
+          const innerBoxY = startY + 2
+          const innerBoxW = stripWidth - 4
+          const innerBoxH = stripHeight - 4
 
-          // --- A. OUTER CONTAINER BORDER ---
+          // --- 1. OUTER CONTAINER (Thick Border) ---
           doc.setDrawColor(COLORS.brand)
-          doc.setLineWidth(0.5)
-          doc.rect(startX - 2, startY, contentWidth + 4, stripHeight)
+          doc.setLineWidth(0.53) // Approx 1.5 points
+          doc.rect(innerBoxX, innerBoxY, innerBoxW, innerBoxH)
 
-          // --- B. HEADER BLOCK (Top) ---
-          const headerHeight = 22
+          // --- 2. HEADER BLOCK ---
+          const headerHeight = 24
+          const headerTopY = innerBoxY
           
           doc.setFillColor(COLORS.brand)
-          doc.rect(startX - 2, yCursor, contentWidth + 4, headerHeight, 'F')
+          doc.rect(innerBoxX, headerTopY, innerBoxW, headerHeight, 'F')
 
-          // School Name (White Text)
+          const logoW = 16
+          const pad = 4
+          let textStartX = startX + 6
+
+          if (logoBase64) {
+            doc.setFillColor(COLORS.white)
+            doc.rect(startX + 5, headerTopY + 4, logoW, logoW, 'F')
+            doc.addImage(logoBase64, 'PNG', startX + 6, headerTopY + 5, logoW - 2, logoW - 2)
+            textStartX += (logoW + pad)
+          }
+
+          // Center Text in remaining space
+          const remainingWidth = (innerBoxX + innerBoxW) - textStartX
+          const textCenterX = textStartX + (remainingWidth / 2)
+
           doc.setTextColor(COLORS.white)
+          doc.setFont("helvetica", "bold")
+          doc.setFontSize(13)
+          doc.text(SCHOOL_NAME, textCenterX, headerTopY + 11, { align: 'center' })
+
+          doc.setFont("helvetica", "normal")
+          doc.setFontSize(8)
+          doc.setTextColor('#D1D5DB')
+          doc.text(CAMPUS_NAME, textCenterX, headerTopY + 16, { align: 'center' })
+
+          // Top Right Copy Label
           doc.setFont("helvetica", "bold")
           doc.setFontSize(10)
-          doc.text(SCHOOL_NAME, startX + (contentWidth / 2), yCursor + 8, { align: 'center' })
-
-          // Campus Name
-          doc.setFont("helvetica", "normal")
-          doc.setFontSize(7)
-          doc.setTextColor(220, 220, 220)
-          doc.text(CAMPUS_NAME, startX + (contentWidth / 2), yCursor + 13, { align: 'center' })
-
-          // Copy Label (e.g., BANK COPY)
-          doc.setFontSize(8)
           doc.setTextColor(COLORS.white)
-          doc.text(copyType, startX + contentWidth, yCursor + 18, { align: 'right' })
+          doc.text(copyType.toUpperCase(), innerBoxX + innerBoxW - 4, headerTopY + 6, { align: 'right' })
 
-          yCursor += headerHeight
+          // --- 3. STATUS BAR (Invoice # & Due Date) ---
+          const barTopY = headerTopY + headerHeight
+          doc.setFillColor('#E5E7EB')
+          doc.rect(startX + 2.5, barTopY, stripWidth - 5, 8, 'F')
 
-          // --- C. STATUS BAR (Invoice # & Due Date) ---
-          doc.setFillColor(COLORS.light_grey_bar)
-          doc.rect(startX - 2, yCursor, contentWidth + 4, 8, 'F')
-
-          // Inv # (Left)
           doc.setTextColor(COLORS.brand)
-          doc.setFontSize(8)
-          doc.setFont("helvetica", "bold")
-          doc.text(`INV #: ${inv.id}`, startX, yCursor + 5.5)
+          doc.setFontSize(9)
+          doc.text(`INV #: ${inv.id}`, startX + 6, barTopY + 5.5)
 
-          // Due Date (Right - Red)
           doc.setTextColor(COLORS.accent)
-          const dueDate = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', {day: 'numeric', month: 'short'}) : "10th"
-          doc.text(`DUE: ${dueDate}`, startX + contentWidth, yCursor + 5.5, { align: 'right' })
+          const dueDate = inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}) : "10th"
+          doc.text(`DUE: ${dueDate}`, innerBoxX + innerBoxW - 4, barTopY + 5.5, { align: 'right' })
 
-          yCursor += 10 // Move down for Student Table
-
-          // --- D. STUDENT DETAILS ---
+          // --- 4. STUDENT DETAILS (Reversed white grid on grey background) ---
           const studentData = [
-            ["STUDENT:", inv.students?.name || "-"],
+            ["NAME:", inv.students?.name || "-"],
             ["FATHER:", inv.students?.fathername || "-"],
-            ["REG ID:", inv.students?.studentid || "-"],
+            ["DAS NO:", inv.students?.studentid || "-"],
             ["CLASS:", inv.students?.classes?.name || "-"]
           ]
 
           autoTable(doc, {
-            startY: yCursor,
+            startY: barTopY + 8 + 2,
             body: studentData,
             theme: 'grid',
-            margin: { left: startX },
-            tableWidth: contentWidth,
-            styles: {
-              font: 'helvetica',
-              fontSize: 8,
-              cellPadding: 1.5,
-              lineColor: COLORS.border,
-              lineWidth: 0.1,
-              textColor: COLORS.text
+            margin: { left: startX + 6 },
+            tableWidth: innerBoxW - 8,
+            styles: { 
+              font: 'helvetica', 
+              fontSize: 10, 
+              cellPadding: 1.5, 
+              lineColor: COLORS.white, // White borders
+              lineWidth: 0.5 
             },
             columnStyles: {
-              0: { 
-                cellWidth: 18, 
-                fillColor: COLORS.sub_bg, 
-                fontStyle: 'bold', 
-                textColor: COLORS.brand 
-              },
-              1: { 
-                fillColor: COLORS.white 
-              }
+              0: { cellWidth: 20, fillColor: COLORS.sub_bg, textColor: COLORS.brand, fontStyle: 'bold' },
+              1: { fillColor: COLORS.sub_bg, textColor: COLORS.text }
             }
           })
 
-          // Ensure next table starts below this one
-          yCursor = doc.lastAutoTable.finalY + 5
-
-          // --- E. FEE TABLE ---
+          // --- 5. FEE TABLE (Professional Ledger Look) ---
           const feeData = inv.fee_invoice_details.map(d => [d.fee_type, formatCurrency(d.amount)])
-          // Add Total Row
           feeData.push(["TOTAL PAYABLE", formatCurrency(inv.total_amount)])
 
           autoTable(doc, {
-            startY: yCursor,
+            startY: doc.lastAutoTable.finalY + 5,
             head: [['DESCRIPTION', 'AMOUNT']],
             body: feeData,
-            theme: 'plain',
-            margin: { left: startX },
-            tableWidth: contentWidth,
-            headStyles: {
-              fillColor: COLORS.brand,
-              textColor: COLORS.white,
-              fontStyle: 'bold',
-              fontSize: 8,
-              halign: 'left',
-              cellPadding: 2
+            theme: 'grid',
+            margin: { left: startX + 6 },
+            tableWidth: innerBoxW - 8,
+            headStyles: { 
+              fillColor: COLORS.brand, 
+              textColor: COLORS.white, 
+              fontStyle: 'bold', 
+              fontSize: 10, 
+              halign: 'left', 
+              cellPadding: 2.5 
             },
-            bodyStyles: {
-              fontSize: 8,
-              textColor: COLORS.text,
-              cellPadding: 2,
-              lineColor: COLORS.light_grey_bar,
-              lineWidth: { bottom: 0.1 }
+            bodyStyles: { 
+              fontSize: 11, 
+              textColor: COLORS.text, 
+              cellPadding: 2, 
+              lineColor: COLORS.border, 
+              lineWidth: 0.2 
+            },
+            alternateRowStyles: { 
+              fillColor: COLORS.sub_bg 
             },
             columnStyles: {
               0: { cellWidth: 'auto' },
-              1: { halign: 'right', cellWidth: 25 }
+              1: { halign: 'right', cellWidth: 22 }
             },
             didParseCell: (data) => {
-              // Style the Total Row (Last row)
+              // Apply specific styles to Total Row
               if (data.section === 'body' && data.row.index === feeData.length - 1) {
                 data.cell.styles.fillColor = COLORS.total_bg
                 data.cell.styles.fontStyle = 'bold'
                 data.cell.styles.textColor = COLORS.brand
               }
+            },
+            didDrawCell: (data) => {
+              // Thick line above the total row
+              if (data.section === 'body' && data.row.index === feeData.length - 1 && data.row.raw) {
+                doc.setDrawColor(COLORS.brand)
+                doc.setLineWidth(0.53)
+                doc.line(data.cell.x, data.cell.y, data.cell.x + data.cell.width, data.cell.y)
+              }
             }
           })
 
-          // --- F. FOOTER (Fixed at Bottom of Strip) ---
-          const footerHeight = 35
-          const footerY = startY + stripHeight - footerHeight
-          
-          // Instructions
+          // --- 6. FOOTER (Split Layout) ---
+          const innerBoxBottomY = innerBoxY + innerBoxH
+          const footerTopY = innerBoxBottomY - 30 // Approx 25mm footer area + bottom bar
+
+          // Dashed separation line
+          doc.setDrawColor(COLORS.border)
+          doc.setLineWidth(0.2)
+          doc.setLineDash([2, 2])
+          doc.line(startX + 6, footerTopY, innerBoxX + innerBoxW - 4, footerTopY)
+          doc.setLineDash([]) // Reset
+
+          // Left: Instructions
           doc.setTextColor(COLORS.brand)
           doc.setFont("helvetica", "bold")
-          doc.setFontSize(7)
-          doc.text("INSTRUCTIONS:", startX, footerY + 5)
+          doc.setFontSize(9)
+          doc.text("INSTRUCTIONS:", startX + 6, footerTopY + 7)
 
-          doc.setFont("helvetica", "normal")
           doc.setTextColor(COLORS.text)
-          doc.setFontSize(6)
+          doc.setFont("helvetica", "normal")
+          doc.setFontSize(8)
           const instructions = [
             "1. Due date is the 10th of every month.",
             "2. Late fee: Rs. 50/day after due date.",
-            "3. Payment is non-refundable."
+            "3. Name struck off on 2 consecutive",
+            "   non-payments."
           ]
-          let instY = footerY + 9
+          let instY = footerTopY + 11.5
           instructions.forEach(line => {
-             doc.text(line, startX, instY)
-             instY += 3
+             doc.text(line, startX + 6, instY)
+             instY += 3.5
           })
 
-          // Signature Line
-          const sigLineY = footerY + 25
+          // Right: Signature
           doc.setDrawColor(COLORS.brand)
-          doc.setLineWidth(0.5)
-          doc.line(startX + contentWidth - 35, sigLineY, startX + contentWidth, sigLineY)
+          doc.setLineWidth(0.35)
+          doc.line(innerBoxX + innerBoxW - 35, footerTopY + 18, innerBoxX + innerBoxW - 8, footerTopY + 18)
           
           doc.setFont("helvetica", "bold")
-          doc.setFontSize(7)
-          doc.text("OFFICER SIGNATURE", startX + contentWidth - 17.5, sigLineY + 4, { align: 'center' })
+          doc.setFontSize(8)
+          doc.text("ACCOUNTANT", innerBoxX + innerBoxW - 21.5, footerTopY + 22, { align: 'center' })
 
-          // --- G. SCISSOR CUT LINE ---
+          // --- BOTTOM BAR: COPY TYPE ---
+          doc.setFillColor(COLORS.brand)
+          doc.rect(innerBoxX, innerBoxBottomY - 5, innerBoxW, 5, 'F')
+          
+          doc.setTextColor(COLORS.white)
+          doc.setFontSize(7)
+          doc.text(copyType.toUpperCase(), innerBoxX + (innerBoxW / 2), innerBoxBottomY - 1.5, { align: 'center' })
+
+          // --- SCISSOR CUT LINE ---
           if (copyIndex < 2) {
              const cutX = margin + ((copyIndex + 1) * stripWidth)
-             doc.setDrawColor(180, 180, 180)
-             doc.setLineWidth(0.5)
-             doc.setLineDash([3, 3])
+             doc.setDrawColor('#9CA3AF')
+             doc.setLineWidth(0.2)
+             doc.setLineDash([2, 2])
              doc.line(cutX, 5, cutX, pageHeight - 5)
              doc.setLineDash([]) // Reset
           }
@@ -373,7 +408,6 @@ function PrintInvoicesContent() {
 
   // --- RENDER ---
   
-  // 1. AUTO-PRINT MODE: Render ONLY a full-screen loader
   if (autoPrintMode) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -383,7 +417,6 @@ function PrintInvoicesContent() {
     )
   }
 
-  // 2. MANUAL MODE: Render the full UI
   return (
     <>
       <Navbar />

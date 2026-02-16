@@ -2,7 +2,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 /**
- * Generates and downloads a PDF receipt using the "School Invoice" design.
+ * Generates and opens a PDF receipt in a new tab using the "School Invoice" design.
  */
 export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceAfterPayment }) => {
   const doc = new jsPDF();
@@ -123,7 +123,7 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
     startY: tableStartY,
     head: [['DESCRIPTION', 'TOTAL FEE', 'PAID NOW (PKR)']],
     body: receiptRows,
-    theme: 'plain', // We construct the style manually to match design
+    theme: 'plain', 
     margin: { left: margin, right: margin },
     headStyles: {
       fillColor: COLORS.brand,
@@ -144,14 +144,11 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
       2: { cellWidth: 40, halign: 'right' }  // Paid Now
     },
     didParseCell: function (data) {
-      // Align the header for amounts to the right manually if needed, 
-      // but columnStyles usually handles it.
       if (data.section === 'head' && data.column.index > 0) {
         data.cell.styles.halign = 'right';
       }
     },
     willDrawCell: function (data) {
-      // Zebra Striping manually to match the #F9FAFB look
       if (data.section === 'body' && data.row.index % 2 === 0) {
         doc.setFillColor(...COLORS.sub_bg);
         doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
@@ -208,7 +205,11 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
   doc.text("2. Any discrepancies must be reported within 7 days.", margin, footerY + 14);
   doc.text("3. This is a computer-generated receipt and requires no signature.", margin, footerY + 18);
 
-  // --- SAVE ---
-  const safeName = (student?.name || "Student").replace(/[^a-z0-9]/gi, '_');
-  doc.save(`Receipt_${safeName}_${invoiceId}.pdf`);
+  // --- 8. OPEN IN NEW TAB (Replaced Save Logic) ---
+  // Create a Blob from the PDF
+  const pdfBlob = doc.output("blob");
+  // Create a temporary URL for the Blob
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  // Open the URL in a new tab
+  window.open(pdfUrl, "_blank");
 };

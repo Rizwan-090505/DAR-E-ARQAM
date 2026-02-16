@@ -235,8 +235,7 @@ export default function PayInvoiceContent() {
         let receiptText = `🏫 *FEE PAYMENT RECEIPT* 🏫\n`;
         receiptText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
         receiptText += `👤 *Student:* ${student?.name}\n`;
-        receiptText += `🆔 *ID:* ${student?.studentid}\n`;
-        receiptText += `📚 *Class:* ${student?.class_id}\n`;
+        receiptText += `🆔 *DAS NUMBER:* ${student?.studentid}\n`;
         receiptText += `📄 *Invoice #:* ${invoiceId}\n\n`;
         
         receiptText += `*💰 FEE BREAKDOWN (PAID)*\n`;
@@ -253,8 +252,8 @@ export default function PayInvoiceContent() {
         receiptText += `💳 *Method:* ${paymentMethod.toUpperCase()}\n\n`;
         
         const newBalance = globalBalance - totalPayingNow;
-        receiptText += `⚖️ *Remaining Balance:* ${newBalance.toLocaleString()} PKR\n\n`;
-        receiptText += `_Thank you for your payment!_`;
+        receiptText += ` *Remaining Balance:* ${newBalance.toLocaleString()} PKR\n\n`;
+        receiptText += `_ACCOUNTS OFFICE_ \n DAR-E-ARQAM SCHOOL`;
 
         // Fetching mobilenumber column specifically 
         const parentPhone = student?.mobilenumber || "00000000000";
