@@ -19,7 +19,7 @@ function FeeReceiptsContent() {
   const router = useRouter()
   const { toast } = useToast()
 
-  // --- State (NO CHANGES) ---
+  // --- State ---
   const [loading, setLoading] = useState(true)
   const [printingId, setPrintingId] = useState(null)
   const [receipts, setReceipts] = useState([])
@@ -40,7 +40,7 @@ function FeeReceiptsContent() {
   
   const [debouncedSearch, setDebouncedSearch] = useState("")
 
-  // --- Initialization (NO CHANGES) ---
+  // --- Initialization ---
   useEffect(() => {
     fetchClasses()
   }, [])
@@ -62,7 +62,7 @@ function FeeReceiptsContent() {
     setClasses(data || [])
   }
 
-  // --- 1. FETCH LIST OF PAYMENTS (NO CHANGES) ---
+  // --- 1. FETCH & GROUP PAYMENTS ---
   const fetchReceipts = useCallback(async () => {
     setLoading(true)
     try {
@@ -114,7 +114,40 @@ function FeeReceiptsContent() {
 
       if (error) throw error
 
-      setReceipts(data || [])
+      // --- GROUPING LOGIC FOR SAME DATE AND INVOICE ---
+      const groupedMap = new Map()
+      const groupedData = []
+
+      ;(data || []).forEach((rcpt) => {
+        const dateStr = new Date(rcpt.paid_at).toLocaleDateString()
+        const key = `${rcpt.invoice_id}_${dateStr}` // Group by invoice and date
+
+        if (!groupedMap.has(key)) {
+          const newGroup = {
+            ...rcpt, // Base record
+            amount: rcpt.amount || 0, // We will aggregate this
+            feeLabels: new Set([rcpt.fee_invoice_details?.fee_type || "General Payment"]),
+            paymentMethods: new Set([rcpt.payment_method || "Cash"]),
+            groupedPayments: [rcpt] // Keep all raw payments for the print function
+          }
+          groupedMap.set(key, newGroup)
+          groupedData.push(newGroup)
+        } else {
+          const existing = groupedMap.get(key)
+          existing.amount += (rcpt.amount || 0)
+          existing.feeLabels.add(rcpt.fee_invoice_details?.fee_type || "General Payment")
+          existing.paymentMethods.add(rcpt.payment_method || "Cash")
+          existing.groupedPayments.push(rcpt)
+        }
+      })
+
+      // Convert Sets to display strings for the UI table
+      groupedData.forEach(g => {
+        g.displayFeeLabel = Array.from(g.feeLabels).join(", ")
+        g.displayMethod = Array.from(g.paymentMethods).join(", ")
+      })
+
+      setReceipts(groupedData)
       setTotalCount(count || 0)
 
     } catch (error) {
@@ -126,11 +159,11 @@ function FeeReceiptsContent() {
   }, [page, filters.classId, filters.startDate, filters.endDate, debouncedSearch])
 
 
-  // --- 2. PRINT LOGIC (NO CHANGES) ---
-  const handlePrintReceipt = async (payment) => {
-    setPrintingId(payment.id)
+  // --- 2. PRINT LOGIC (UPDATED FOR MULTIPLE ITEMS) ---
+  const handlePrintReceipt = async (groupedPayment) => {
+    setPrintingId(groupedPayment.id) // using the base ID for loading spinner
     try {
-      const invoiceId = payment.invoice_id
+      const invoiceId = groupedPayment.invoice_id
       if (!invoiceId) throw new Error("Invoice data missing");
 
       // A. Fetch Invoice Total Amount
@@ -142,7 +175,7 @@ function FeeReceiptsContent() {
       
       if (invError) throw invError;
 
-      // B. Fetch ALL payments to calculate balance
+      // B. Fetch ALL historical payments to calculate balance
       const { data: allPayments, error: payError } = await supabase
         .from("fee_payments")
         .select("amount")
@@ -154,28 +187,25 @@ function FeeReceiptsContent() {
       const totalPaidHistory = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
       const balance = Math.max(0, (invoiceData.total_amount || 0) - totalPaidHistory);
 
-      // D. Determine the Label
-      const feeReason = payment.fee_invoice_details?.fee_type 
-        ? payment.fee_invoice_details.fee_type 
-        : "General Fee Payment";
+      // D. Generate line items for ALL grouped payments
+      const studentData = groupedPayment.fee_invoices?.students || {};
 
-      const studentData = payment.fee_invoices?.students || {};
-
-      const receiptItems = [
-        {
-          fee_type: `${feeReason} (${payment.payment_method || 'Cash'})`, 
+      const receiptItems = groupedPayment.groupedPayments.map((p) => {
+        const feeReason = p.fee_invoice_details?.fee_type || "General Fee Payment";
+        return {
+          fee_type: `${feeReason} (${p.payment_method || 'Cash'})`, 
           totalAmount: invoiceData.total_amount, 
-          payingNow: payment.amount 
+          payingNow: p.amount 
         }
-      ]
+      });
 
       // E. Execute Print
       printReceipt({
         student: studentData,
         invoiceId: invoiceId,
-        paymentId: payment.id, 
+        paymentId: groupedPayment.groupedPayments.map(p => p.id).join(", "), // Join all grouped IDs
         items: receiptItems,       
-        totalPaidNow: payment.amount,
+        totalPaidNow: groupedPayment.amount, // Send the newly summed aggregate amount
         balanceAfterPayment: balance
       })
 
@@ -193,17 +223,10 @@ function FeeReceiptsContent() {
     return name ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '??';
   }
 
-  // --- New Styling Constants ---
-  // Background: Clean white (light) vs Dark Gradient (dark)
+  // --- Styling Constants ---
   const pageBackground = "min-h-screen bg-slate-50 dark:bg-[#0f172a] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-slate-900 dark:via-[#0a0f1d] dark:to-black text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-500/30 transition-colors duration-300"
-  
-  // Panels: Solid white with border (light) vs Glass (dark)
   const panelStyle = "bg-white border border-slate-200 shadow-sm rounded-xl dark:bg-white/5 dark:backdrop-blur-md dark:border-white/10 dark:shadow-none transition-all duration-300"
-  
-  // Inputs: Solid white/border (light) vs Glass (dark)
   const inputStyle = "bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-blue-500 placeholder:text-slate-400 dark:bg-white/5 dark:border-white/10 dark:text-slate-100 dark:focus:ring-white/20 dark:focus:border-white/20 transition-all duration-300"
-  
-  // Table Headers
   const thStyle = "px-6 py-4 text-left text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700 dark:bg-white/5 dark:text-slate-300 sticky top-0 z-20 border-b border-slate-200 dark:border-white/10"
 
   return (
@@ -316,10 +339,10 @@ function FeeReceiptsContent() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className={`${thStyle} w-24`}>ID</th>
+                    <th className={`${thStyle} w-32`}>ID(s)</th>
                     <th className={thStyle}>Student Information</th>
                     <th className={thStyle}>Payment For</th>
-                    <th className={`${thStyle} text-right`}>Amount Paid</th>
+                    <th className={`${thStyle} text-right`}>Total Paid</th>
                     <th className={`${thStyle} text-center`}>Method</th>
                     <th className={`${thStyle} text-right pr-8`}>Actions</th>
                   </tr>
@@ -346,14 +369,17 @@ function FeeReceiptsContent() {
                   ) : receipts.map((rcpt) => {
                     const student = rcpt.fee_invoices?.students;
                     const className = student?.classes?.name;
-                    const feeLabel = rcpt.fee_invoice_details?.fee_type || "General Payment";
 
                     return (
                       <tr key={rcpt.id} className="group hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-150">
                         
-                        {/* ID */}
+                        {/* MULTIPLE IDs */}
                         <td className="px-6 py-5 text-xs font-mono text-slate-500 dark:text-slate-400">
-                          #{rcpt.id}
+                          <div className="flex flex-wrap gap-1">
+                            {rcpt.groupedPayments.map((p) => (
+                              <span key={p.id}>#{p.id}</span>
+                            ))}
+                          </div>
                         </td>
 
                         {/* Student Info */}
@@ -381,7 +407,7 @@ function FeeReceiptsContent() {
                         <td className="px-6 py-4">
                           <div className="flex flex-col text-sm">
                             <span className="text-slate-700 dark:text-slate-200 font-medium">
-                              {feeLabel}
+                              {rcpt.displayFeeLabel}
                             </span>
                             <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                               {new Date(rcpt.paid_at).toLocaleDateString()}
@@ -389,7 +415,7 @@ function FeeReceiptsContent() {
                           </div>
                         </td>
 
-                        {/* Amount */}
+                        {/* Amount (SUMMED) */}
                         <td className="px-6 py-4 text-right">
                             <div className="flex flex-col items-end">
                               <span className="font-bold text-base text-slate-900 dark:text-white">
@@ -402,7 +428,7 @@ function FeeReceiptsContent() {
                         {/* Method */}
                         <td className="px-6 py-4 text-center">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/10 dark:text-slate-300 dark:border-white/5">
-                              {rcpt.payment_method || "Cash"}
+                              {rcpt.displayMethod}
                             </span>
                         </td>
 
@@ -434,7 +460,7 @@ function FeeReceiptsContent() {
             {/* --- PAGINATION --- */}
             <div className="px-6 py-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
                <div className="text-xs text-slate-500 dark:text-slate-400 font-medium order-2 sm:order-1">
-                 Showing <span className="text-slate-900 dark:text-white font-bold">{receipts.length > 0 ? page * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="text-slate-900 dark:text-white font-bold">{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)}</span> of <span className="text-slate-900 dark:text-white font-bold">{totalCount}</span>
+                 Showing raw entries <span className="text-slate-900 dark:text-white font-bold">{receipts.length > 0 ? page * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="text-slate-900 dark:text-white font-bold">{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)}</span> of <span className="text-slate-900 dark:text-white font-bold">{totalCount}</span>
                </div>
                
                <div className="flex items-center gap-2 order-1 sm:order-2">
@@ -474,4 +500,3 @@ export default function FeeReceiptsPage() {
     </Suspense>
   )
 }
-
