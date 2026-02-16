@@ -304,10 +304,6 @@ export default function PayInvoiceContent() {
     bg-white border border-gray-200 shadow-sm
     dark:bg-white/5 dark:border-white/10 dark:backdrop-blur-xl dark:shadow-none`
 
-  const inputClass = `h-10 w-full rounded-md px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50
-    bg-white border-gray-300 text-black dark:text-white focus:border-blue-500
-    dark:bg-white/20 dark:border-white/10 dark:text-white dark:placeholder:text-gray-600 dark:focus:border-blue-500/50`
-
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#0f172a]"><Loader /></div>
 
   // --- NOT FOUND VIEW ---
@@ -361,7 +357,7 @@ export default function PayInvoiceContent() {
                                 placeholder="e.g. 1024"
                                 value={manualIdInput}
                                 onChange={(e) => setManualIdInput(e.target.value)}
-                                className={inputClass + " h-12 text-lg tracking-wider"}
+                                className="flex h-12 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-lg tracking-wider text-black placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus-visible:ring-blue-500"
                             />
                         </div>
                         <Button type="submit" size="lg" disabled={!manualIdInput} className="w-full bg-blue-600 hover:bg-blue-700 text-white h-12">
@@ -419,7 +415,7 @@ export default function PayInvoiceContent() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-white dark:bg-white/20 px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
+            <div className="flex items-center gap-3 bg-green-600 dark:bg-white/20 text-white px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm transition-colors">
               <input 
                 type="checkbox" 
                 id="sendNotification" 
@@ -427,7 +423,7 @@ export default function PayInvoiceContent() {
                 onChange={(e) => setSendMessageToParent(e.target.checked)}
                 className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
               />
-              <Label htmlFor="sendNotification" className="text-sm font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <Label htmlFor="sendNotification" className="text-sm font-bold text-gray-100 dark:text-gray-300 cursor-pointer select-none">
                 Send SMS/WhatsApp to Parent
               </Label>
             </div>
@@ -489,7 +485,7 @@ export default function PayInvoiceContent() {
                    placeholder="e.g. Received by Admin..." 
                    value={notes}
                    onChange={(e) => setNotes(e.target.value)}
-                   className={inputClass}
+                   className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus-visible:ring-blue-500"
                  />
               </div>
             </div>
@@ -522,18 +518,19 @@ export default function PayInvoiceContent() {
                                         </td>
                                         <td className="p-5 text-right font-mono text-gray-500 dark:text-blue-400">{item.totalAmount.toLocaleString()}</td>
                                         <td className="p-5 text-right font-mono text-green-600 dark:text-green-400">{item.alreadyPaid > 0 ? item.alreadyPaid.toLocaleString() : '-'}</td>
-                                        <td className="p-5 text-right font-mono font-bold text-gray-900 dark:text-blue-100">{item.remainingBalance.toLocaleString()}</td>
-                                        <td className={`p-4 bg-blue-50 dark:bg-blue-800 ${item.isOver ? 'bg-red-50 dark:bg-red-800' : ''}`}>
+                                        <td className="p-5 text-right font-mono font-bold text-gray-900 dark:text-white">{item.remainingBalance.toLocaleString()}</td>
+                                        <td className={`p-4 bg-blue-50 dark:bg-blue-500/20 ${item.isOver ? 'bg-red-50 dark:bg-red-500/20' : ''}`}>
                                             <Input 
                                                 type="number" 
                                                 disabled={item.remainingBalance <= 0}
                                                 value={paymentInputs[item.id] === 0 ? '' : paymentInputs[item.id]}
                                                 onChange={(e) => handleAmountChange(item.id, e.target.value)}
                                                 placeholder={item.remainingBalance > 0 ? item.remainingBalance.toString() : '-'}
-                                                className={`text-right h-10 ${inputClass} 
-                                                  ${item.isOver 
-                                                    ? 'border-red-500 text-red-600 dark:text-red-400 focus:ring-red-500' 
-                                                    : 'focus:ring-blue-500'}`}
+                                                className={`flex h-10 w-full rounded-md border bg-white px-3 py-2 text-right text-sm text-black placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 ${
+                                                    item.isOver 
+                                                    ? 'border-red-500 text-red-600 focus-visible:ring-red-500 dark:text-red-400 dark:border-red-500/50' 
+                                                    : 'border-gray-300 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-500'
+                                                }`}
                                             />
                                         </td>
                                     </tr>
@@ -611,8 +608,8 @@ export default function PayInvoiceContent() {
                                 disabled={submitting || totalPayingNow <= 0 || isAnyItemOverpaying}
                                 className={`w-full md:w-auto min-w-[200px] h-14 font-bold shadow-xl transition-all rounded-xl text-lg
                                     ${isAnyItemOverpaying 
-                                        ? 'bg-blue-400 cursor-not-allowed' 
-                                        : 'bg-gradient-to-r from-blue-400 to-indigo-400 hover:from-blue-700 hover:to-indigo-700 hover:shadow-blue-500/25 dark:from-blue-600 dark:to-blue-500'}`}
+                                        ? 'bg-red-600 cursor-not-allowed' 
+                                        : 'bg-blue-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-blue-500/25 dark:bg-blue-400'}`}
                             >
                                 {submitting ? <Loader small /> : (
                                     <span className="flex items-center">
@@ -639,21 +636,16 @@ export default function PayInvoiceContent() {
                 
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Success!</h2>
-                    <p className="text-gray-500 dark:text-blue-400 text-sm">Transaction recorded via <span className="capitalize font-bold text-gray-700 dark:text-blue-300">{paymentMethod}</span>.</p>
+                    <p className="text-gray-500 dark:text-blue-400 text-sm">Transaction recorded via <span className="font-bold uppercase">{paymentMethod}</span></p>
                 </div>
-
-                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 w-full border border-dashed border-gray-300 dark:border-gray-700">
-                   <p className="text-xs uppercase font-bold text-gray-500 dark:text-blue-400">Amount Received</p>
-                   <p className="text-3xl font-black text-blue-600 dark:text-blue-400">{totalPayingNow.toLocaleString()} <span className="text-sm text-gray-400">PKR</span></p>
-                </div>
-
-                <div className="flex flex-col w-full gap-3">
-                  <Button onClick={handlePrint} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                    <Printer className="w-4 h-4 mr-2" /> Print Receipt
-                  </Button>
-                  <Button variant="outline" onClick={() => router.push("/admin/invoices")} className="w-full">
-                    Return to Dashboard
-                  </Button>
+                
+                <div className="w-full space-y-3 pt-4 border-t border-gray-100 dark:border-white/10">
+                    <Button size="lg" onClick={handlePrint} className="w-full bg-green-600 hover:bg-green-700 text-white">
+                        <Printer className="w-5 h-5 mr-2" /> Print Receipt
+                    </Button>
+                    <Button variant="outline" onClick={() => router.push("/admin/invoices")} className="w-full">
+                        Done
+                    </Button>
                 </div>
               </div>
             </div>
