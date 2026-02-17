@@ -9,12 +9,12 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { 
   ArrowLeft, Calendar, FileText, 
-  Download, AlertTriangle, FileBarChart, Users
+  Download, FileBarChart 
 } from "lucide-react"
 import { useToast } from "../../hooks/use-toast"
 import { generateCollectionReportBlob } from "../../utils/collectionReport" 
 
-export default function ReportsPage() {
+export default function CollectionReportPage() {
   const router = useRouter()
   const { toast } = useToast()
   
@@ -57,14 +57,6 @@ export default function ReportsPage() {
     }
   }
 
-  const handleDefaultersList = () => {
-    toast({ 
-      title: "Coming Soon", 
-      description: "Defaulters list functionality will be implemented later.",
-      variant: "default"
-    })
-  }
-
   // --- Glassmorphic Styles ---
   const glassCardClass = "relative overflow-hidden rounded-2xl border border-white/20 bg-white/40 dark:bg-black/40 backdrop-blur-xl shadow-xl p-6 transition-all hover:border-white/30"
   const glassInputClass = "bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-500/70"
@@ -73,7 +65,7 @@ export default function ReportsPage() {
     <>
       <Navbar />
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718] p-4 md:p-8 transition-colors duration-500">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-2xl mx-auto">
             
           {/* HEADER */}
           <div className="flex items-center gap-4 mb-8">
@@ -82,117 +74,76 @@ export default function ReportsPage() {
             </Button>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white drop-shadow-sm">
-                Reports & Analytics
+                Collection Report
               </h1>
               <p className="text-gray-600 dark:text-slate-400 text-sm font-medium">
-                Generate dynamic financial and academic reports
+                Generate financial collection reports by date range
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* COLLECTION REPORT CARD */}
+          <div className={`${glassCardClass} flex flex-col`}>
+            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+              <FileBarChart className="w-24 h-24 text-blue-500" />
+            </div>
             
-            {/* OPTION A: COLLECTION REPORT (Glass Card) */}
-            <div className={`${glassCardClass} flex flex-col`}>
-              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <FileBarChart className="w-24 h-24 text-blue-500" />
-              </div>
-              
-              <h2 className="text-xl font-bold flex items-center gap-2 mb-2 text-gray-800 dark:text-white relative z-10">
-                <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" /> 
-                Collection Report
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 relative z-10">
-                Generate a PDF report of all fee collections within a specific date range.
-              </p>
+            <h2 className="text-xl font-bold flex items-center gap-2 mb-2 text-gray-800 dark:text-white relative z-10">
+              <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" /> 
+              Generate Report
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 relative z-10">
+              Generate a PDF report of all fee collections within a specific date range.
+            </p>
 
-              <form onSubmit={handleGenerateCollection} className="space-y-5 flex-1 flex flex-col relative z-10">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="ml-1 text-gray-700 dark:text-gray-300">Start Date</Label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                      <Input 
-                        type="date" 
-                        required
-                        className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
-                        value={dateRange.startDate} 
-                        onChange={e => setDateRange({...dateRange, startDate: e.target.value})} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="ml-1 text-gray-700 dark:text-gray-300">End Date</Label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                      <Input 
-                        type="date" 
-                        required
-                        className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
-                        value={dateRange.endDate} 
-                        onChange={e => setDateRange({...dateRange, endDate: e.target.value})} 
-                      />
-                    </div>
+            <form onSubmit={handleGenerateCollection} className="space-y-5 flex-1 flex flex-col relative z-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="ml-1 text-gray-700 dark:text-gray-300">Start Date</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <Input 
+                      type="date" 
+                      required
+                      className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
+                      value={dateRange.startDate} 
+                      onChange={e => setDateRange({...dateRange, startDate: e.target.value})} 
+                    />
                   </div>
                 </div>
 
-                <div className="mt-auto pt-6">
-                  <Button 
-                    type="submit" 
-                    disabled={loadingCollection}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 dark:bg-white/5 text-white shadow-lg hover:shadow-blue-500/30 transition-all rounded-lg h-12 border-0"
-                  >
-                    {loadingCollection ? <Loader small /> : (
-                      <>
-                        <Download className="w-5 h-5 mr-2" /> 
-                        Generate Report
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </div>
-
-            {/* OPTION B: DEFAULTERS LIST (Glass Card) */}
-            <div className={`${glassCardClass} flex flex-col border-red-200/50 dark:border-red-900/30`}>
-              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <Users className="w-24 h-24 text-red-500" />
-              </div>
-
-              <h2 className="text-xl font-bold flex items-center gap-2 mb-2 text-gray-800 dark:text-white relative z-10">
-                <AlertTriangle className="w-6 h-6 text-red-500" /> 
-                Defaulters List
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 relative z-10">
-                View and export a list of students who have pending dues or unpaid invoices.
-              </p>
-
-              <div className="flex-1 flex flex-col relative z-10">
-                <div className="space-y-4 opacity-50 pointer-events-none mb-6">
-                   <div className="space-y-1.5">
-                    <Label className="ml-1 text-gray-700 dark:text-gray-300">Target Month (Coming Soon)</Label>
-                    <div className="relative">
-                       <Input type="month" disabled className={glassInputClass} />
-                    </div>
+                <div className="space-y-1.5">
+                  <Label className="ml-1 text-gray-700 dark:text-gray-300">End Date</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    <Input 
+                      type="date" 
+                      required
+                      className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
+                      value={dateRange.endDate} 
+                      onChange={e => setDateRange({...dateRange, endDate: e.target.value})} 
+                    />
                   </div>
                 </div>
-
-                <div className="mt-auto pt-6">
-                  <Button 
-                    type="button" 
-                    onClick={handleDefaultersList}
-                    variant="outline"
-                    className="w-full bg-white/30 dark:bg-black/30 backdrop-blur border-red-500/30 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all rounded-lg h-12"
-                  >
-                    <AlertTriangle className="w-5 h-5 mr-2" /> 
-                    Generate Defaulters List
-                  </Button>
-                </div>
               </div>
-            </div>
 
+              <div className="mt-auto pt-6">
+                <Button 
+                  type="submit" 
+                  disabled={loadingCollection}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 dark:bg-white/5 text-white shadow-lg hover:shadow-blue-500/30 transition-all rounded-lg h-12 border-0"
+                >
+                  {loadingCollection ? <Loader small /> : (
+                    <>
+                      <Download className="w-5 h-5 mr-2" /> 
+                      Generate Report
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
+
         </div>
       </div>
     </>
