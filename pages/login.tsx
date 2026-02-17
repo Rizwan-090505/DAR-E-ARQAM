@@ -61,8 +61,14 @@ export default function AuthPage() {
         // or just let them fall back to the default route.
       }
 
+      // --- NEW LOGIC: Store the role in localStorage ---
+      // We use a fallback to 'user' just in case the profileData doesn't have a role set
+      const userRole = profileData?.role || 'user'
+      localStorage.setItem('UserRole', userRole)
+      // -------------------------------------------------
+
       // 3. Navigate based on role
-      if (profileData?.role === 'admin') {
+      if (userRole === 'admin') {
         router.push('/admin')
       } else {
         router.push('/')

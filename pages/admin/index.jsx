@@ -136,7 +136,7 @@ export default function AdminDashboard() {
         { label: "Generate Fee", icon: FilePlus, href: "/admin/fee/generate", color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-500/20" },
         { label: "Fee Receipts", icon: Wallet, href: "/admin/receipts", color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-500/20" },
         { label: "All Invoices", icon: FileText, href: "/admin/invoices", color: "text-teal-600", bg: "bg-teal-500/10", border: "border-teal-200 dark:border-teal-500/20" },
-        { label: "Financial Reports", icon: BarChart3, href: "/admin/report", color: "text-cyan-600", bg: "bg-cyan-500/10", border: "border-cyan-200 dark:border-cyan-500/20" },
+        { label: "Fee Reports", icon: BarChart3, href: "/admin/report", color: "text-cyan-600", bg: "bg-cyan-500/10", border: "border-cyan-200 dark:border-cyan-500/20" },
       ]
     },
     { 

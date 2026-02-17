@@ -24,6 +24,7 @@ function InvoicesPageContent() {
   const [loading, setLoading] = useState(true)
   const [invoices, setInvoices] = useState([])
   const [classes, setClasses] = useState([])
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false) 
     
   // Pagination State
   const [page, setPage] = useState(0)
@@ -41,6 +42,22 @@ function InvoicesPageContent() {
 
   // --- Initialization ---
   useEffect(() => {
+    // Check user role from localStorage on mount
+    const checkUserRole = () => {
+      try {
+        const userRole = localStorage.getItem("UserRole")
+        // Check if the role is 'superadmin' (added toLowerCase for safety)
+        if (userRole && userRole.toLowerCase() === "superadmin") {
+          setIsSuperAdmin(true)
+        } else {
+          setIsSuperAdmin(false)
+        }
+      } catch (error) {
+        console.error("Error reading UserRole from local storage:", error)
+      }
+    }
+
+    checkUserRole()
     fetchClasses()
   }, [])
 
@@ -113,6 +130,11 @@ function InvoicesPageContent() {
   }
 
   const handleDelete = async (id) => {
+    if (!isSuperAdmin) {
+      toast({ title: "Unauthorized", description: "Only superadmins can delete invoices.", variant: "destructive" })
+      return
+    }
+
     if (!confirm("Are you sure you want to delete this invoice? This cannot be undone.")) return
     try {
       await supabase.from("fee_invoice_details").delete().eq("invoice_id", id)
@@ -126,7 +148,6 @@ function InvoicesPageContent() {
   }
 
   const handlePrint = (id) => {
-    // Navigate to /invoice/print and pass the ID as an array in query params
     const idArray = JSON.stringify([id])
     router.push(`/admin/invoice/print?invoices=${idArray}`)
   }
@@ -405,11 +426,18 @@ function InvoicesPageContent() {
                             </Link>
                           )}
 
+                          {/* DELETE BUTTON (Conditionally Disabled) */}
                           <Button 
                             size="icon" 
                             variant="ghost" 
                             onClick={() => handleDelete(inv.id)}
-                            className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                            disabled={!isSuperAdmin}
+                            title={!isSuperAdmin ? "Only superadmins can delete invoices" : "Delete invoice"}
+                            className={`h-8 w-8 rounded-full transition-colors ${
+                              isSuperAdmin 
+                                ? "text-rose-400 hover:text-rose-600 hover:bg-rose-50" 
+                                : "text-slate-300 opacity-50 cursor-not-allowed"
+                            }`}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
