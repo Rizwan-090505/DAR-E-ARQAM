@@ -35,16 +35,40 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // 1. Authenticate the user
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: loginEmail,
       password: loginPassword,
     })
 
-    if (error) {
-      setError(error.message)
-    } else if (data?.user) {
-      router.push('/')
+    if (authError) {
+      setError(authError.message)
+      setLoading(false)
+      return
     }
+
+    // 2. If login is successful, fetch the user's role from the profiles table
+    if (authData?.user) {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (profileError) {
+        console.error("Error fetching profile role:", profileError)
+        // If there's an error fetching the profile, you might want to handle it 
+        // or just let them fall back to the default route.
+      }
+
+      // 3. Navigate based on role
+      if (profileData?.role === 'admin') {
+        router.push('/admin')
+      } else {
+        router.push('/')
+      }
+    }
+    
     setLoading(false)
   }
 
