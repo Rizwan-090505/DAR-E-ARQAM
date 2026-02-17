@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "../../utils/supabaseClient"
 import Navbar from "../../components/Navbar"
 import Loader from "../../components/Loader"
 import { Button } from "../../components/ui/button"
@@ -13,7 +12,7 @@ import {
   Download, AlertTriangle, FileBarChart, Users
 } from "lucide-react"
 import { useToast } from "../../hooks/use-toast"
-import { generateCollectionReportBlob } from "../../utils/collectionReport" // Adjust path if needed
+import { generateCollectionReportBlob } from "../../utils/collectionReport" 
 
 export default function ReportsPage() {
   const router = useRouter()
@@ -24,7 +23,7 @@ export default function ReportsPage() {
   
   // Date Range State
   const [dateRange, setDateRange] = useState({
-    startDate: new Date().toISOString().split('T')[0], // Defaults to today
+    startDate: new Date().toISOString().split('T')[0], 
     endDate: new Date().toISOString().split('T')[0]
   })
 
@@ -34,105 +33,10 @@ export default function ReportsPage() {
     setLoadingCollection(true)
 
     try {
-      // 1. Fetch data from Supabase using Pagination (Bypass 1000 row limit)
-      let allReceipts = []
-      let fetchMore = true
-      let from = 0
-      const pageSize = 1000 // Supabase default max
+      // 1. Await the blob generation from our utility function
+      const pdfBlob = await generateCollectionReportBlob(dateRange.startDate, dateRange.endDate)
 
-      while (fetchMore) {
-        const to = from + pageSize - 1
-
-        const { data: receiptsChunk, error } = await supabase
-          .from("fee_payments") 
-          .select(`
-            *,
-            fee_invoice_details (
-              fee_type
-            ),
-            fee_invoices (
-              id,
-              invoice_date,
-              students (
-                studentid,
-                name,
-                fathername,
-                class_id,
-                classes ( name )
-              )
-            )
-          `)
-          .gte("paid_at", `${dateRange.startDate}T00:00:00.000Z`)
-          .lte("paid_at", `${dateRange.endDate}T23:59:59.999Z`)
-          .order('paid_at', { ascending: false })
-          .range(from, to) // Added range for pagination
-
-        if (error) throw error
-
-        if (receiptsChunk && receiptsChunk.length > 0) {
-          allReceipts.push(...receiptsChunk)
-          from += pageSize
-          
-          // If the chunk is smaller than the page size, we've reached the end
-          if (receiptsChunk.length < pageSize) {
-            fetchMore = false
-          }
-        } else {
-          // No more records returned
-          fetchMore = false
-        }
-      }
-
-      if (!allReceipts || allReceipts.length === 0) {
-        toast({ title: "No collections found for this date range.", variant: "destructive" })
-        setLoadingCollection(false)
-        return
-      }
-
-      // 2. Grouping Logic (Matching the Fee Receipts Page)
-      const groupedMap = new Map()
-      const groupedData = []
-
-      // Use allReceipts instead of receipts
-      allReceipts.forEach((rcpt) => {
-        const dateStr = new Date(rcpt.paid_at).toLocaleDateString()
-        const key = `${rcpt.invoice_id}_${dateStr}` // Group by invoice and date
-
-        if (!groupedMap.has(key)) {
-          const newGroup = {
-            ...rcpt, // Base record
-            amount: rcpt.amount || 0, // We will aggregate this
-            feeLabels: new Set([rcpt.fee_invoice_details?.fee_type || "General Payment"]),
-            paymentMethods: new Set([rcpt.payment_method || "Cash"]),
-            groupedPayments: [rcpt] // Keep all raw payments
-          }
-          groupedMap.set(key, newGroup)
-          groupedData.push(newGroup)
-        } else {
-          const existing = groupedMap.get(key)
-          existing.amount += (rcpt.amount || 0)
-          existing.feeLabels.add(rcpt.fee_invoice_details?.fee_type || "General Payment")
-          existing.paymentMethods.add(rcpt.payment_method || "Cash")
-          existing.groupedPayments.push(rcpt)
-        }
-      })
-
-      // 3. Format data to match what the PDF util expects
-      const formattedReceipts = groupedData.map(g => ({
-        ...g,
-        displayFeeLabel: Array.from(g.feeLabels).join(", "),
-        displayMethod: Array.from(g.paymentMethods).join(", ")
-      }))
-
-      // 4. Format Date Range string for the PDF header
-      const startStr = new Date(dateRange.startDate).toLocaleDateString()
-      const endStr = new Date(dateRange.endDate).toLocaleDateString()
-      const dateRangeString = startStr === endStr ? startStr : `${startStr} to ${endStr}`
-
-      // 5. Generate the Blob
-      const pdfBlob = generateCollectionReportBlob(formattedReceipts, dateRangeString)
-
-      // 6. Create a URL and open it in a new tab for preview/printing
+      // 2. Create a URL and open it in a new tab for preview/printing
       const blobUrl = URL.createObjectURL(pdfBlob)
       window.open(blobUrl, "_blank")
       
@@ -143,7 +47,11 @@ export default function ReportsPage() {
 
     } catch (error) {
       console.error(error)
-      toast({ title: "Failed to generate report", description: error.message, variant: "destructive" })
+      toast({ 
+        title: "Failed to generate report", 
+        description: error.message, 
+        variant: "destructive" 
+      })
     } finally {
       setLoadingCollection(false)
     }
@@ -186,7 +94,6 @@ export default function ReportsPage() {
             
             {/* OPTION A: COLLECTION REPORT (Glass Card) */}
             <div className={`${glassCardClass} flex flex-col`}>
-              {/* Background Icon Detail */}
               <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                 <FileBarChart className="w-24 h-24 text-blue-500" />
               </div>
@@ -234,7 +141,7 @@ export default function ReportsPage() {
                   <Button 
                     type="submit" 
                     disabled={loadingCollection}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-blue-500/30 transition-all rounded-lg h-12 border-0"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 dark:bg-white/5 text-white shadow-lg hover:shadow-blue-500/30 transition-all rounded-lg h-12 border-0"
                   >
                     {loadingCollection ? <Loader small /> : (
                       <>
@@ -249,7 +156,6 @@ export default function ReportsPage() {
 
             {/* OPTION B: DEFAULTERS LIST (Glass Card) */}
             <div className={`${glassCardClass} flex flex-col border-red-200/50 dark:border-red-900/30`}>
-              {/* Background Icon Detail */}
               <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                 <Users className="w-24 h-24 text-red-500" />
               </div>
@@ -263,11 +169,12 @@ export default function ReportsPage() {
               </p>
 
               <div className="flex-1 flex flex-col relative z-10">
-                {/* Visual Placeholder for future filters */}
                 <div className="space-y-4 opacity-50 pointer-events-none mb-6">
                    <div className="space-y-1.5">
                     <Label className="ml-1 text-gray-700 dark:text-gray-300">Target Month (Coming Soon)</Label>
-                    <Input type="month" disabled className={glassInputClass} />
+                    <div className="relative">
+                       <Input type="month" disabled className={glassInputClass} />
+                    </div>
                   </div>
                 </div>
 
@@ -291,4 +198,3 @@ export default function ReportsPage() {
     </>
   )
 }
-
