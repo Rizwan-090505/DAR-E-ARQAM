@@ -305,13 +305,13 @@ function GenerateInvoicesContent() {
 
         // 6. Messaging Integration (Standardized Template)
         if (sendMessage) {
-            let finalMessage = `*Fee Invoice Alert* 🔔\n\nDear *${student.name}*,\nYour fee invoice for *${config.feeLabel}* has been generated.\n\n*Fee Breakdown:*\nTuition Fee: Rs. ${monthlyFee}`;
+            let finalMessage = `*Fee Invoice Alert* \n\nDear *${student.name}*,\nYour fee invoice for *${config.feeLabel}* has been generated.\n\n*Fee Breakdown:*\nTuition Fee: Rs. ${monthlyFee}`;
             if (annual > 0) finalMessage += `\nAnnual Charges: Rs. ${annual}`;
             if (stationery > 0) finalMessage += `\nStationery: Rs. ${stationery}`;
             if (customFee > 0) finalMessage += `\n${config.customFeeLabel || 'Custom Charges'}: Rs. ${customFee}`;
             if (totalCarryOverAmount > 0) finalMessage += `\nArrears: Rs. ${totalCarryOverAmount}`;
             
-            finalMessage += `\n\n💰 *Total Due:* Rs. ${grandTotal}\n📅 *Due Date:* ${config.dueDate}\n\nPlease clear the dues before the deadline. Thank you! 🏫`;
+            finalMessage += `\n\n *Total Due:* Rs. ${grandTotal}\n📅 *Due Date:* ${config.dueDate}\n\nPlease clear the dues before the deadline. Thank you! `;
 
             // Updated per new schema
             await supabase.from("messages").insert({
@@ -356,22 +356,22 @@ function GenerateInvoicesContent() {
   }
 
   // --- Styles ---
-  const glassCardClass = "relative overflow-hidden rounded-xl border border-white/20 bg-white/40 dark:bg-black/40 backdrop-blur-xl shadow-sm p-4"
-  const inputClass = "h-9 bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50"
+  const glassCardClass = "relative overflow-hidden rounded-xl border border-white/20 bg-black/40 backdrop-blur-xl shadow-sm p-4"
+  const inputClass = "h-9 bg-white dark:bg-white/5 border-white/20 focus:border-blue-500/50 text-gray-800 dark:text-white"
 
   return (
     <>
       <Navbar />
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0b1220] p-4 transition-colors duration-500 pb-20">
+      <div className="min-h-screen bg-[#0b1220] p-4 transition-colors duration-500 pb-20">
         <div className="max-w-7xl mx-auto space-y-4">
           
           {/* HEADER */}
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => router.back()} className="rounded-full bg-white backdrop-blur h-8 w-8 p-0">
+            <Button variant="outline" size="sm" onClick={() => router.back()} className="rounded-full bg-white/10 text-white hover:bg-white/20 border-white/20 backdrop-blur h-8 w-8 p-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Fee Generation</h1>
+              <h1 className="text-2xl font-bold text-black dark:text-white">Fee Generation</h1>
             </div>
           </div>
 
@@ -382,7 +382,7 @@ function GenerateInvoicesContent() {
                 <div className="lg:col-span-1">
                    <Label className="text-xs text-gray-500 font-semibold uppercase mb-1">Class</Label>
                    <select 
-                      className={`w-full rounded-md border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass}`}
+                      className={`w-full rounded-md border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass} [&>option]:bg-[#0b1220]`}
                       value={selectedClassId}
                       onChange={handleClassChange}
                     >
@@ -401,7 +401,7 @@ function GenerateInvoicesContent() {
                    <Input type="date" value={config.dueDate} onChange={(e) => setConfig({...config, dueDate: e.target.value})} className={inputClass}/>
                 </div>
 
-                <div className="lg:col-span-3 grid grid-cols-3 gap-2 border-l pl-3 border-gray-200 dark:border-white/10">
+                <div className="lg:col-span-3 grid grid-cols-3 gap-2 border-l pl-3 border-white/10">
                    <div>
                       <Label className="text-[10px] text-gray-500 font-semibold uppercase mb-1">Global Annual</Label>
                       <Input type="number" placeholder="0" value={config.annualCharges} onChange={(e) => setConfig({...config, annualCharges: e.target.value})} className={inputClass} />
@@ -418,7 +418,7 @@ function GenerateInvoicesContent() {
                           placeholder="Custom Label" 
                           value={config.customFeeLabel} 
                           onChange={(e) => setConfig({...config, customFeeLabel: e.target.value})} 
-                          className="bg-transparent border-b border-gray-300 dark:border-gray-600 focus:outline-none focus:border-blue-500 w-full font-semibold placeholder:text-gray-400 placeholder:font-normal"
+                          className="bg-transparent border-b border-gray-600 text-white focus:outline-none focus:border-blue-500 w-full font-semibold placeholder:text-gray-400 placeholder:font-normal"
                         />
                       </Label>
                       <Input type="number" placeholder="0" value={config.customFeeDefault} onChange={(e) => setConfig({...config, customFeeDefault: e.target.value})} className={inputClass} />
@@ -433,13 +433,13 @@ function GenerateInvoicesContent() {
              </div>
              
              {/* Labels Row */}
-             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+             <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                 <div className="flex flex-col">
                     <Label className="text-[10px] text-gray-400 uppercase font-bold">Main Fee Label (e.g. Tuition Fee)</Label>
-                    <Input value={config.feeLabel} onChange={(e) => setConfig({...config, feeLabel: e.target.value})} className="h-7 w-64 text-xs bg-transparent border-none p-0 focus-visible:ring-0 placeholder:text-gray-300" placeholder="e.g. Tuition Fee - Oct" />
+                    <Input value={config.feeLabel} onChange={(e) => setConfig({...config, feeLabel: e.target.value})} className="h-7 w-64 text-xs bg-transparent border-none p-0 focus-visible:ring-0 placeholder:text-gray-400 text-white" placeholder="e.g. Tuition Fee - Oct" />
                 </div>
                 <div className="flex justify-end">
-                    <div className="flex items-center gap-2 text-[10px] text-orange-600 bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded-full w-max">
+                    <div className="flex items-center gap-2 text-[10px] text-orange-600 bg-orange-900/20 px-3 py-1 rounded-full w-max">
                          <AlertCircle className="w-3 h-3" />
                          <span>Unpaid arrears are automatically fetched and carried over.</span>
                     </div>
@@ -456,9 +456,9 @@ function GenerateInvoicesContent() {
                        id="send-sms"
                        checked={sendMessage}
                        onChange={(e) => setSendMessage(e.target.checked)}
-                       className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer"
+                       className="w-4 h-4 rounded border-gray-600 bg-white/5 text-green-600 focus:ring-green-500 accent-green-600 cursor-pointer"
                     />
-                    <Label htmlFor="send-sms" className="cursor-pointer font-bold text-sm text-gray-800 dark:text-gray-200 flex items-center gap-1">
+                    <Label htmlFor="send-sms" className="cursor-pointer font-bold text-sm text-gray-200 flex items-center gap-1">
                        <MessageSquare className="w-4 h-4 text-green-600" /> WhatsApp / SMS Alert on Generation
                     </Label>
                 </div>
@@ -467,7 +467,7 @@ function GenerateInvoicesContent() {
              {sendMessage && (
                <div className="pl-6 pt-1">
                  <Label className="text-[10px] text-gray-500 font-semibold mb-1 block">Standardized Message Preview</Label>
-                 <div className="w-full mt-1 p-3 text-xs rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/50 text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed font-medium">
+                 <div className="w-full mt-1 p-3 text-xs rounded-md border border-white/10 bg-black/50 text-gray-800 dark:text-gray-300 whitespace-pre-wrap leading-relaxed font-medium">
                    *Fee Invoice Alert* 🔔{"\n\n"}
                    Dear *[Student Name]*,{"\n"}
                    Your fee invoice for *{config.feeLabel || "Tuition Fee"}* has been generated.{"\n\n"}
@@ -486,17 +486,17 @@ function GenerateInvoicesContent() {
           </div>
 
           {/* MAIN CONTENT: STUDENT TABLE */}
-          <div className="space-y-2 bg-white dark:bg-[#111827] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
+          <div className="space-y-2 bg-[#111827] rounded-xl border border-gray-800 shadow-sm overflow-hidden">
              
-              <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/5">
-                  <h3 className="font-bold flex items-center gap-2 text-gray-700 dark:text-gray-200">
+              <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-white/5">
+                  <h3 className="font-bold flex items-center gap-2 text-gray-200">
                     <Users className="w-4 h-4" /> Eligible Students
                     <span className="text-xs font-normal text-gray-400">({students.length})</span>
                   </h3>
               </div>
 
               {!selectedClassId ? (
-                   <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 m-4 rounded-xl">
+                   <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-800 m-4 rounded-xl">
                      <Filter className="w-8 h-8 mb-2 opacity-20" />
                      <p className="text-sm">Select a class above to load students</p>
                    </div>
@@ -505,19 +505,19 @@ function GenerateInvoicesContent() {
                      <Loader />
                    </div>
               ) : students.length === 0 ? (
-                  <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 m-4 rounded-xl">
+                  <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-800 m-4 rounded-xl">
                     <CheckSquare className="w-8 h-8 mb-2 opacity-20" />
                     <p className="text-sm">No eligible students found.</p>
                   </div>
               ) : (
                   <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm text-gray-600 dark:text-gray-300">
-                          <thead className="bg-gray-100/50 dark:bg-gray-800/50 text-xs uppercase text-gray-500 dark:text-gray-400 border-b dark:border-gray-800">
+                      <table className="w-full text-left text-sm text-gray-300">
+                          <thead className="bg-gray-800/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                               <tr>
                                   <th className="p-3 w-10 text-center">
                                       <input 
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+                                        className="w-4 h-4 rounded border-gray-600 bg-white/5 text-blue-800 dark:text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
                                         checked={selectedStudentIds.size === students.length && students.length > 0}
                                         onChange={toggleSelectAll}
                                       />
@@ -527,11 +527,11 @@ function GenerateInvoicesContent() {
                                   <th className="p-3 font-semibold w-24">Arrears</th>
                                   <th className="p-3 font-semibold w-28">Annual Rs.</th>
                                   <th className="p-3 font-semibold w-28">Stat. Rs.</th>
-                                  <th className="p-3 font-semibold w-28 text-blue-600 dark:text-blue-400">{config.customFeeLabel || "Custom"} Rs.</th>
+                                  <th className="p-3 font-semibold w-28 text-blue-400">{config.customFeeLabel || "Custom"} Rs.</th>
                                   <th className="p-3 font-semibold text-right w-24">Est. Total</th>
                               </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                          <tbody className="divide-y divide-gray-800">
                               {students.map((student) => {
                                 const isSelected = selectedStudentIds.has(student.studentid)
                                 
@@ -545,18 +545,18 @@ function GenerateInvoicesContent() {
                                 return (
                                   <tr 
                                     key={student.studentid} 
-                                    className={`hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${isSelected ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}
+                                    className={`hover:bg-white/5 transition-colors ${isSelected ? 'bg-blue-900/10' : ''}`}
                                   >
                                       <td className="p-3 text-center">
                                           <input 
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+                                            className="w-4 h-4 rounded border-gray-600 bg-white/5 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
                                             checked={isSelected}
                                             onChange={() => toggleStudent(student.studentid)}
                                           />
                                       </td>
                                       <td className="p-3">
-                                          <div className="font-bold text-gray-900 dark:text-white line-clamp-1">{student.name}</div>
+                                          <div className="font-bold text-blue-500 dark:text-white line-clamp-1">{student.name}</div>
                                           <div className="text-[11px] text-gray-400">{student.fathername} • {student.studentid}</div>
                                       </td>
                                       <td className="p-3 text-gray-500 font-medium">
@@ -568,7 +568,7 @@ function GenerateInvoicesContent() {
                                       <td className="p-3">
                                           <Input 
                                             type="number" 
-                                            className="h-7 w-20 text-xs" 
+                                            className="h-7 w-20 text-xs bg-white/5 border-gray-700 text-white placeholder:text-gray-500" 
                                             placeholder={config.annualCharges}
                                             value={studentFees[student.studentid]?.annual !== undefined ? studentFees[student.studentid].annual : ""}
                                             onChange={(e) => handleStudentFeeChange(student.studentid, 'annual', e.target.value)}
@@ -577,7 +577,7 @@ function GenerateInvoicesContent() {
                                       <td className="p-3">
                                           <Input 
                                             type="number" 
-                                            className="h-7 w-20 text-xs" 
+                                            className="h-7 w-20 text-xs bg-white/5 border-gray-700 text-white placeholder:text-gray-500" 
                                             placeholder={config.stationeryCharges}
                                             value={studentFees[student.studentid]?.stationery !== undefined ? studentFees[student.studentid].stationery : ""}
                                             onChange={(e) => handleStudentFeeChange(student.studentid, 'stationery', e.target.value)}
@@ -586,14 +586,14 @@ function GenerateInvoicesContent() {
                                       <td className="p-3">
                                           <Input 
                                             type="number" 
-                                            className="h-7 w-20 text-xs" 
+                                            className="h-7 w-20 text-xs bg-white/5 border-gray-700 text-white placeholder:text-gray-500" 
                                             placeholder={config.customFeeDefault}
                                             value={studentFees[student.studentid]?.custom !== undefined ? studentFees[student.studentid].custom : ""}
                                             onChange={(e) => handleStudentFeeChange(student.studentid, 'custom', e.target.value)}
                                           />
                                       </td>
                                       <td className="p-3 text-right">
-                                          <div className="font-mono font-bold text-green-600 dark:text-green-500">
+                                          <div className="font-mono font-bold text-green-500">
                                             {estTotal.toLocaleString()}
                                           </div>
                                       </td>
@@ -613,7 +613,7 @@ function GenerateInvoicesContent() {
 
 export default function GenerateInvoicesPage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader /></div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center bg-[#0b1220]"><Loader /></div>}>
       <GenerateInvoicesContent />
     </Suspense>
   )
