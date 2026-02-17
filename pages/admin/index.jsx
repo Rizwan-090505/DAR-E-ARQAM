@@ -6,19 +6,17 @@ import Loader from '../../components/Loader'
 import Breadcrumbs from '../../components/Breadcrumbs'
 import { 
   Users, 
-  Layers, 
+  UserPlus,
   FileText, 
-  CreditCard, 
   Banknote, 
   MessageSquareWarning, 
   Database, 
   FilePlus, 
   Wallet, 
   HelpCircle, 
-  ArrowRight,
   AlertCircle,
-  TrendingUp,
-  ChevronRight
+  ChevronRight,
+  BarChart3
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useToast } from "../../hooks/use-toast"
@@ -29,11 +27,12 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   
   const [stats, setStats] = useState({
-    studentCount: 0,
-    classCount: 0,
-    monthlyInvoices: 0,
-    monthlyPayingStudents: 0,
-    monthlyComplaints: 0
+    totalStudents: 0,
+    newAdmissions: 0,
+    recentInquiries: 0,
+    unresolvedComplaints: 0,
+    recentInvoices: 0,
+    uniquePayments: 0
   })
 
   useEffect(() => {
@@ -42,26 +41,83 @@ export default function AdminDashboard() {
 
   const fetchAdminStats = async () => {
     setIsLoading(true)
-    const now = new Date()
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString()
+    
+    // Calculate 30 days ago from exactly right now
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const thirtyDaysAgoStr = thirtyDaysAgo.toISOString()
 
     try {
-      const { count: studentCount } = await supabase.from('students').select('*', { count: 'exact', head: true })
-      const { count: classCount } = await supabase.from('classes').select('*', { count: 'exact', head: true })
-      const { count: monthlyInvoices } = await supabase.from('fee_invoices').select('*', { count: 'exact', head: true }).gte('invoice_date', firstDay).lte('invoice_date', lastDay)
-      
-      const { data: payments } = await supabase.from('fee_payments').select('invoice_id').gte('paid_at', firstDay).lte('paid_at', lastDay)
-      let uniquePayingStudents = 0
-      if (payments && payments.length > 0) {
-        const invoiceIds = payments.map(p => p.invoice_id)
-        const { data: paidInvoices } = await supabase.from('fee_invoices').select('student_id').in('id', invoiceIds)
-        uniquePayingStudents = new Set(paidInvoices?.map(i => i.student_id)).size
+      // 1. Total number of students
+      // Using { count: 'exact', head: true } bypasses the 1000 row download limit, returning just the count integer
+      const { count: totalStudents } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+
+      // 2. Admissions in the last 30 days (joining_date)
+      const { count: newAdmissions } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+        .gte('joining_date', thirtyDaysAgoStr)
+
+      // 3. Inquiries in the last 30 days
+      const { count: recentInquiries } = await supabase
+        .from('inquiries')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', thirtyDaysAgoStr)
+
+      // 4. Unresolved complaints in last 30 days (status != Resolved AND status != Closed)
+      const { count: unresolvedComplaints } = await supabase
+        .from('complaints')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', thirtyDaysAgoStr)
+        .neq('status', 'Resolved')
+        .neq('status', 'Closed')
+
+      // 5. Total invoices generated in the last 30 days
+      // Note: Assumed table is fee_invoices based on existing code, filtered by created_at
+      const { count: recentInvoices } = await supabase
+        .from('fee_invoices')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', thirtyDaysAgoStr)
+
+      // 6. Distinct invoice payments in the last 30 days
+      // Implemented a pagination loop to safely fetch data if payments exceed the 1000 row Supabase limit
+      let allPayments = []
+      let hasMore = true
+      let page = 0
+      const limit = 1000
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('fee_payments')
+          .select('invoice_id')
+          .gte('paid_at', thirtyDaysAgoStr)
+          .range(page * limit, (page + 1) * limit - 1)
+
+        if (error) throw error
+
+        if (data && data.length > 0) {
+          allPayments.push(...data)
+          page++
+          if (data.length < limit) hasMore = false // We've reached the end
+        } else {
+          hasMore = false
+        }
       }
+      
+      // Filter distinct invoice_ids using a Set
+      const uniquePayments = new Set(allPayments.map(p => p.invoice_id)).size
 
-      const { count: monthlyComplaints } = await supabase.from('complaints').select('*', { count: 'exact', head: true }).gte('created_at', firstDay).lte('created_at', lastDay)
-
-      setStats({ studentCount: studentCount || 0, classCount: classCount || 0, monthlyInvoices: monthlyInvoices || 0, monthlyPayingStudents: uniquePayingStudents, monthlyComplaints: monthlyComplaints || 0 })
+      // Update state with all fetched values
+      setStats({ 
+        totalStudents: totalStudents || 0, 
+        newAdmissions: newAdmissions || 0, 
+        recentInquiries: recentInquiries || 0, 
+        unresolvedComplaints: unresolvedComplaints || 0, 
+        recentInvoices: recentInvoices || 0,
+        uniquePayments: uniquePayments || 0
+      })
 
     } catch (error) {
       console.error('Error fetching admin stats:', error)
@@ -80,6 +136,7 @@ export default function AdminDashboard() {
         { label: "Generate Fee", icon: FilePlus, href: "/admin/fee/generate", color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-500/20" },
         { label: "Fee Receipts", icon: Wallet, href: "/admin/receipts", color: "text-emerald-600", bg: "bg-emerald-500/10", border: "border-emerald-200 dark:border-emerald-500/20" },
         { label: "All Invoices", icon: FileText, href: "/admin/invoices", color: "text-teal-600", bg: "bg-teal-500/10", border: "border-teal-200 dark:border-teal-500/20" },
+        { label: "Financial Reports", icon: BarChart3, href: "/admin/report", color: "text-cyan-600", bg: "bg-cyan-500/10", border: "border-cyan-200 dark:border-cyan-500/20" },
       ]
     },
     { 
@@ -107,28 +164,29 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-500/30">
       <Navbar />
       
-      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-8 pb-20">
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-8 pb-20">
         <Breadcrumbs items={[{ label: 'Dashboard', href: '/admin' }]} />
 
-        {/* HEADER: Compact & Clean */}
+        {/* HEADER */}
         <div className="flex flex-row justify-between items-end border-b border-slate-200 dark:border-white/5 pb-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                Admin Overview
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} 
+              Last 30 Days Snapshot
             </p>
           </div>
         </div>
 
-        {/* STATS: High Density Row */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-           <StatsCard icon={Users} label="Total Students" value={stats.studentCount} color="blue" />
-           <StatsCard icon={Layers} label="Active Classes" value={stats.classCount} color="indigo" />
-           <StatsCard icon={FileText} label="Invoices Generated" value={stats.monthlyInvoices} color="orange" />
-           <StatsCard icon={Banknote} label="Paid This Month" value={stats.monthlyPayingStudents} color="emerald" />
-           <StatsCard icon={AlertCircle} label="Pending Complaints" value={stats.monthlyComplaints} color="rose" />
+        {/* STATS: High Density Row updated to fit 6 cards */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+           <StatsCard icon={Users} label="Total Students" value={stats.totalStudents} color="blue" />
+           <StatsCard icon={UserPlus} label="New Admissions" value={stats.newAdmissions} color="indigo" />
+           <StatsCard icon={HelpCircle} label="New Inquiries" value={stats.recentInquiries} color="amber" />
+           <StatsCard icon={AlertCircle} label="Active Complaints" value={stats.unresolvedComplaints} color="rose" />
+           <StatsCard icon={FileText} label="Invoices Generated" value={stats.recentInvoices} color="orange" />
+           <StatsCard icon={Banknote} label="Invoices Paid" value={stats.uniquePayments} color="emerald" />
         </div>
 
         {/* NAVIGATION: Compact Grid */}
@@ -197,6 +255,7 @@ function StatsCard({ icon: Icon, label, value, color }) {
     orange: "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10",
     emerald: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10",
     rose: "text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10",
+    amber: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10",
   }[color]
 
   return (

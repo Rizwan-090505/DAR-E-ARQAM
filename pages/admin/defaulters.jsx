@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "../../utils/supabaseClient"
 import { exportToCSV, exportToPDF } from "../../utils/exportUtils"
 import Navbar from "../../components/Navbar"
@@ -17,6 +17,7 @@ import { useToast } from "../../hooks/use-toast"
 
 function DefaulterListContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
 
   // --- State ---
@@ -29,26 +30,47 @@ function DefaulterListContent() {
   const [defaulters, setDefaulters] = useState([]) 
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set())
 
-  // Configuration & Filters
+  // Configuration & Filters (Respecting URL Params)
+  const urlStart = searchParams.get('startDate')
+  const urlEnd = searchParams.get('endDate')
+
   const [startDate, setStartDate] = useState(
-    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+    urlStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   )
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
+  const [endDate, setEndDate] = useState(
+    urlEnd || new Date().toISOString().split('T')[0]
+  )
   const [selectedClasses, setSelectedClasses] = useState(new Set())
 
   // --- Initialization ---
   useEffect(() => {
-    fetchClasses()
+    fetchInitialData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const fetchClasses = async () => {
+  // Combines class fetching, auto-selecting all, and auto-fetching defaulters
+  const fetchInitialData = async () => {
+    // 1. Fetch Classes
     const { data } = await supabase.from("classes").select("*").order('id')
-    setClasses(data || [])
+    const fetchedClasses = data || []
+    setClasses(fetchedClasses)
+
+    if (fetchedClasses.length > 0) {
+      // 2. Select All Classes
+      const allClassIds = new Set(fetchedClasses.map(c => c.id))
+      setSelectedClasses(allClassIds)
+
+      // 3. Auto-load Defaulter Data
+      await fetchDefaulters(Array.from(allClassIds))
+    }
   }
 
   // --- CORE LOGIC: Paginated Fetch & Grouping ---
-  const fetchDefaulters = async () => {
-    if (selectedClasses.size === 0) {
+  const fetchDefaulters = async (overrideClassIds = null) => {
+    // Use override IDs on initial load (since state might not be updated yet), otherwise use state
+    const classIdsArray = overrideClassIds || Array.from(selectedClasses)
+
+    if (classIdsArray.length === 0) {
       toast({ title: "Please select at least one class", variant: "destructive" })
       return
     }
@@ -57,8 +79,6 @@ function DefaulterListContent() {
     setSelectedStudentIds(new Set())
     
     try {
-      const classIdsArray = Array.from(selectedClasses)
-
       // 1. Fetch Students (Paginated to bypass 1000 limit)
       let students = []
       let fromStudents = 0
@@ -221,7 +241,7 @@ function DefaulterListContent() {
       })
 
       setDefaulters(defaulterData)
-      toast({ title: `Found ${defaulterData.length} defaulters`, variant: "default" })
+      toast({ title: `Loaded ${defaulterData.length} defaulters`, variant: "default" })
 
     } catch (error) {
       console.error(error)
@@ -305,9 +325,9 @@ function DefaulterListContent() {
     }
   }
 
-  // --- Styles ---
-  const glassCardClass = "relative overflow-hidden rounded-xl border border-white/20 bg-white/40 dark:bg-black/40 backdrop-blur-xl shadow-sm p-4 print:hidden"
-  const inputClass = "h-9 bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50"
+  // --- Styles (Matching Previous Page) ---
+  const glassCardClass = "relative overflow-hidden rounded-2xl border border-white/20 bg-white/40 dark:bg-black/40 backdrop-blur-xl shadow-xl p-6 transition-all hover:border-white/30 print:hidden print:shadow-none print:border-none print:p-0"
+  const glassInputClass = "flex h-10 w-full rounded-md border px-3 py-2 text-sm bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-500/70 [color-scheme:light] dark:[color-scheme:dark]"
 
   return (
     <>
@@ -315,23 +335,31 @@ function DefaulterListContent() {
         <Navbar />
       </div>
       
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0b1220] p-4 transition-colors duration-500 pb-20 print:bg-white print:p-0 print:m-0">
-        <div className="max-w-7xl mx-auto space-y-4 print:max-w-full">
+      {/* Updated Background matching previous page */}
+      <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718] p-4 md:p-8 transition-colors duration-500 pb-20 print:bg-white print:p-0 print:m-0">
+        <div className="max-w-7xl mx-auto space-y-6 print:max-w-full print:space-y-0">
           
           {/* HEADER */}
-          <div className="flex items-center justify-between print:hidden">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" onClick={() => router.back()} className="rounded-full bg-white backdrop-blur h-8 w-8 p-0">
-                <ArrowLeft className="w-4 h-4" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+            <div className="flex items-center gap-4">
+              <Button variant="outline" size="icon" onClick={() => router.back()} className="rounded-full h-10 w-10 bg-white/30 backdrop-blur border-white/20 hover:bg-white/50 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white dark:border-white/10">
+                <ArrowLeft className="w-5 h-5" />
               </Button>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Defaulter List</h1>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white drop-shadow-sm transition-all">
+                  Defaulter List
+                </h1>
+                <p className="text-gray-600 dark:text-slate-400 text-sm font-medium transition-all">
+                  Manage and notify students with pending fees.
+                </p>
+              </div>
             </div>
             
             <div className="flex items-center gap-2">
-              <Button onClick={() => exportToCSV(defaulters)} variant="outline" className="h-9 gap-2 text-xs font-semibold bg-white dark:bg-transparent text-gray-800 dark:text-gray-200">
+              <Button onClick={() => exportToCSV(defaulters)} variant="outline" className="h-10 gap-2 text-sm font-semibold bg-white/40 dark:bg-white/5 backdrop-blur-md border-white/20 text-gray-800 dark:text-gray-200 hover:bg-white/60 dark:hover:bg-white/10 transition-all rounded-lg shadow-sm">
                 <Download className="w-4 h-4" /> Export Excel
               </Button>
-              <Button onClick={() => exportToPDF(defaulters, startDate, endDate)} variant="outline" className="h-9 gap-2 text-xs font-semibold bg-white dark:bg-transparent text-gray-800 dark:text-gray-200">
+              <Button onClick={() => exportToPDF(defaulters, startDate, endDate)} variant="outline" className="h-10 gap-2 text-sm font-semibold bg-white/40 dark:bg-white/5 backdrop-blur-md border-white/20 text-gray-800 dark:text-gray-200 hover:bg-white/60 dark:hover:bg-white/10 transition-all rounded-lg shadow-sm">
                 <Printer className="w-4 h-4" /> Print / PDF
               </Button>
             </div>
@@ -339,49 +367,55 @@ function DefaulterListContent() {
 
           {/* TOP CONFIGURATION BAR */}
           <div className={glassCardClass}>
-             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
+             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
                
                {/* Date Range */}
-               <div className="lg:col-span-1 space-y-3 border-r border-gray-200 dark:border-gray-700 pr-4">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Invoice Date Range</h3>
-                  <div>
-                    <Label className="text-[10px] text-gray-500 font-semibold uppercase mb-1">From</Label>
-                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <Label className="text-[10px] text-gray-500 font-semibold uppercase mb-1">To</Label>
-                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
+               <div className="xl:col-span-1 space-y-4 border-b xl:border-b-0 xl:border-r border-gray-300 dark:border-gray-700 pb-6 xl:pb-0 xl:pr-6">
+                  <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <Filter className="w-4 h-4" /> Invoice Dates
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="ml-1 text-xs text-gray-600 dark:text-gray-400 font-semibold uppercase">From</Label>
+                      <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={glassInputClass} />
+                    </div>
+                    <div>
+                      <Label className="ml-1 text-xs text-gray-600 dark:text-gray-400 font-semibold uppercase">To</Label>
+                      <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={glassInputClass} />
+                    </div>
                   </div>
                </div>
 
                {/* Multi-Class Selection */}
-               <div className="lg:col-span-2 space-y-2">
+               <div className="xl:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Classes</h3>
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                      <Users className="w-4 h-4" /> Select Classes
+                    </h3>
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="h-6 text-[10px]"
+                      className="h-8 text-xs font-semibold bg-white/30 dark:bg-white/5 hover:bg-white/50 dark:hover:bg-white/10 text-gray-800 dark:text-gray-200 transition-all rounded-md"
                       onClick={() => setSelectedClasses(new Set(classes.map(c => c.id)))}
                     >
                       Select All
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-32 overflow-y-auto p-1 custom-scrollbar">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 max-h-40 overflow-y-auto p-1 custom-scrollbar">
                     {classes.map(c => (
                       <label 
                         key={c.id} 
-                        className={`flex items-start gap-2 p-2 w-full rounded-md border cursor-pointer transition-colors text-xs font-medium ${
+                        className={`flex items-start gap-2 p-2.5 w-full rounded-lg border cursor-pointer transition-all text-sm font-medium shadow-sm backdrop-blur-md ${
                           selectedClasses.has(c.id) 
-                            ? 'bg-blue-50 border-blue-300 text-blue-800 dark:bg-blue-900/40 dark:border-blue-600 dark:text-blue-100' 
-                            : 'bg-white border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-200'
+                            ? 'bg-blue-500/10 border-blue-500/50 text-blue-900 dark:bg-blue-500/20 dark:border-blue-500/50 dark:text-blue-100' 
+                            : 'bg-white/40 border-white/20 text-gray-700 dark:bg-black/20 dark:border-white/10 dark:text-gray-300 hover:bg-white/60 dark:hover:bg-white/5'
                         }`}
                       >
                         <input 
                           type="checkbox" 
                           checked={selectedClasses.has(c.id)}
                           onChange={() => toggleClass(c.id)}
-                          className="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                          className="w-4 h-4 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0 bg-transparent"
                         />
                         <span className="break-words whitespace-normal leading-tight">{c.name}</span>
                       </label>
@@ -390,9 +424,13 @@ function DefaulterListContent() {
                </div>
 
                {/* Actions */}
-               <div className="lg:col-span-1 flex flex-col justify-end h-full">
-                  <Button onClick={fetchDefaulters} disabled={fetching} className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-md text-sm font-bold">
-                    {fetching ? <Loader small /> : ( <><Filter className="w-4 h-4 mr-2" /> FETCH DEFAULTERS</> )}
+               <div className="xl:col-span-1 flex flex-col justify-end h-full pt-4 xl:pt-0">
+                  <Button 
+                    onClick={() => fetchDefaulters()} 
+                    disabled={fetching} 
+                    className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-blue-500/30 text-white shadow-lg transition-all rounded-xl border-0 font-bold"
+                  >
+                    {fetching ? <Loader small /> : ( <>APPLY & FETCH</> )}
                   </Button>
                </div>
 
@@ -401,14 +439,14 @@ function DefaulterListContent() {
 
           {/* BULK MESSAGING BAR */}
           {defaulters.length > 0 && (
-            <div className={`${glassCardClass} flex flex-col md:flex-row items-center justify-between gap-4`}>
-               <div className="flex items-center gap-3">
-                 <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full">
-                   <MessageSquare className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <div className={`${glassCardClass} flex flex-col md:flex-row items-center justify-between gap-4 py-4`}>
+               <div className="flex items-center gap-4">
+                 <div className="bg-blue-500/20 dark:bg-blue-500/20 p-3 rounded-xl backdrop-blur-sm border border-blue-500/20">
+                   <MessageSquare className="w-6 h-6 text-blue-700 dark:text-blue-400" />
                  </div>
                  <div>
-                   <h3 className="font-bold text-sm text-gray-900 dark:text-white">Bulk Formal Reminders</h3>
-                   <p className="text-[11px] text-gray-500">Send formal WhatsApp/SMS notices to selected defaulters.</p>
+                   <h3 className="font-bold text-lg text-gray-900 dark:text-white">Bulk Formal Reminders</h3>
+                   <p className="text-sm text-gray-600 dark:text-gray-400">Send formal WhatsApp/SMS notices to selected defaulters.</p>
                  </div>
                </div>
                
@@ -416,21 +454,23 @@ function DefaulterListContent() {
                  <Button 
                    onClick={handleSendMessages} 
                    disabled={submitting || selectedStudentIds.size === 0} 
-                   className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white text-xs font-bold gap-2"
+                   className="w-full md:w-auto bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 shadow-lg hover:shadow-green-500/30 text-white font-bold gap-2 h-12 px-6 rounded-xl border-0 transition-all"
                  >
-                   {submitting ? <Loader small /> : <><Send className="w-4 h-4" /> SEND {selectedStudentIds.size > 0 ? `TO (${selectedStudentIds.size})` : ''}</>}
+                   {submitting ? <Loader small /> : <><Send className="w-5 h-5" /> SEND NOTICES {selectedStudentIds.size > 0 ? `(${selectedStudentIds.size})` : ''}</>}
                  </Button>
                </div>
             </div>
           )}
 
           {/* MAIN CONTENT: DEFAULTER TABLE */}
-          <div className="bg-white dark:bg-[#111827] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden print:border-none print:shadow-none print:bg-transparent">
+          <div className={`${glassCardClass} !p-0 print:border-none print:shadow-none print:bg-transparent print:backdrop-blur-none`}>
              
-             <div className="flex justify-between items-center p-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-white/5 print:hidden">
-                 <h3 className="font-bold flex items-center gap-2 text-gray-700 dark:text-gray-200">
-                   <Users className="w-4 h-4" /> Defaulter Records
-                   <span className="text-xs font-normal text-gray-400">({defaulters.length})</span>
+             <div className="flex justify-between items-center p-5 border-b border-white/20 dark:border-white/10 bg-white/20 dark:bg-black/20 print:hidden">
+                 <h3 className="font-bold text-lg flex items-center gap-2 text-gray-800 dark:text-white">
+                   Defaulter Records
+                   <span className="text-sm font-medium bg-white/40 dark:bg-white/10 px-2.5 py-0.5 rounded-full text-gray-700 dark:text-gray-300 border border-white/20">
+                     {defaulters.length} found
+                   </span>
                  </h3>
              </div>
 
@@ -439,43 +479,43 @@ function DefaulterListContent() {
                    <Loader />
                  </div>
              ) : defaulters.length === 0 ? (
-                 <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-100 dark:border-gray-800 m-4 rounded-xl print:hidden">
-                   <CheckSquare className="w-8 h-8 mb-2 opacity-20" />
-                   <p className="text-sm">No defaulters found for the selected criteria.</p>
+                 <div className="h-64 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-700 m-6 rounded-2xl print:hidden bg-white/10 dark:bg-black/10">
+                   <CheckSquare className="w-10 h-10 mb-3 opacity-30" />
+                   <p className="text-base font-medium">No defaulters found for the selected criteria.</p>
                  </div>
              ) : (
                  <div className="overflow-x-auto print:overflow-visible custom-scrollbar">
-                     <table className="w-full text-left text-sm text-gray-600 dark:text-gray-300 print:text-black print:text-[10px]">
-                         <thead className="bg-gray-100/50 dark:bg-gray-800/50 text-[11px] uppercase text-gray-500 dark:text-gray-400 border-b dark:border-gray-800 print:bg-gray-100 print:text-black">
+                     <table className="w-full text-left text-sm text-gray-700 dark:text-gray-300 print:text-black print:text-[10px]">
+                         <thead className="bg-white/30 dark:bg-black/30 backdrop-blur-md text-xs uppercase text-gray-600 dark:text-gray-400 border-b border-white/20 dark:border-white/10 print:bg-gray-100 print:text-black print:border-gray-300">
                              <tr>
-                                 <th className="p-3 w-10 text-center print:hidden">
+                                 <th className="p-4 w-12 text-center print:hidden">
                                      <input 
                                          type="checkbox"
-                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+                                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer bg-white/50 dark:bg-black/50"
                                          checked={selectedStudentIds.size === defaulters.length && defaulters.length > 0}
                                          onChange={toggleSelectAll}
                                      />
                                  </th>
-                                 <th className="p-3 font-semibold">Student Name</th>
-                                 <th className="p-3 font-semibold">Class</th>
-                                 <th className="p-3 font-semibold text-right text-blue-600 dark:text-blue-400 print:text-black">Curr Tuition</th>
-                                 <th className="p-3 font-semibold text-right text-blue-600 dark:text-blue-400 print:text-black">Prev Tuition</th>
-                                 <th className="p-3 font-semibold text-right text-purple-600 dark:text-purple-400 print:text-black">Annual</th>
-                                 <th className="p-3 font-semibold text-right text-orange-600 dark:text-orange-400 print:text-black">Stationery</th>
-                                 <th className="p-3 font-semibold text-right">Arrears</th>
-                                 <th className="p-3 font-bold text-right text-red-600 dark:text-red-400 print:text-black">Total Pending</th>
-                                 <th className="p-3 font-semibold text-right text-green-600 dark:text-green-500 print:text-black">Rec. This Mth</th>
+                                 <th className="p-4 font-bold tracking-wider">Student Name</th>
+                                 <th className="p-4 font-bold tracking-wider">Class</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-blue-700 dark:text-blue-400 print:text-black">Curr Tuition</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-blue-700 dark:text-blue-400 print:text-black">Prev Tuition</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-purple-700 dark:text-purple-400 print:text-black">Annual</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-orange-700 dark:text-orange-400 print:text-black">Stationery</th>
+                                 <th className="p-4 font-bold tracking-wider text-right">Arrears</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-red-600 dark:text-red-400 print:text-black">Total Pending</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-emerald-600 dark:text-emerald-500 print:text-black">Rec. This Mth</th>
                              </tr>
                          </thead>
-                         <tbody className="divide-y divide-gray-100 dark:divide-gray-800 print:divide-gray-300">
+                         <tbody className="divide-y divide-white/10 dark:divide-white/5 print:divide-gray-300">
                              {defaulters.map((student) => {
                                const isSelected = selectedStudentIds.has(student.studentid)
                                return (
                                  <tr 
                                    key={student.studentid} 
-                                   className={`hover:bg-gray-50 dark:hover:bg-white/5 transition-colors ${isSelected ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''} print:bg-transparent`}
+                                   className={`hover:bg-white/40 dark:hover:bg-white/5 transition-colors ${isSelected ? 'bg-blue-500/10 dark:bg-blue-500/20' : ''} print:bg-transparent`}
                                  >
-                                     <td className="p-3 text-center print:hidden">
+                                     <td className="p-4 text-center print:hidden">
                                          <input 
                                              type="checkbox"
                                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
@@ -483,35 +523,35 @@ function DefaulterListContent() {
                                              onChange={() => toggleStudent(student.studentid)}
                                          />
                                      </td>
-                                     <td className="p-3">
-                                         <div className="font-bold text-gray-900 dark:text-white print:text-black">{student.name}</div>
-                                         <div className="text-[11px] text-gray-400 print:text-gray-600">{student.fathername} • {student.studentid}</div>
+                                     <td className="p-4">
+                                         <div className="font-bold text-gray-900 dark:text-white print:text-black text-base">{student.name}</div>
+                                         <div className="text-xs text-gray-500 dark:text-gray-400 print:text-gray-600">{student.fathername} • {student.studentid}</div>
                                      </td>
-                                     <td className="p-3 font-medium text-gray-700 dark:text-gray-300 print:text-black">
-                                         {student.className}
+                                     <td className="p-4 font-medium print:text-black">
+                                         <span className="bg-white/50 dark:bg-black/30 border border-white/20 dark:border-white/10 px-2 py-1 rounded-md text-xs">{student.className}</span>
                                      </td>
-                                     <td className="p-3 text-right font-medium text-blue-600 dark:text-blue-400 print:text-black">
+                                     <td className="p-4 text-right font-medium text-blue-700 dark:text-blue-300 print:text-black">
                                          {student.currentTuition > 0 ? student.currentTuition.toLocaleString() : "-"}
                                      </td>
-                                     <td className="p-3 text-right font-medium text-blue-600 dark:text-blue-400 print:text-black">
+                                     <td className="p-4 text-right font-medium text-blue-700 dark:text-blue-300 print:text-black">
                                          {student.prevTuition > 0 ? student.prevTuition.toLocaleString() : "-"}
                                      </td>
-                                     <td className="p-3 text-right font-medium text-purple-600 dark:text-purple-400 print:text-black">
+                                     <td className="p-4 text-right font-medium text-purple-700 dark:text-purple-300 print:text-black">
                                          {student.annualCharges > 0 ? student.annualCharges.toLocaleString() : "-"}
                                      </td>
-                                     <td className="p-3 text-right font-medium text-orange-600 dark:text-orange-400 print:text-black">
+                                     <td className="p-4 text-right font-medium text-orange-700 dark:text-orange-300 print:text-black">
                                          {student.stationeryCharges > 0 ? student.stationeryCharges.toLocaleString() : "-"}
                                      </td>
-                                     <td className="p-3 text-right font-medium text-gray-500 print:text-black">
+                                     <td className="p-4 text-right font-medium text-gray-600 dark:text-gray-400 print:text-black">
                                          {student.arrears > 0 ? student.arrears.toLocaleString() : "-"}
                                      </td>
-                                     <td className="p-3 text-right">
-                                         <div className="font-mono font-bold text-red-600 dark:text-red-500 print:text-black">
+                                     <td className="p-4 text-right">
+                                         <div className="font-mono font-bold text-base text-red-600 dark:text-red-400 print:text-black">
                                             {student.totalPending.toLocaleString()}
                                          </div>
                                      </td>
-                                     <td className="p-3 text-right">
-                                         <div className="font-mono font-bold text-green-600 dark:text-green-500 print:text-black">
+                                     <td className="p-4 text-right">
+                                         <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 print:text-black">
                                             {student.amountReceivedThisMonth > 0 ? student.amountReceivedThisMonth.toLocaleString() : "-"}
                                          </div>
                                      </td>
@@ -519,28 +559,28 @@ function DefaulterListContent() {
                                )
                              })}
                              
-                             <tr className="bg-gray-50 dark:bg-gray-800/30 font-bold print:bg-gray-100">
-                               <td colSpan={3} className="p-3 text-right print:hidden">Grand Totals:</td>
-                               <td colSpan={2} className="p-3 text-right hidden print:table-cell">Grand Totals:</td>
-                               <td className="p-3 text-right text-blue-600 dark:text-blue-400 print:text-black">
+                             <tr className="bg-white/40 dark:bg-black/40 backdrop-blur-md font-bold print:bg-gray-100 text-base">
+                               <td colSpan={3} className="p-4 text-right print:hidden text-gray-900 dark:text-white">Grand Totals:</td>
+                               <td colSpan={2} className="p-4 text-right hidden print:table-cell text-black">Grand Totals:</td>
+                               <td className="p-4 text-right text-blue-700 dark:text-blue-400 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.currentTuition, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right text-blue-600 dark:text-blue-400 print:text-black">
+                               <td className="p-4 text-right text-blue-700 dark:text-blue-400 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.prevTuition, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right text-purple-600 dark:text-purple-400 print:text-black">
+                               <td className="p-4 text-right text-purple-700 dark:text-purple-400 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.annualCharges, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right text-orange-600 dark:text-orange-400 print:text-black">
+                               <td className="p-4 text-right text-orange-700 dark:text-orange-400 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.stationeryCharges, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right print:text-black">
+                               <td className="p-4 text-right text-gray-900 dark:text-white print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.arrears, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right text-red-600 dark:text-red-500 print:text-black">
+                               <td className="p-4 text-right font-mono text-red-600 dark:text-red-500 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.totalPending, 0).toLocaleString()}
                                </td>
-                               <td className="p-3 text-right text-green-600 dark:text-green-500 print:text-black">
+                               <td className="p-4 text-right font-mono text-emerald-600 dark:text-emerald-500 print:text-black">
                                  {defaulters.reduce((acc, curr) => acc + curr.amountReceivedThisMonth, 0).toLocaleString()}
                                </td>
                              </tr>
@@ -557,7 +597,7 @@ function DefaulterListContent() {
 
 export default function DefaultersPage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader /></div>}>
+    <Suspense fallback={<div className="h-screen bg-gradient-to-br flex items-center justify-center from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718]"><Loader /></div>}>
       <DefaulterListContent />
     </Suspense>
   )
