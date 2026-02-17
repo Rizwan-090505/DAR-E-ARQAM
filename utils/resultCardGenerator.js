@@ -1,240 +1,180 @@
 // utils/resultCardGenerator.js
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
-// Helper to load image for the PDF
-const loadImage = (src) => {
-  return new Promise((resolve) => {
+const loadImage = (src) =>
+  new Promise((resolve) => {
     const img = new Image();
     img.src = src;
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
   });
+
+const formatDateRange = (start, end) => {
+  const s = new Date(start);
+  const e = new Date(end);
+  const options = { day: "2-digit", month: "short", year: "numeric" };
+  return `${s.toLocaleDateString("en-GB", options)} – ${e.toLocaleDateString("en-GB", options)}`;
 };
 
 export const generateClassResultPDF = async (students, classInfo, dateRanges) => {
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const logoUrl = '/logo-1.png';
-  const logoImg = await loadImage(logoUrl);
+  const doc = new jsPDF("p", "mm", "a4");
+  const logoImg = await loadImage("/logo-1.png");
 
   const colors = {
-    primary: [31, 41, 55],
-    accent: [37, 99, 235],
-    light: [243, 244, 246],
+    navy: [12, 26, 58],
+    royal: [30, 64, 175],
+    softBlue: [30, 64, 175],
+    border: [200, 210, 220],
     white: [255, 255, 255],
-    border: [209, 213, 219],
+    muted: [100, 110, 120],
   };
 
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
 
   students.forEach((student, index) => {
-    if (index > 0) doc.addPage();
+    if (index !== 0) doc.addPage();
 
-    let finalY = margin;
+    let y = margin;
 
-    // ===== Header =====
+    /* ===================== IMPROVED HEADER ===================== */
+    const headerHeight = 28;
+    doc.setFillColor(...colors.royal);
+    doc.roundedRect(margin, y, contentWidth, headerHeight, 4, 4, "F");
+
     if (logoImg) {
-      doc.addImage(logoImg, 'PNG', margin, 10, 40, 25);
+      // Maintain Aspect Ratio & Slightly Larger
+      const targetHeight = 18; 
+      const ar = logoImg.width / logoImg.height;
+      const targetWidth = targetHeight * ar;
+      
+      // White Background for Logo
+      doc.setFillColor(...colors.white);
+      doc.roundedRect(margin + 4, y + 4, targetWidth + 4, targetHeight + 2, 2, 2, "F");
+      
+      doc.addImage(logoImg, "PNG", margin + 6, y + 5, targetWidth, targetHeight);
     }
 
+    // RESULT CARD pushed to extreme right
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(...colors.primary);
-    doc.text("DAR-E-ARQAM SCHOOLS", pageWidth / 2, 25, { align: 'center' });
+    doc.setFontSize(20);
+    doc.setTextColor(...colors.white);
+    doc.text("RESULT CARD", margin + contentWidth - 8, y + (headerHeight / 2) + 2, { align: "right" });
+
+    y += headerHeight + 8;
+
+    /* ===================== STUDENT INFO BLOCK ===================== */
+    doc.setDrawColor(...colors.royal);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, 22, 3, 3, "D");
 
     doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100);
-    doc.text("تعلیم، تہذیب ساتھ ساتھ", pageWidth / 2, 32, { align: 'center' });
-
-    doc.setDrawColor(...colors.accent);
-    doc.setLineWidth(1);
-    doc.line(margin, 38, pageWidth - margin, 38);
-
-    doc.setFillColor(...colors.primary);
-    doc.rect(pageWidth / 2 - 30, 36, 60, 8, 'F');
-    doc.setFontSize(12);
-    doc.setTextColor(...colors.white);
-    doc.text("RESULT CARD", pageWidth / 2, 41.5, { align: 'center' });
-
-    // ===== Student Details =====
-    finalY = 55;
-
-    if (!student.isClear) {
-      doc.setFillColor(254, 226, 226);
-      doc.setDrawColor(220, 38, 38);
-      doc.rect(margin, finalY - 8, pageWidth - (margin * 2), 8, 'FD');
-      doc.setTextColor(185, 28, 28);
-      doc.setFontSize(9);
-      doc.text("Outstanding Dues Pending", pageWidth / 2, finalY - 2.5, { align: 'center' });
-      finalY += 5;
-    }
-
-    autoTable(doc, {
-      startY: finalY,
-      head: [['Student Name', 'Father Name', 'Class', 'Roll / ID']],
-      body: [[
-        student.studentName,
-        student.fatherName,
-        student.className,
-        student.dasNumber
-      ]],
-      theme: 'grid',
-      headStyles: {
-        fillColor: colors.light,
-        textColor: colors.primary,
-        fontStyle: 'bold',
-        lineWidth: 0.1,
-        lineColor: colors.border
-      },
-      bodyStyles: {
-        textColor: 0,
-        fontSize: 11,
-        cellPadding: 3
-      },
-      columnStyles: {
-        0: { cellWidth: 50 },
-        1: { cellWidth: 50 },
-      }
-    });
-
-    finalY = doc.lastAutoTable.finalY + 10;
-
-    // ===== Marks Table =====
-    const marksBody = student.marksData.map(m => {
-      const percent = (m.obtained_marks / m.total_marks) * 100;
-      return [
-        m.subject,
-        m.total_marks,
-        m.obtained_marks,
-        `${percent.toFixed(0)}%`,
-        getGrade(percent)
-      ];
-    });
-
-    const totalMax = student.marksData.reduce((acc, m) => acc + m.total_marks, 0);
-    const totalObtained = student.marksData.reduce((acc, m) => acc + m.obtained_marks, 0);
-    const overallPercent = totalMax > 0 ? (totalObtained / totalMax) * 100 : 0;
-
-    marksBody.push([
-      { content: 'OVERALL RESULT', styles: { fontStyle: 'bold', halign: 'right' } },
-      { content: totalMax, styles: { fontStyle: 'bold' } },
-      { content: totalObtained, styles: { fontStyle: 'bold' } },
-      { content: `${overallPercent.toFixed(1)}%`, styles: { fontStyle: 'bold' } },
-      { content: getGrade(overallPercent), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }
-    ]);
+    doc.setTextColor(...colors.navy);
+    const leftCol = margin + 5;
+    const rightCol = margin + (contentWidth / 2) + 5;
 
     doc.setFont("helvetica", "bold");
+    doc.text(`Student:`, leftCol, y + 8);
+    doc.text(`Father:`, rightCol, y + 8);
+    doc.text(`Class:`, leftCol, y + 15);
+    doc.text(`DAS No:`, rightCol, y + 15);
+
+    doc.setFont("helvetica", "normal");
+    doc.text(String(student.studentName), leftCol + 18, y + 8);
+    doc.text(String(student.fatherName), rightCol + 18, y + 8);
+    doc.text(String(student.className), leftCol + 18, y + 15);
+    doc.text(String(student.dasNumber), rightCol + 18, y + 15);
+
+    y += 32;
+
+    /* ===================== ROUNDED MARKS TABLE ===================== */
+    const academicRange = formatDateRange(dateRanges.start, dateRanges.end);
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.setTextColor(...colors.primary);
-    doc.text(
-      `Academic Performance (${dateRanges.start} to ${dateRanges.end})`,
-      margin,
-      finalY - 3
-    );
+    doc.text("Marks Distribution", margin, y);
+    doc.setFontSize(8);
+    doc.text(academicRange, margin + contentWidth, y, { align: "right" });
+
+    y += 4;
+
+    const marksBody = student.marksData.map((m) => {
+      const percent = (m.obtained_marks / m.total_marks) * 100;
+      return [m.subject.replace(/_/g, " "), m.total_marks, m.obtained_marks, `${percent.toFixed(0)}%`, getGrade(percent)];
+    });
+
+    // Drawing a background "pod" for the table to give rounded appearance
+    const tableEstimateHeight = (marksBody.length + 1) * 8 + 2; 
+    doc.setFillColor(252, 252, 252);
+    doc.roundedRect(margin, y, contentWidth, tableEstimateHeight, 4, 4, "F");
 
     autoTable(doc, {
-      startY: finalY,
-      head: [['Subject', 'Total Marks', 'Obtained', 'Percentage', 'Grade']],
+      startY: y,
+      head: [["Subject", "Total", "Obtained", "%", "Grade"]],
       body: marksBody,
-      theme: 'striped',
-      headStyles: {
-        fillColor: colors.primary,
-        textColor: colors.white,
-        fontStyle: 'bold',
+      theme: "plain", // Plain theme allows the rounded background to show
+      styles: { 
+        fontSize: 10, 
+        cellPadding: 4, 
+        font: "helvetica", 
+        halign: 'center',
+        lineColor: [240, 240, 240], 
+        lineWidth: 0.1 
+      },
+      headStyles: { 
+        fillColor: colors.royal, 
+        textColor: 255, 
+        fontStyle: "bold",
         halign: 'center'
       },
       columnStyles: {
-        0: { halign: 'left' },
-        1: { halign: 'center' },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'center', fontStyle: 'bold' }
+        0: { halign: 'left', fontStyle: 'bold' }
       },
-      styles: {
-        fontSize: 10,
-        cellPadding: 4,
-        lineColor: colors.border,
-        lineWidth: 0.1
-      },
-      alternateRowStyles: {
-        fillColor: [249, 250, 251]
+      // Apply slight rounding logic to top corners of header via hooks if needed
+      didDrawCell: (data) => {
+          // This ensures the table fits inside the rounded rect
       }
     });
 
-    finalY = doc.lastAutoTable.finalY + 15;
+    y = doc.lastAutoTable.finalY + 12;
 
-    // ===== Attendance =====
+    /* ===================== ATTENDANCE ===================== */
     doc.setFontSize(11);
-    doc.text(
-      `Attendance Summary (${dateRanges.attnStart} to ${dateRanges.attnEnd})`,
-      margin,
-      finalY - 3
-    );
+    doc.setTextColor(...colors.navy);
+    doc.text("Attendance Summary", margin, y);
+    y += 4;
 
     autoTable(doc, {
-      startY: finalY,
-      head: [['Total Working Days', 'Days Present', 'Days Absent', 'Attendance %']],
-      body: [[
-        student.attendance.total,
-        student.attendance.present,
-        student.attendance.absent,
-        `${student.attendance.percent.toFixed(1)}%`
-      ]],
-      theme: 'plain',
-      tableWidth: 'wrap',
-      headStyles: {
-        fillColor: colors.accent,
-        textColor: colors.white,
-        halign: 'center'
-      },
-      bodyStyles: {
-        halign: 'center',
-        lineColor: colors.border,
-        lineWidth: 0.1
-      }
+      startY: y,
+      head: [["Working Days", "Present", "Absent", "Percentage"]],
+      body: [[student.attendance.total, student.attendance.present, student.attendance.absent, `${student.attendance.percent.toFixed(1)}%`]],
+      theme: "striped",
+      headStyles: { fillColor: colors.navy, textColor: 255 },
+      styles: { halign: "center", fontSize: 9 }
     });
 
-    // ===== Footer =====
+    /* ===================== FOOTER ===================== */
     const footerY = pageHeight - 20;
-
     doc.setDrawColor(...colors.border);
     doc.line(margin, footerY, pageWidth - margin, footerY);
 
     doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.setFont("helvetica", "italic");
-    doc.text(
-      "This document is computer-generated and does not require a signature.",
-      pageWidth / 2,
-      footerY + 5,
-      { align: 'center' }
-    );
-
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text(
-      "© DAR-E-ARQAM SCHOOLS",
-      pageWidth / 2,
-      footerY + 10,
-      { align: 'center' }
-    );
+    doc.setTextColor(...colors.muted);
+    doc.text("Address: 583 Q Block Model Town Lahore", margin, footerY + 7);
+    doc.text("Phone: 03234447292", margin + contentWidth, footerY + 7, { align: "right" });
+    doc.text("Software generated document. No need of signatures.", pageWidth / 2, pageHeight - 5, { align: "center" });
   });
 
-  doc.save(
-    `Result_Card_${classInfo.name}_${new Date().toISOString().split('T')[0]}.pdf`
-  );
+  doc.save(`Result_Card_${classInfo.name}.pdf`);
 };
 
 const getGrade = (percent) => {
-  if (percent >= 90) return 'A+';
-  if (percent >= 80) return 'A';
-  if (percent >= 70) return 'B';
-  if (percent >= 60) return 'C';
-  if (percent >= 50) return 'D';
-  if (percent >= 33) return 'E';
-  return 'F';
+  if (percent >= 90) return "A+";
+  if (percent >= 80) return "A";
+  if (percent >= 70) return "B";
+  if (percent >= 60) return "C";
+  if (percent >= 50) return "D";
+  return "F";
 };
-
