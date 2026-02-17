@@ -1,19 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation" // Changed from react-router-dom
+import { useRouter } from "next/navigation" 
 import { supabase } from "../../utils/supabaseClient"
 import Navbar from "../../components/Navbar"
 import Loader from "../../components/Loader"
 import { Button } from "../../components/ui/button"
 import { Input } from "../../components/ui/input"
-import { Plus, Edit, Trash2, Filter, Search, ChevronDown, CheckCircle2, Check, XCircle } from "lucide-react"
+import { 
+  Plus, Edit, Trash2, Filter, Search, ChevronDown, 
+  CheckCircle2, Check, XCircle, GraduationCap, 
+  TrendingUp, TrendingDown, ArrowRight 
+} from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "../../hooks/use-toast"
 
 export default function StudentsPage() {
   const { toast } = useToast()
-  const router = useRouter() // Initialize Next.js router
+  const router = useRouter()
 
   // --- State ---
   const [students, setStudents] = useState([])
@@ -27,6 +31,10 @@ export default function StudentsPage() {
   // Selection & Bulk Action State
   const [selectedStudents, setSelectedStudents] = useState([])
   const [bulkLoading, setBulkLoading] = useState(false)
+  
+  // New State for Mass Class Change
+  const [targetClassId, setTargetClassId] = useState("")
+  const [bulkClassLoading, setBulkClassLoading] = useState(false)
     
   const [loading, setLoading] = useState(false)
   const [loadingClear, setLoadingClear] = useState(null)
@@ -75,13 +83,11 @@ export default function StudentsPage() {
     setStudents(filtered)
   }, [filterClasses, filterClear, searchQuery, allStudents])
 
-  // --- Navigation Action (Next.js) ---
+  // --- Navigation Action ---
   const handleManageRedirect = (id = null) => {
     if (id) {
-      // Edit mode: pass ID as query param
       router.push(`/admin/managestudent?id=${id}`)
     } else {
-      // Add mode
       router.push('/admin/managestudent')
     }
   }
@@ -128,6 +134,59 @@ export default function StudentsPage() {
       setBulkLoading(false)
     }
   }
+
+  // --- Bulk Class Update (Promote/Demote) ---
+  const handleBulkClassUpdate = async () => {
+    if (!targetClassId || selectedStudents.length === 0) return
+    setBulkClassLoading(true)
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({ class_id: targetClassId })
+        .in("studentid", selectedStudents)
+
+      if (error) throw error
+
+      // Find the target class object to update the local state correctly
+      const targetClassObject = classes.find(c => String(c.id) === String(targetClassId))
+
+      setAllStudents(prev => prev.map(s => 
+        selectedStudents.includes(s.studentid) 
+          ? { ...s, class_id: targetClassId, classes: { name: targetClassObject?.name } } 
+          : s
+      ))
+
+      toast({ title: `Moved ${selectedStudents.length} students to ${targetClassObject?.name} 🎓` })
+      setSelectedStudents([])
+      setTargetClassId("")
+
+    } catch (error) {
+      console.error(error)
+      toast({ title: "Class update failed", variant: "destructive" })
+    } finally {
+      setBulkClassLoading(false)
+    }
+  }
+
+  // Helper to visually determine if action is Promotion, Demotion, or Lateral Transfer
+  const getPromotionStatus = () => {
+    if (!targetClassId || selectedStudents.length === 0) return null
+    
+    const targetIndex = classes.findIndex(c => String(c.id) === String(targetClassId))
+    
+    // Check against the first selected student's current class for the tag
+    const firstSelectedStudent = students.find(s => s.studentid === selectedStudents[0])
+    if (!firstSelectedStudent) return null
+
+    const currentIndex = classes.findIndex(c => String(c.id) === String(firstSelectedStudent.class_id))
+
+    if (targetIndex > currentIndex) return { label: "Promote", color: "text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-3 h-3 mr-1" /> }
+    if (targetIndex < currentIndex) return { label: "Demote", color: "text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-3 h-3 mr-1" /> }
+    return { label: "Transfer", color: "text-blue-600 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400", icon: <ArrowRight className="w-3 h-3 mr-1" /> }
+  }
+
+  const promotionAction = getPromotionStatus()
 
   const toggleClassFilter = (id) => {
     setFilterClasses(prev => 
@@ -258,39 +317,73 @@ export default function StudentsPage() {
                               <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-md">
                                   {selectedStudents.length} Selected
                               </span>
-                              <span className="text-sm text-blue-800 dark:text-blue-200 font-medium">
-                                  Update status for selected students:
-                              </span>
                           </div>
-                          <div className="flex items-center gap-2">
-                               {bulkLoading ? (
-                                  <Loader small /> 
-                               ) : (
-                                  <>
-                                      <Button 
-                                          size="sm" 
-                                          onClick={() => handleBulkStatus(true)}
-                                          className="bg-green-600 hover:bg-green-700 text-white border-none h-8"
-                                      >
-                                          <Check className="w-3 h-3 mr-1.5" /> Mark Cleared
-                                      </Button>
-                                      <Button 
-                                          size="sm" 
-                                          onClick={() => handleBulkStatus(false)}
-                                          className="bg-red-500 hover:bg-red-600 text-white border-none h-8"
-                                      >
-                                          <XCircle className="w-3 h-3 mr-1.5" /> Mark Pending
-                                      </Button>
-                                      <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          onClick={() => setSelectedStudents([])}
-                                          className="text-gray-600 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200 h-8"
-                                      >
-                                          Cancel
-                                      </Button>
-                                  </>
-                               )}
+                          
+                          {/* Bulk Actions Split Container */}
+                          <div className="flex flex-wrap items-center gap-4 w-full md:w-auto md:flex-1 md:justify-end">
+                              
+                              {/* STATUS UPDATE ACTIONS */}
+                              <div className="flex items-center gap-2">
+                                   {bulkLoading ? (
+                                      <Loader small /> 
+                                   ) : (
+                                      <>
+                                          <Button size="sm" onClick={() => handleBulkStatus(true)} className="bg-green-600 hover:bg-green-700 text-white border-none h-8">
+                                              <Check className="w-3 h-3 mr-1.5" /> Cleared
+                                          </Button>
+                                          <Button size="sm" onClick={() => handleBulkStatus(false)} className="bg-red-500 hover:bg-red-600 text-white border-none h-8">
+                                              <XCircle className="w-3 h-3 mr-1.5" /> Pending
+                                          </Button>
+                                      </>
+                                   )}
+                              </div>
+
+                              {/* CLASS MASS UPDATE (PROMOTION/DEMOTION) */}
+                              <div className="flex items-center gap-2 md:pl-4 md:border-l md:border-blue-200 dark:md:border-blue-800/60">
+                                  <GraduationCap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                  <select
+                                      value={targetClassId}
+                                      onChange={(e) => setTargetClassId(e.target.value)}
+                                      className="h-8 text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-[#0b1220] dark:text-white"
+                                  >
+                                      <option value="">Move to class...</option>
+                                      {classes.map(c => (
+                                          <option key={c.id} value={c.id}>{c.name}</option>
+                                      ))}
+                                  </select>
+
+                                  {targetClassId && (
+                                      <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-2">
+                                          {/* Dynamic Promotion/Demotion Tag */}
+                                          {promotionAction && (
+                                              <span className={`flex items-center text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full ${promotionAction.color}`}>
+                                                  {promotionAction.icon} {promotionAction.label}
+                                              </span>
+                                          )}
+                                          
+                                          <Button 
+                                              size="sm" 
+                                              onClick={handleBulkClassUpdate}
+                                              disabled={bulkClassLoading}
+                                              className="bg-blue-600 hover:bg-blue-700 text-white h-8"
+                                          >
+                                              {bulkClassLoading ? <Loader small /> : "Apply"}
+                                          </Button>
+                                      </motion.div>
+                                  )}
+                              </div>
+
+                              <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                      setSelectedStudents([]);
+                                      setTargetClassId("");
+                                  }}
+                                  className="text-gray-600 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200 h-8 ml-auto md:ml-0"
+                              >
+                                  Cancel
+                              </Button>
                           </div>
                       </div>
                   </motion.div>
