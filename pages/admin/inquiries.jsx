@@ -173,7 +173,7 @@ export default function InquiryManager() {
     };
 
     if(type === 'WELCOME') {
-        return `Respected *${parent}*,\n\nThank you for visiting *${schoolName}*. We have successfully recorded the admission inquiry for *${student}*.\n\nDo you have any specific questions regarding the curriculum or facilities? \n Admission test syllabus can be found on this link: https://darearqam.vercel.app/admin/admission`;
+        return `Respected *${parent}*,\n\nThank you for visiting *${schoolName}*. We have successfully recorded the admission inquiry for *${student}*.\n\nDo you have any specific questions regarding the curriculum or facilities? \n Admission test syllabus can be found on this link: https://darearqam.vercel.app/admission`;
     }
     
     if(type === 'TEST_SCHEDULED') {
