@@ -170,7 +170,7 @@ export default function BulkMessagePage() {
         // CASE B: Class Selection (Standard Bulk Mode)
         else if (selectedClass) {
           const { data, error } = await supabase
-            .from('students')
+            .from('active_students')
             .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
             .eq('class_id', selectedClass)
             .order('name', { ascending: true });
