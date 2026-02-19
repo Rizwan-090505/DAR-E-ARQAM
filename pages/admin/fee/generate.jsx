@@ -367,7 +367,7 @@ function GenerateInvoicesContent() {
           
           {/* HEADER */}
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => router.back()} className="rounded-full bg-white/10 text-white hover:bg-white/20 border-white/20 backdrop-blur h-8 w-8 p-0">
+            <Button variant="outline" size="sm" onClick={() => router.back()} className="rounded-full bg-white/10  text-black dark:text-white hover:bg-white/20 border-white/20 backdrop-blur h-8 w-8 p-0">
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>
@@ -436,7 +436,7 @@ function GenerateInvoicesContent() {
              <div className="mt-3 pt-3 border-t border-white/5 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                 <div className="flex flex-col">
                     <Label className="text-[10px] text-gray-400 uppercase font-bold">Main Fee Label (e.g. Tuition Fee)</Label>
-                    <Input value={config.feeLabel} onChange={(e) => setConfig({...config, feeLabel: e.target.value})} className="h-7 w-64 text-xs bg-transparent border-none p-0 focus-visible:ring-0 placeholder:text-gray-400 text-white" placeholder="e.g. Tuition Fee - Oct" />
+                    <Input value={config.feeLabel} onChange={(e) => setConfig({...config, feeLabel: e.target.value})} className="h-7 w-64 text-xs bg-transparent border-none p-0 focus-visible:ring-0 placeholder:text-gray-400 text-black dark:text-white" placeholder="e.g. Tuition Fee - Oct" />
                 </div>
                 <div className="flex justify-end">
                     <div className="flex items-center gap-2 text-[10px] text-orange-600 bg-orange-900/20 px-3 py-1 rounded-full w-max">
