@@ -4,40 +4,38 @@ import autoTable from "jspdf-autotable";
 /**
  * Generates and opens a PDF receipt in a new tab using the "School Invoice" design.
  */
-export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceAfterPayment }) => {
+export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceAfterPayment, receiptDate }) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15; // Approx equivalent to 50pt in original design
+  const margin = 15;
 
-  // --- 1. COLOR PALETTE (Converted from Hex to RGB) ---
+  // --- 1. COLOR PALETTE ---
   const COLORS = {
-    brand: [31, 41, 55],    // #1F2937 (Dark Charcoal)
-    accent: [185, 28, 28],  // #B91C1C (Red)
-    sub_bg: [249, 250, 251],// #F9FAFB (Very Light Grey)
-    text: [55, 65, 81],     // #374151 (Dark Grey)
-    border: [229, 231, 235] // #E5E7EB (Light Border)
+    brand: [31, 41, 55],
+    accent: [185, 28, 28],
+    sub_bg: [249, 250, 251],
+    text: [55, 65, 81],
+    border: [229, 231, 235],
+    green: [21, 128, 61]
   };
 
   // --- 2. HEADER BACKGROUND ---
-  // Large dark strip at the top (approx 140pt -> ~50mm)
   doc.setFillColor(...COLORS.brand);
   doc.rect(0, 0, pageWidth, 50, 'F');
 
   // --- 3. HEADER TEXT ---
-  // Left: School Info
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20); // 24pt -> ~20 equivalent
+  doc.setFontSize(20);
   doc.setTextColor(255, 255, 255);
   doc.text("DAR-E-ARQAM SCHOOL", margin, 20);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.setTextColor(209, 213, 219); // Light gray text
+  doc.setTextColor(209, 213, 219);
   doc.text("Q MODEL TOWN CAMPUS", margin, 27);
   doc.text("Phone: +92 323 4447292", margin, 32);
 
-  // Right: Badge
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
@@ -49,7 +47,6 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
   doc.text("OFFICIAL COPY", pageWidth - margin, 27, { align: "right" });
 
   // --- 4. FLOATING METADATA BOX ---
-  // White box with border/shadow effect overlapping the header
   const boxY = 40;
   const boxHeight = 35;
   const boxWidth = pageWidth - (margin * 2);
@@ -58,7 +55,6 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(margin, boxY, boxWidth, boxHeight, 2, 2, 'FD');
 
-  // Box Content - Column 1 (Student)
   const col1X = margin + 5;
   const textYStart = boxY + 8;
   const lineHeight = 7;
@@ -66,64 +62,69 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
   doc.setTextColor(...COLORS.text);
   doc.setFontSize(9);
 
-  // Row 1
   doc.setFont("helvetica", "bold");
   doc.text("Student Name:", col1X, textYStart);
   doc.setFont("helvetica", "normal");
   doc.text(student?.name || 'N/A', col1X + 30, textYStart);
 
-  // Row 2
   doc.setFont("helvetica", "bold");
   doc.text("Father Name:", col1X, textYStart + lineHeight);
   doc.setFont("helvetica", "normal");
   doc.text(student?.fathername || 'N/A', col1X + 30, textYStart + lineHeight);
 
-  // Row 3
   doc.setFont("helvetica", "bold");
   doc.text("ID / Roll No:", col1X, textYStart + (lineHeight * 2));
   doc.setFont("helvetica", "normal");
-  doc.text(student?.studentid || 'N/A', col1X + 30, textYStart + (lineHeight * 2));
+  doc.text(String(student?.studentid || 'N/A'), col1X + 30, textYStart + (lineHeight * 2));
 
-  // Box Content - Column 2 (Transaction)
   const col2X = pageWidth / 2 + 10;
 
-  // Row 1
   doc.setFont("helvetica", "bold");
+  doc.setTextColor(...COLORS.text);
   doc.text("Receipt ID:", col2X, textYStart);
   doc.setFont("helvetica", "normal");
   doc.text(`#${invoiceId}-${Date.now().toString().slice(-4)}`, col2X + 25, textYStart);
 
-  // Row 2
   doc.setFont("helvetica", "bold");
   doc.text("Ref Invoice:", col2X, textYStart + lineHeight);
   doc.setFont("helvetica", "normal");
   doc.text(`#${invoiceId}`, col2X + 25, textYStart + lineHeight);
 
-  // Row 3 (Date - Red Accent)
+  const displayDate = new Date(receiptDate || Date.now()).toLocaleDateString("en-PK", {
+    day: "2-digit", month: "short", year: "numeric"
+  });
+
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLORS.accent);
   doc.text("Date Paid:", col2X, textYStart + (lineHeight * 2));
-  doc.text(new Date().toLocaleDateString(), col2X + 25, textYStart + (lineHeight * 2));
+  doc.setFont("helvetica", "normal");
+  doc.text(displayDate, col2X + 25, textYStart + (lineHeight * 2));
 
   // --- 5. FEE TABLE ---
+  // Columns: FEE TYPE | AMOUNT RECEIVED | AMOUNT PENDING
   const tableStartY = boxY + boxHeight + 10;
 
-  // Filter items like in your original code
-  const receiptRows = items
-    .filter(item => item.payingNow > 0)
-    .map(item => [
-      item.fee_type,
-      item.totalAmount.toLocaleString(),
-      item.payingNow.toLocaleString()
-    ]);
+  const filteredItems = items.filter(item => item.payingNow > 0);
 
-  if (receiptRows.length === 0) receiptRows.push(["No payment recorded", "-", "0"]);
+  // Rows: fee type | amount received (payingNow) only
+  const receiptRows = filteredItems.map(item => [
+    item.fee_type,
+    item.payingNow.toLocaleString()
+  ]);
+
+  if (receiptRows.length === 0) {
+    receiptRows.push(["No payment recorded", "0"]);
+  }
 
   autoTable(doc, {
     startY: tableStartY,
-    head: [['DESCRIPTION', 'TOTAL FEE', 'PAID NOW (PKR)']],
+    head: [['FEE TYPE', 'AMOUNT RECEIVED']],
     body: receiptRows,
-    theme: 'plain', 
+    foot: [[
+      { content: 'TOTAL RECEIVED', styles: { fontStyle: 'bold', textColor: [255, 255, 255] } },
+      { content: totalPaidNow.toLocaleString(), styles: { fontStyle: 'bold', textColor: [255, 255, 255], halign: 'right' } },
+    ]],
+    theme: 'plain',
     margin: { left: margin, right: margin },
     headStyles: {
       fillColor: COLORS.brand,
@@ -131,17 +132,22 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
       fontStyle: 'bold',
       fontSize: 9,
       halign: 'left',
-      cellPadding: 3
+      cellPadding: 3.5
     },
     bodyStyles: {
       textColor: COLORS.text,
       fontSize: 9,
-      cellPadding: 3
+      cellPadding: 3.5
+    },
+    footStyles: {
+      fillColor: COLORS.brand,
+      fontSize: 9,
+      cellPadding: 3.5,
+      halign: 'left'
     },
     columnStyles: {
-      0: { cellWidth: 'auto' }, // Description
-      1: { cellWidth: 40, halign: 'right' }, // Total Fee
-      2: { cellWidth: 40, halign: 'right' }  // Paid Now
+      0: { cellWidth: 'auto' },
+      1: { cellWidth: 50, halign: 'right' }
     },
     didParseCell: function (data) {
       if (data.section === 'head' && data.column.index > 0) {
@@ -156,60 +162,54 @@ export const printReceipt = ({ student, invoiceId, items, totalPaidNow, balanceA
     }
   });
 
-  // --- 6. TOTALS SECTION ---
-  const finalY = doc.lastAutoTable.finalY + 5;
+  // --- BALANCE ROW after table ---
+  const balanceY = doc.lastAutoTable.finalY + 8;
+  const rowHeight = 9;
+  const tableWidth = pageWidth - (margin * 2);
 
-  // Separator Line
-  doc.setDrawColor(...COLORS.brand);
-  doc.setLineWidth(0.5);
-  doc.line(margin, finalY, pageWidth - margin, finalY);
+  doc.setFillColor(...COLORS.sub_bg);
+  doc.rect(margin, balanceY, tableWidth, rowHeight, 'F');
+  doc.setDrawColor(...COLORS.border);
+  doc.rect(margin, balanceY, tableWidth, rowHeight, 'S');
 
-  const totalY = finalY + 8;
-
-  // Total Label (Brand Color)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.brand);
-  doc.text("TOTAL PAID", margin + 5, totalY);
+  doc.setFontSize(9);
+  doc.setTextColor(...COLORS.text);
+  doc.text("BALANCE REMAINING", margin + 4, balanceY + 6);
 
-  // Total Amount (Red Accent)
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.accent);
-  doc.text(`Rs. ${totalPaidNow.toLocaleString()}`, pageWidth - margin, totalY, { align: "right" });
+  const balanceText = balanceAfterPayment === 0 ? '0 ✓' : balanceAfterPayment.toLocaleString();
+  doc.setTextColor(...(balanceAfterPayment === 0 ? COLORS.green : COLORS.accent));
+  doc.text(balanceText, pageWidth - margin - 4, balanceY + 6, { align: 'right' });
 
-  // Balance (Small Text)
-  if (balanceAfterPayment > 0) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...COLORS.text);
-    doc.text(`Remaining Balance: Rs. ${balanceAfterPayment.toLocaleString()}`, pageWidth - margin, totalY + 6, { align: "right" });
+  // --- 6. PAID IN FULL BADGE ---
+  if (balanceAfterPayment === 0) {
+    const badgeY = balanceY + rowHeight + 7;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.green);
+    doc.text("✓ PAID IN FULL", pageWidth - margin, badgeY, { align: "right" });
   }
 
-  // --- 7. FOOTER / INSTRUCTIONS ---
+  // --- 7. FOOTER ---
   const footerY = pageHeight - 40;
 
-  // Footer Line
   doc.setDrawColor(...COLORS.border);
   doc.setLineWidth(0.1);
   doc.line(margin, footerY, pageWidth - margin, footerY);
 
-  // Instructions
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.brand);
   doc.text("Instructions:", margin, footerY + 5);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(107, 114, 128); // Gray-500
+  doc.setTextColor(107, 114, 128);
   doc.text("1. Please keep this receipt for your records.", margin, footerY + 10);
   doc.text("2. Any discrepancies must be reported within 7 days.", margin, footerY + 14);
   doc.text("3. This is a computer-generated receipt and requires no signature.", margin, footerY + 18);
 
-  // --- 8. OPEN IN NEW TAB (Replaced Save Logic) ---
-  // Create a Blob from the PDF
+  // --- 8. OPEN IN NEW TAB ---
   const pdfBlob = doc.output("blob");
-  // Create a temporary URL for the Blob
   const pdfUrl = URL.createObjectURL(pdfBlob);
-  // Open the URL in a new tab
   window.open(pdfUrl, "_blank");
 };

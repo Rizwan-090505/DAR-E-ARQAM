@@ -50,6 +50,15 @@ export default function PayInvoiceContent() {
   // Notification Toggle State (Checked by default)
   const [sendMessageToParent, setSendMessageToParent] = useState(true)
 
+  // SuperAdmin State
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+
+  // --- Check SuperAdmin Role from localStorage ---
+  useEffect(() => {
+    const role = localStorage.getItem("UserRole")
+    setIsSuperAdmin(role === "superadmin")
+  }, [])
+
   // --- Fetch Data ---
   useEffect(() => {
     if (!invoiceId) {
@@ -84,7 +93,7 @@ export default function PayInvoiceContent() {
       if (invData.student_id) {
         const { data: stuData } = await supabase
           .from("students")
-          .select("*") // Fetches mobilenumber automatically
+          .select("*")
           .eq("studentid", invData.student_id)
           .single()
         setStudent(stuData)
@@ -213,9 +222,7 @@ export default function PayInvoiceContent() {
 
       await supabase.from("fee_invoices").update({ status: newStatus }).eq("id", invoiceId)
 
-      // ==========================================
-      // NEW ADDITION: CLEAR STUDENT IF FULLY PAID
-      // ==========================================
+      // CLEAR STUDENT IF FULLY PAID
       if (totalPaidAfter >= grandTotal && student?.studentid) {
         const { error: studentUpdateError } = await supabase
           .from("students")
@@ -226,11 +233,8 @@ export default function PayInvoiceContent() {
           console.error("Failed to update student clear status:", studentUpdateError);
         }
       }
-      // ==========================================
 
-      // ==========================================
       // GENERATE & INSERT WHATSAPP MESSAGE (Conditional)
-      // ==========================================
       if (sendMessageToParent) {
         let receiptText = `🏫 *FEE PAYMENT RECEIPT* 🏫\n`;
         receiptText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -255,7 +259,6 @@ export default function PayInvoiceContent() {
         receiptText += ` *Remaining Balance:* ${newBalance.toLocaleString()} PKR\n\n`;
         receiptText += `_ACCOUNTS OFFICE_ \n DAR-E-ARQAM SCHOOL`;
 
-        // Fetching mobilenumber column specifically 
         const parentPhone = student?.mobilenumber || "00000000000";
 
         const { error: msgError } = await supabase.from("messages").insert({
@@ -267,11 +270,9 @@ export default function PayInvoiceContent() {
 
         if (msgError) {
           console.error("Message Table Insert Error:", msgError);
-          // Displaying a soft toast so it doesn't interrupt the actual payment success flow
           toast({ title: "Note", description: "Payment recorded, but failed to queue the WhatsApp notification.", variant: "default" });
         }
       }
-      // ==========================================
 
       setSubmitting(false)
       setShowPrintModal(true)
@@ -294,7 +295,6 @@ export default function PayInvoiceContent() {
   }
 
   // --- Styles ---
-  
   const pageBackground = `min-h-screen pb-20 transition-colors duration-300
     bg-gray-50
     dark:bg-[#0f172a] dark:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] dark:from-slate-900 dark:via-[#0a0f1d] dark:to-black
@@ -556,7 +556,8 @@ export default function PayInvoiceContent() {
                     <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
                         
                         {/* Payment Method Selector */}
-                        <div className="flex gap-2 p-1.5 bg-gray-100 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 w-full md:w-auto justify-center">
+                        <div className="flex flex-wrap gap-2 p-1.5 bg-gray-100 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 w-full md:w-auto justify-center">
+                            
                             {/* Option: Cash */}
                             <button
                                 onClick={() => setPaymentMethod("cash")}
@@ -595,6 +596,21 @@ export default function PayInvoiceContent() {
                                 <Smartphone className="w-5 h-5 mb-1.5" />
                                 EASYPAISA
                             </button>
+
+                            {/* Option: Adjustment (superadmin only) */}
+                            {isSuperAdmin && (
+                                <button
+                                    onClick={() => setPaymentMethod("adjustment")}
+                                    className={`flex flex-col items-center justify-center min-w-[80px] py-3 px-4 rounded-lg text-xs font-bold transition-all duration-200
+                                        ${paymentMethod === "adjustment" 
+                                            ? "bg-white shadow-md text-purple-700 ring-1 ring-purple-500/20 dark:bg-purple-600 dark:text-white dark:ring-0 dark:shadow-purple-900/30" 
+                                            : "text-gray-500 hover:bg-gray-200 dark:text-blue-400 dark:hover:bg-white/10"
+                                        }`}
+                                >
+                                    <Wallet className="w-5 h-5 mb-1.5" />
+                                    ADJUSTMENT
+                                </button>
+                            )}
                         </div>
 
                         {/* Divider */}
@@ -631,26 +647,27 @@ export default function PayInvoiceContent() {
             <div className={`${cardClass} max-w-sm w-full bg-white dark:bg-[#0b1220] border-gray-200 dark:border-white/10 p-6 animate-in zoom-in-95 duration-200 shadow-2xl`}>
               <div className="flex flex-col items-center text-center space-y-6">
                 <div className="w-20 h-20 bg-green-50 dark:bg-green-500/20 rounded-full flex items-center justify-center border border-green-100 dark:border-green-500/30">
-                  <CheckCircle className="w-10 h-10 text-green-600 dark:text-green-400" />
+                  <CheckCircle className="w-10 h-10 text-green-500" />
                 </div>
-                
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Success!</h2>
-                    <p className="text-gray-500 dark:text-blue-400 text-sm">Transaction recorded via <span className="font-bold uppercase">{paymentMethod}</span></p>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Payment Recorded!</h2>
+                  <p className="text-gray-500 dark:text-blue-300 text-sm">
+                    <span className="font-bold text-green-600 dark:text-green-400">PKR {totalPayingNow.toLocaleString()}</span> collected successfully via <span className="font-semibold capitalize">{paymentMethod}</span>.
+                  </p>
                 </div>
-                
-                <div className="w-full space-y-3 pt-4 border-t border-gray-100 dark:border-white/10">
-                    <Button size="lg" onClick={handlePrint} className="w-full bg-green-600 hover:bg-green-700 text-white">
-                        <Printer className="w-5 h-5 mr-2" /> Print Receipt
-                    </Button>
-                    <Button variant="outline" onClick={() => router.push("/admin/invoices")} className="w-full">
-                        Done
-                    </Button>
+                <div className="flex flex-col gap-3 w-full pt-2">
+                  <Button size="lg" onClick={handlePrint} className="w-full bg-slate-800 hover:bg-slate-900 text-white dark:bg-white dark:text-black dark:hover:bg-gray-100 h-12">
+                    <Printer className="w-4 h-4 mr-2" /> Print Receipt & Exit
+                  </Button>
+                  <Button variant="ghost" onClick={() => router.push("/admin/invoices")} className="w-full text-gray-500">
+                    Skip & Go to Dashboard
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
         )}
+
       </div>
     </>
   )

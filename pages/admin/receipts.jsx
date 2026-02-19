@@ -120,15 +120,15 @@ function FeeReceiptsContent() {
 
       ;(data || []).forEach((rcpt) => {
         const dateStr = new Date(rcpt.paid_at).toLocaleDateString()
-        const key = `${rcpt.invoice_id}_${dateStr}` // Group by invoice and date
+        const key = `${rcpt.invoice_id}_${dateStr}`
 
         if (!groupedMap.has(key)) {
           const newGroup = {
-            ...rcpt, // Base record
-            amount: rcpt.amount || 0, // We will aggregate this
+            ...rcpt,
+            amount: rcpt.amount || 0,
             feeLabels: new Set([rcpt.fee_invoice_details?.fee_type || "General Payment"]),
             paymentMethods: new Set([rcpt.payment_method || "Cash"]),
-            groupedPayments: [rcpt] // Keep all raw payments for the print function
+            groupedPayments: [rcpt]
           }
           groupedMap.set(key, newGroup)
           groupedData.push(newGroup)
@@ -141,7 +141,6 @@ function FeeReceiptsContent() {
         }
       })
 
-      // Convert Sets to display strings for the UI table
       groupedData.forEach(g => {
         g.displayFeeLabel = Array.from(g.feeLabels).join(", ")
         g.displayMethod = Array.from(g.paymentMethods).join(", ")
@@ -159,9 +158,9 @@ function FeeReceiptsContent() {
   }, [page, filters.classId, filters.startDate, filters.endDate, debouncedSearch])
 
 
-  // --- 2. PRINT LOGIC (UPDATED FOR MULTIPLE ITEMS) ---
+  // --- 2. PRINT LOGIC ---
   const handlePrintReceipt = async (groupedPayment) => {
-    setPrintingId(groupedPayment.id) // using the base ID for loading spinner
+    setPrintingId(groupedPayment.id)
     try {
       const invoiceId = groupedPayment.invoice_id
       if (!invoiceId) throw new Error("Invoice data missing");
@@ -175,38 +174,55 @@ function FeeReceiptsContent() {
       
       if (invError) throw invError;
 
-      // B. Fetch ALL historical payments to calculate balance
+      // B. Fetch ALL historical payments ordered chronologically to compute running balance
       const { data: allPayments, error: payError } = await supabase
         .from("fee_payments")
-        .select("amount")
+        .select("id, amount, paid_at")
         .eq("invoice_id", invoiceId)
+        .order("paid_at", { ascending: true })
+        .order("id", { ascending: true })
 
       if (payError) throw payError;
 
-      // C. Calculate Totals
-      const totalPaidHistory = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const balance = Math.max(0, (invoiceData.total_amount || 0) - totalPaidHistory);
+      // C. Build a map of cumulative paid up to and including each payment id
+      //    so we can derive the remaining balance after each individual payment
+      let cumulative = 0
+      const cumulativeMap = new Map()
+      allPayments.forEach((p) => {
+        cumulative += (p.amount || 0)
+        cumulativeMap.set(p.id, cumulative)
+      })
 
-      // D. Generate line items for ALL grouped payments
-      const studentData = groupedPayment.fee_invoices?.students || {};
+      const invoiceTotal = invoiceData.total_amount || 0
+      const totalPaidHistory = cumulative
+      const balance = Math.max(0, invoiceTotal - totalPaidHistory)
 
-      const receiptItems = groupedPayment.groupedPayments.map((p) => {
-        const feeReason = p.fee_invoice_details?.fee_type || "General Fee Payment";
+      // D. Generate line items with part-wise amount and remaining balance after each part
+      const studentData = groupedPayment.fee_invoices?.students || {}
+
+      // Sort grouped payments chronologically (by id as proxy within same-day group)
+      const sortedGrouped = [...groupedPayment.groupedPayments].sort((a, b) => a.id - b.id)
+
+      const receiptItems = sortedGrouped.map((p) => {
+        const feeReason = p.fee_invoice_details?.fee_type || "General Fee Payment"
+        const paidUpToThis = cumulativeMap.get(p.id) ?? 0
+        const remainingAfterThis = Math.max(0, invoiceTotal - paidUpToThis)
         return {
-          fee_type: `${feeReason} (${p.payment_method || 'Cash'})`, 
-          totalAmount: invoiceData.total_amount, 
-          payingNow: p.amount 
+          fee_type: `${feeReason} (${p.payment_method || 'Cash'})`,
+          payingNow: p.amount || 0,           // this part's specific amount
+          remainingBalance: remainingAfterThis // balance remaining after this part
         }
-      });
+      })
 
-      // E. Execute Print
+      // E. Execute Print — pass paid_at as receiptDate (A)
       printReceipt({
         student: studentData,
         invoiceId: invoiceId,
-        paymentId: groupedPayment.groupedPayments.map(p => p.id).join(", "), // Join all grouped IDs
-        items: receiptItems,       
-        totalPaidNow: groupedPayment.amount, // Send the newly summed aggregate amount
-        balanceAfterPayment: balance
+        paymentId: groupedPayment.groupedPayments.map(p => p.id).join(", "),
+        items: receiptItems,
+        totalPaidNow: groupedPayment.amount,
+        balanceAfterPayment: balance,
+        receiptDate: groupedPayment.paid_at   // A: actual payment date
       })
 
       toast({ title: "Receipt generated" })
@@ -321,7 +337,7 @@ function FeeReceiptsContent() {
                   />
                 </div>
                 <div className="relative flex-1">
-                    <Input 
+                  <Input 
                     type="date" 
                     className={`h-10 text-xs ${inputStyle} [color-scheme:light] dark:[color-scheme:dark]`} 
                     value={filters.endDate}
@@ -351,18 +367,18 @@ function FeeReceiptsContent() {
                   {loading ? (
                     <tr>
                       <td colSpan="6" className="h-64">
-                          <div className="flex flex-col items-center justify-center h-full gap-3">
-                             <Loader small={false} />
-                             <p className="text-sm text-slate-500 dark:text-slate-400">Loading records...</p>
-                          </div>
+                        <div className="flex flex-col items-center justify-center h-full gap-3">
+                          <Loader small={false} />
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Loading records...</p>
+                        </div>
                       </td>
                     </tr>
                   ) : receipts.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="h-64 text-center">
                         <div className="flex flex-col items-center justify-center opacity-60">
-                           <Filter className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-2" />
-                           <p className="text-lg font-medium text-slate-500 dark:text-slate-400">No payments found</p>
+                          <Filter className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-2" />
+                          <p className="text-lg font-medium text-slate-500 dark:text-slate-400">No payments found</p>
                         </div>
                       </td>
                     </tr>
@@ -417,19 +433,19 @@ function FeeReceiptsContent() {
 
                         {/* Amount (SUMMED) */}
                         <td className="px-6 py-4 text-right">
-                            <div className="flex flex-col items-end">
-                              <span className="font-bold text-base text-slate-900 dark:text-white">
-                                {Number(rcpt.amount).toLocaleString()}
-                              </span>
-                              <span className="text-[10px] uppercase font-bold text-slate-400">PKR</span>
-                            </div>
+                          <div className="flex flex-col items-end">
+                            <span className="font-bold text-base text-slate-900 dark:text-white">
+                              {Number(rcpt.amount).toLocaleString()}
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400">PKR</span>
+                          </div>
                         </td>
 
                         {/* Method */}
                         <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/10 dark:text-slate-300 dark:border-white/5">
-                              {rcpt.displayMethod}
-                            </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded text-[10px] uppercase font-bold bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/10 dark:text-slate-300 dark:border-white/5">
+                            {rcpt.displayMethod}
+                          </span>
                         </td>
 
                         {/* Actions */}
@@ -459,31 +475,31 @@ function FeeReceiptsContent() {
 
             {/* --- PAGINATION --- */}
             <div className="px-6 py-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
-               <div className="text-xs text-slate-500 dark:text-slate-400 font-medium order-2 sm:order-1">
-                 Showing raw entries <span className="text-slate-900 dark:text-white font-bold">{receipts.length > 0 ? page * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="text-slate-900 dark:text-white font-bold">{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)}</span> of <span className="text-slate-900 dark:text-white font-bold">{totalCount}</span>
-               </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 font-medium order-2 sm:order-1">
+                Showing raw entries <span className="text-slate-900 dark:text-white font-bold">{receipts.length > 0 ? page * ITEMS_PER_PAGE + 1 : 0}</span> - <span className="text-slate-900 dark:text-white font-bold">{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)}</span> of <span className="text-slate-900 dark:text-white font-bold">{totalCount}</span>
+              </div>
                
-               <div className="flex items-center gap-2 order-1 sm:order-2">
-                 <Button 
-                   variant="outline" size="sm" 
-                   onClick={() => setPage(p => Math.max(0, p - 1))}
-                   disabled={page === 0 || loading}
-                   className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
-                 >
-                   Previous
-                 </Button>
-                 <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded min-w-[3rem] text-center dark:bg-white/10 dark:text-white dark:border-white/5">
-                    {page + 1}
-                 </span>
-                 <Button 
-                   variant="outline" size="sm" 
-                   onClick={() => setPage(p => p + 1)}
-                   disabled={(page + 1) * ITEMS_PER_PAGE >= totalCount || loading}
-                   className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
-                 >
-                   Next
-                 </Button>
-               </div>
+              <div className="flex items-center gap-2 order-1 sm:order-2">
+                <Button 
+                  variant="outline" size="sm" 
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0 || loading}
+                  className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
+                >
+                  Previous
+                </Button>
+                <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1.5 rounded min-w-[3rem] text-center dark:bg-white/10 dark:text-white dark:border-white/5">
+                  {page + 1}
+                </span>
+                <Button 
+                  variant="outline" size="sm" 
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={(page + 1) * ITEMS_PER_PAGE >= totalCount || loading}
+                  className="h-8 text-xs bg-white hover:bg-slate-100 border-slate-300 text-slate-700 dark:bg-white/10 dark:hover:bg-white/20 dark:border-transparent dark:text-white"
+                >
+                  Next
+                </Button>
+              </div>
             </div>
 
           </div>
