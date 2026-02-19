@@ -556,7 +556,7 @@ function GenerateInvoicesContent() {
                                           />
                                       </td>
                                       <td className="p-3">
-                                          <div className="font-bold text-blue-500 dark:text-white line-clamp-1">{student.name}</div>
+                                          <div className="font-bold text-blue-500 dark:text-white ">{student.name}</div>
                                           <div className="text-[11px] text-gray-400">{student.fathername} • {student.studentid}</div>
                                       </td>
                                       <td className="p-3 text-gray-500 font-medium">
