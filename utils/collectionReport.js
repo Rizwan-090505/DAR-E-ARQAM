@@ -62,20 +62,18 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   const groupedMap = new Map();
 
   allReceipts.forEach((rcpt) => {
-    // Extract raw data safely
     const studentName = rcpt.fee_invoices?.students?.name || "Unknown";
     const studentId = rcpt.fee_invoices?.students?.studentid || studentName;
     const classData = rcpt.fee_invoices?.students?.classes;
-    const studentClass = classData 
-        ? (Array.isArray(classData) ? classData[0]?.name : classData.name) 
-        : "N/A";
-    
+    const studentClass = classData
+      ? (Array.isArray(classData) ? classData[0]?.name : classData.name)
+      : "N/A";
+
     const receiptDate = rcpt.paid_at ? new Date(rcpt.paid_at).toLocaleDateString() : "N/A";
     const description = rcpt.fee_invoice_details?.fee_type || "General Payment";
     const amount = Number(rcpt.amount) || 0;
     const mode = rcpt.payment_method || "Cash";
 
-    // Unique key to pair payments by the exact same student on the exact same day
     const key = `${studentId}_${receiptDate}`;
 
     if (!groupedMap.has(key)) {
@@ -83,7 +81,7 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
         date: receiptDate,
         name: studentName,
         className: studentClass,
-        descriptions: new Set([description]), 
+        descriptions: new Set([description]),
         amount: amount,
         modes: new Set([mode])
       });
@@ -99,10 +97,10 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   const doc = new jsPDF("p", "pt", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 40; 
+  const margin = 40;
 
   // Header Section
-  doc.setTextColor(0, 0, 0); 
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("DAR-E-ARQAM SCHOOL", margin, 45);
@@ -117,12 +115,12 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   // Meta Information
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80); 
+  doc.setTextColor(80, 80, 80);
 
   doc.text(`DATE RANGE: ${dateRangeString.toUpperCase()}`, margin, 70);
-  
-  const generatedTime = new Date().toLocaleString("en-US", { 
-    dateStyle: "medium", timeStyle: "short" 
+
+  const generatedTime = new Date().toLocaleString("en-US", {
+    dateStyle: "medium", timeStyle: "short"
   });
   doc.text(`GENERATED: ${generatedTime.toUpperCase()}`, pageWidth - margin, 70, { align: "right" });
 
@@ -144,21 +142,42 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
       group.name,
       group.className,
       Array.from(group.descriptions).join(", "),
-      group.amount.toLocaleString(), 
+      group.amount.toLocaleString(),
       Array.from(group.modes).join(", ").toUpperCase()
     ]);
   });
 
+  // --- Per-mode subtotals ---
+  const modeTotals = {};
+  sortedGroupedData.forEach((group) => {
+    const modeKey = Array.from(group.modes).map(m => m.toUpperCase()).sort().join(" + ");
+    modeTotals[modeKey] = (modeTotals[modeKey] || 0) + group.amount;
+  });
+
+  const modeFootRows = Object.entries(modeTotals).map(([mode, sum]) => [
+    {
+      content: mode,
+      colSpan: 4,
+      styles: { halign: "right", fontStyle: "normal", fontSize: 8, textColor: 60 }
+    },
+    {
+      content: sum.toLocaleString(),
+      styles: { fontStyle: "normal", halign: "right", fontSize: 8, textColor: 60 }
+    },
+    ""
+  ]);
+
   const tableFoot = [
+    ...modeFootRows,
     [
-      { 
-        content: "TOTAL COLLECTION", 
-        colSpan: 4, 
-        styles: { halign: "right", fontStyle: "bold" } 
+      {
+        content: "TOTAL COLLECTION",
+        colSpan: 4,
+        styles: { halign: "right", fontStyle: "bold" }
       },
-      { 
-        content: totalAmount.toLocaleString(), 
-        styles: { fontStyle: "bold", halign: "right" } 
+      {
+        content: totalAmount.toLocaleString(),
+        styles: { fontStyle: "bold", halign: "right" }
       },
       ""
     ]
@@ -178,12 +197,12 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
       fontStyle: "bold",
       fontSize: 8,
       cellPadding: { top: 6, bottom: 6, left: 4, right: 4 },
-      lineColor: 0, 
-      lineWidth: { top: 1, bottom: 1 }, 
+      lineColor: 0,
+      lineWidth: { top: 1, bottom: 1 },
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: 20, 
+      textColor: 20,
       cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
     },
     footStyles: {
@@ -193,10 +212,10 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
       fontSize: 9,
       cellPadding: { top: 6, bottom: 6, left: 4, right: 4 },
       lineColor: 0,
-      lineWidth: { top: 1, bottom: 2 }, 
+      lineWidth: { top: 1, bottom: 2 },
     },
     columnStyles: {
-      0: { cellWidth: 55 }, 
+      0: { cellWidth: 55 },
       1: { cellWidth: 100 },
       2: { cellWidth: 60 },
       3: { cellWidth: "auto" },
