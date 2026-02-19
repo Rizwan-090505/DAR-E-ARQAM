@@ -377,7 +377,7 @@ export default function StudentsPage() {
                         placeholder="Amount..."
                         value={feeAdjustAmount}
                         onChange={e => setFeeAdjustAmount(e.target.value)}
-                        className="h-8 w-24 text-sm rounded-md border border-gray-300 px-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-white/20 dark:bg-[#0b1220] dark:text-white"
+                        className="h-8 w-24 text-sm rounded-md border border-gray-300 px-2 shadow-sm focus:border-blue-500 focus:ring-1 bg-white text-black focus:ring-blue-500 dark:border-white/20 dark:bg-[#0b1220] dark:text-white"
                       />
                       {feeAdjustLoading ? (
                         <Loader small />
@@ -386,14 +386,14 @@ export default function StudentsPage() {
                           <button
                             onClick={() => handleBulkFeeAdjust("+")}
                             title="Increase fee"
-                            className="h-8 w-8 flex items-center justify-center rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold transition-colors"
+                            className="h-8 w-8 flex items-center justify-center rounded-md bg-emerald-600 hover:bg-emerald-700 text-black dark:text-white text-base font-bold transition-colors"
                           >
                             +
                           </button>
                           <button
                             onClick={() => handleBulkFeeAdjust("-")}
                             title="Decrease fee"
-                            className="h-8 w-8 flex items-center justify-center rounded-md bg-orange-500 hover:bg-orange-600 text-white text-base font-bold transition-colors"
+                            className="h-8 w-8 flex items-center justify-center rounded-md bg-orange-500 hover:bg-orange-600 text-black dark:text-white text-base font-bold transition-colors"
                           >
                             −
                           </button>
@@ -407,7 +407,7 @@ export default function StudentsPage() {
                       <select
                         value={targetClassId}
                         onChange={(e) => setTargetClassId(e.target.value)}
-                        className="h-8 text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-[#0b1220] dark:text-white"
+                        className="h-8 text-black bg-white text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-[#0b1220] dark:text-white"
                       >
                         <option value="">Move to class...</option>
                         {classes.map(c => (
