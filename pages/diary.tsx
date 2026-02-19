@@ -256,7 +256,7 @@ export default function DiaryPage() {
 
     // Queue Messages
     const { data: students } = await supabase
-      .from('students')
+      .from('active_students')
       .select('studentid, mobilenumber')
       .eq('class_id', classId);
 

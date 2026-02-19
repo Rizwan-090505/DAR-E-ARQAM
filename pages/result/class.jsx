@@ -127,7 +127,7 @@ export default function ClassResultPage() {
     const classNameStr = currentClassObj ? currentClassObj.name : ''
 
     const { data: studentsData, error: studentsError } = await supabase
-      .from('students')
+      .from('active_students')
       .select('studentid, name, fathername, mobilenumber, Clear')
       .eq('class_id', selectedClass)
 

@@ -88,7 +88,7 @@ export default function AttendanceRecordPage() {
   const fetchStudents = async () => {
     setIsLoading(true);
     const { data, error } = await supabase
-      .from('students')
+      .from('active_students')
       .select('studentid, name, fathername, mobilenumber')
       .eq('class_id', id)
       .order('name');

@@ -66,7 +66,7 @@ export default function MarksEntryPage() {
 
         // Load Students (with mobilenumber)
         const { data: studentData, error: stuErr } = await supabase
-          .from('students')
+          .from('active_students')
           .select('studentid, name, fathername, mobilenumber')
           .eq('class_id', testData.class_id)
           .order('studentid', { ascending: true })

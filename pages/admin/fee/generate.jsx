@@ -80,7 +80,7 @@ function GenerateInvoicesContent() {
       
     try {
       const { data: allStudents, error: sError } = await supabase
-        .from("students")
+        .from("active_students")
         .select("*")
         .eq("class_id", classId)
         .order("name")

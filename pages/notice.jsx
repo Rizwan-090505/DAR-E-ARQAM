@@ -144,7 +144,7 @@ export default function BulkMessagePage() {
         // CASE A: Direct Student Selection (Bypass Class Query)
         if (urlStudentId) {
           const { data, error } = await supabase
-            .from('students')
+            .from('active_students')
             .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
             .eq('studentid', urlStudentId)
             // We use .maybeSingle() or just handle the array. 

@@ -100,7 +100,7 @@ export default function ClassPage() {
 
   const fetchStudents = async () => {
     const { data, error } = await supabase
-      .from('students')
+      .from('active_students')
       .select('studentid, name, fathername, dob')
       .eq('class_id', id)
       .order('name')

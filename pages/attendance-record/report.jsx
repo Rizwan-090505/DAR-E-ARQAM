@@ -84,7 +84,7 @@ export default function AttendanceReportPage() {
 
         const { data, error } = await supabase
           .from("attendance")
-          .select("studentid, status, date, students(name, fathername, mobilenumber)")
+          .select("studentid, status, date, active_students(name, fathername, mobilenumber)")
           .eq("class_id", selectedClassId)
           .gte("date", startDate)
           .lte("date", endDate)

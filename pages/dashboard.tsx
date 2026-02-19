@@ -86,7 +86,7 @@ export default function Dashboard() {
         classesData.map(async (cls: any) => {
           // Count Students (Exact)
           const { count: studentCount } = await supabase
-            .from('students')
+            .from('active_students')
             .select('*', { count: 'exact', head: true })
             .eq('class_id', cls.id)
 

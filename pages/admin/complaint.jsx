@@ -135,7 +135,7 @@ export default function ComplaintsAdmin() {
       return;
     }
     const fetchStudents = async () => {
-      const { data } = await supabase.from("students").select("*").eq("class_id", selectedClass);
+      const { data } = await supabase.from("active_students").select("*").eq("class_id", selectedClass);
       if (data) setStudents(data);
     };
     fetchStudents();
