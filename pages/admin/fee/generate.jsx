@@ -418,7 +418,7 @@ function GenerateInvoicesContent() {
                           placeholder="Custom Label" 
                           value={config.customFeeLabel} 
                           onChange={(e) => setConfig({...config, customFeeLabel: e.target.value})} 
-                          className="bg-transparent border-b border-gray-600 text-white focus:outline-none focus:border-blue-500 w-full font-semibold placeholder:text-gray-400 placeholder:font-normal"
+                          className="bg-transparent border-b border-gray-600 text-black dark:text-white focus:outline-none focus:border-blue-500 w-full font-semibold placeholder:text-gray-400 placeholder:font-normal"
                         />
                       </Label>
                       <Input type="number" placeholder="0" value={config.customFeeDefault} onChange={(e) => setConfig({...config, customFeeDefault: e.target.value})} className={inputClass} />
