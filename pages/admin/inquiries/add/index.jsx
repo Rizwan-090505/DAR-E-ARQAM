@@ -16,9 +16,9 @@ import {
   MessageSquare, Pencil, Check, X
 } from "lucide-react";
 
-import { getPakistanDate } from "../constants";
-import { insertInquiry } from "../inquiryService";
-import { printFeeQuote } from "../printUtils";
+import { getPakistanDate } from "../../../../utils/constants";
+import { insertInquiry } from "../../../../utils/inquiryService";
+import { printFeeQuote } from "../../../../utils/printUtils";
 import { useToast } from "../../../../hooks/use-toast";
 import { supabase } from "../../../../utils/supabaseClient";
 
