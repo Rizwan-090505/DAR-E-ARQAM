@@ -23,7 +23,7 @@ import { useToast } from "../../../../hooks/use-toast";
 import { supabase } from "../../../../utils/supabaseClient";
 
 // ─── Default fee values ───────────────────────────────────────────────────────
-const DEFAULT_FEE = { admission: 8000, monthly: 4700, annual: 5000, stationery: 5000 };
+const DEFAULT_FEE = { admission: 8000, monthly: 5000, annual: 5000, stationery: 5000 };
 
 function makeFeeJson(feeObj) {
   return JSON.stringify(feeObj);
