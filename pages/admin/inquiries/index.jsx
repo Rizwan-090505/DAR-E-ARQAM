@@ -14,13 +14,13 @@ import {
   Printer, Trash2, FileText, Send
 } from "lucide-react";
 
-import { BADGE_STYLES, FILTERS, INPUT_STYLES, getPakistanDate } from "./constants";
-import { generateMessageTemplate } from "./messageTemplates";
+import { BADGE_STYLES, FILTERS, INPUT_STYLES, getPakistanDate } from "../../../utils/constants";
+import { generateMessageTemplate } from "../../../utils/messageTemplates";
 import {
   fetchAllInquiries, updateInquiryStatus,
   incrementFollowUpCount, logMessage
-} from "./inquiryService";
-import { parseFee, printFeeQuote, printTestSlip } from "./printUtils";
+} from "../../../utils/inquiryService";
+import { parseFee, printFeeQuote, printTestSlip } from "../../../utils/printUtils";
 
 // ─── Reusable Modal (Overflow Safe with Fixed Footer) ─────────────────────────
 const Modal = ({ isOpen, onClose, title, subtitle, children, footer, wide }) => {

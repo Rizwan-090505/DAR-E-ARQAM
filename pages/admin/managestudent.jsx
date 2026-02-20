@@ -107,7 +107,7 @@ function ManageStudentContent() {
     }
     const { data } = await supabase
       .from("inquiries")
-      .select("*")
+      .select("id, name,fathername,mobilenumber, address")
       .ilike("name", `%${query}%`)
       .limit(5)
     setInquiryResults(data || [])
@@ -116,9 +116,10 @@ function ManageStudentContent() {
   const importInquiry = (inquiry) => {
     setFormData(prev => ({
       ...prev,
-      name: inquiry.name,
-      fathername: inquiry.father_name || "",
-      mobilenumber: inquiry.mobile || "",
+      name: inquiry.name || "",
+      fathername: inquiry.father_name || inquiry.fathername || "",
+      mobilenumber: inquiry.mobile || inquiry.mobilenumber || "",
+      address: inquiry.address || "",
     }))
     setShowInquirySearch(false)
     setInquirySearch("")
@@ -190,7 +191,7 @@ function ManageStudentContent() {
           .insert([{
             student_id: formData.studentid,
             invoice_date: new Date().toISOString().split('T')[0],
-            due_date: new Date().toISOString().split('T')[0], // Due today
+            due_date: new Date().toISOString().split('T')[0],
             total_amount: totalAmount,
             status: "unpaid"
           }])
@@ -205,15 +206,10 @@ function ManageStudentContent() {
           // B. Prepare Detail Rows (fee_invoice_details)
           const detailsPayload = [];
 
-          // 1. Tuition
           if (monthly > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: 'Tuition Fee', description: 'First Month Tuition', amount: monthly });
-          // 2. Admission
           if (admission > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: 'Admission Fee', description: 'New Admission Charges', amount: admission });
-          // 3. Annual
           if (annual > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: 'Annual Funds', description: 'Annual/Paper Funds', amount: annual });
-          // 4. Stationery
           if (stationery > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: 'Stationery', description: 'Books/Stationery', amount: stationery });
-          // 5. Discount (Negative Amount)
           if (discount > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: 'Discount', description: 'Admission Discount', amount: -discount });
 
           if (detailsPayload.length > 0) {
@@ -283,7 +279,7 @@ function ManageStudentContent() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-blue-600/70" />
                 <Input 
-                  placeholder="Search inquiry..." 
+                  placeholder="Search by student name..." 
                   className="pl-10 bg-white/60 dark:bg-black/40 border-blue-200 dark:border-blue-800"
                   value={inquirySearch}
                   onChange={(e) => handleInquirySearch(e.target.value)}
@@ -295,12 +291,20 @@ function ManageStudentContent() {
                     <div key={inq.id} className="flex justify-between items-center p-3 rounded-lg bg-white/60 dark:bg-white/5 border border-white/20 shadow-sm">
                       <div>
                         <p className="font-bold text-sm text-gray-800 dark:text-gray-200">{inq.name}</p>
-                        <p className="text-xs text-gray-500">{inq.mobile}</p>
+                        <p className="text-xs text-gray-500">
+                          {inq.father_name || inq.fathername || "—"} &nbsp;·&nbsp; {inq.mobile || inq.mobilenumber || "—"}
+                        </p>
+                        {(inq.address) && (
+                          <p className="text-xs text-gray-400 mt-0.5">{inq.address}</p>
+                        )}
                       </div>
                       <Button size="sm" className="bg-blue-600/90 hover:bg-blue-700" onClick={() => importInquiry(inq)}>Import</Button>
                     </div>
                   ))}
                 </div>
+              )}
+              {inquirySearch.length >= 2 && inquiryResults.length === 0 && (
+                <p className="text-center text-sm text-gray-500 mt-3">No inquiries found for "{inquirySearch}"</p>
               )}
             </div>
           )}
