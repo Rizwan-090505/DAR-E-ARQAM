@@ -382,7 +382,7 @@ function GenerateInvoicesContent() {
                 <div className="lg:col-span-1">
                    <Label className="text-xs text-gray-500 font-semibold uppercase mb-1">Class</Label>
                    <select 
-                      className={`w-full rounded-md border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass} [&>option]:bg-[#0b1220]`}
+                      className={`w-full rounded-md border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass} `}
                       value={selectedClassId}
                       onChange={handleClassChange}
                     >
