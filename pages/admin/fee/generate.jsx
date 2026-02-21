@@ -382,23 +382,27 @@ function GenerateInvoicesContent() {
                 <div className="lg:col-span-1">
                    <Label className="text-xs text-gray-500 font-semibold uppercase mb-1">Class</Label>
                    <select 
-                      className={`w-full rounded-md border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${inputClass} `}
+                      className="w-full h-9 rounded-md border border-gray-300 dark:border-gray-700 px-3 text-sm focus:outline-none focus:ring-2 bg-white dark:bg-white/5 text-black dark:text-white focus:ring-blue-500/50 shadow-sm transition-colors cursor-pointer"
                       value={selectedClassId}
                       onChange={handleClassChange}
                     >
-                      <option value="">-- Select --</option>
-                      {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <option value="" className="bg-white dark:bg-[#111827] text-gray-900 dark:text-gray-200">-- Select --</option>
+                      {classes.map(c => (
+                        <option key={c.id} value={c.id} className="bg-white dark:bg-[#111827] text-gray-900 dark:text-gray-200">
+                          {c.name}
+                        </option>
+                      ))}
                     </select>
                 </div>
 
                 <div className="lg:col-span-1">
                    <Label className="text-xs text-gray-500 font-semibold uppercase mb-1">Invoice Date</Label>
-                   <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className={inputClass} />
+                   <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)}  />
                 </div>
 
                 <div className="lg:col-span-1">
                    <Label className="text-xs text-gray-500 font-semibold uppercase mb-1">Due Date</Label>
-                   <Input type="date" value={config.dueDate} onChange={(e) => setConfig({...config, dueDate: e.target.value})} className={inputClass}/>
+                   <Input type="date" value={config.dueDate} onChange={(e) => setConfig({...config, dueDate: e.target.value})} />
                 </div>
 
                 <div className="lg:col-span-3 grid grid-cols-3 gap-2 border-l pl-3 border-white/10">
@@ -477,7 +481,7 @@ function GenerateInvoicesContent() {
                    {config.stationeryCharges > 0 ? `Stationery: Rs. [Amount]\n` : ""}
                    {config.customFeeDefault > 0 ? `${config.customFeeLabel || 'Custom Charges'}: Rs. [Amount]\n` : ""}
                    Arrears: Rs. [Amount] (if any){"\n\n"}
-                   💰 *Total Due:* Rs. [Grand Total]{"\n"}
+                   *Total Due:* Rs. [Grand Total]{"\n"}
                    📅 *Due Date:* {config.dueDate}{"\n\n"}
                    Please clear the dues before the deadline. Thank you! 🏫
                  </div>
@@ -496,7 +500,7 @@ function GenerateInvoicesContent() {
               </div>
 
               {!selectedClassId ? (
-                   <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-800 m-4 rounded-xl">
+                   <div className="h-64 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-800 text-black dark:text-white dark:bg-white/5 m-4 rounded-xl">
                      <Filter className="w-8 h-8 mb-2 opacity-20" />
                      <p className="text-sm">Select a class above to load students</p>
                    </div>
