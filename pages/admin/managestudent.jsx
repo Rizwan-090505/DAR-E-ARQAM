@@ -164,7 +164,8 @@ function ManageStudentContent() {
           .insert([{ 
             studentid: formData.studentid,
             ...formData, 
-            Clear: false 
+            Clear: false,
+            status:"invoice_generated"
           }])
 
         if (error) {

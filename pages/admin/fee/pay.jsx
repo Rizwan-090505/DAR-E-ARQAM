@@ -222,6 +222,18 @@ export default function PayInvoiceContent() {
 
       await supabase.from("fee_invoices").update({ status: newStatus }).eq("id", invoiceId)
 
+      // SET STUDENT TO ACTIVE IF STATUS WAS invoice_generated AND ANY PAYMENT RECEIVED
+      if (totalPayingNow > 0 && student?.studentid && student?.status === "invoice_generated") {
+        const { error: activeStatusError } = await supabase
+          .from("students")
+          .update({ status: "active" })
+          .eq("studentid", student.studentid);
+
+        if (activeStatusError) {
+          console.error("Failed to update student status to active:", activeStatusError);
+        }
+      }
+
       // CLEAR STUDENT IF FULLY PAID
       if (totalPaidAfter >= grandTotal && student?.studentid) {
         const { error: studentUpdateError } = await supabase
@@ -236,13 +248,13 @@ export default function PayInvoiceContent() {
 
       // GENERATE & INSERT WHATSAPP MESSAGE (Conditional)
       if (sendMessageToParent) {
-        let receiptText = `🏫 *FEE PAYMENT RECEIPT* 🏫\n`;
+        let receiptText = `*FEE PAYMENT RECEIPT*\n`;
         receiptText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
         receiptText += `👤 *Student:* ${student?.name}\n`;
         receiptText += `🆔 *DAS NUMBER:* ${student?.studentid}\n`;
         receiptText += `📄 *Invoice #:* ${invoiceId}\n\n`;
         
-        receiptText += `*💰 FEE BREAKDOWN (PAID)*\n`;
+        receiptText += `*FEE BREAKDOWN (PAID)*\n`;
         receiptText += `-------------------------\n`;
         
         calculatedDetails.forEach(item => {
