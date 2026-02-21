@@ -357,7 +357,7 @@ function GenerateInvoicesContent() {
 
   // --- Styles ---
   const glassCardClass = "relative overflow-hidden rounded-xl border border-white/20 bg-black/40 backdrop-blur-xl shadow-sm p-4"
-  const inputClass = "h-9 bg-white dark:bg-white/5 border-white/20 focus:border-blue-500/50 text-gray-800 dark:text-white"
+  const inputClass = "h-9 bg-white dark:bg-white/5 border-white/20 focus:border-blue-500/50 text-black dark:text-white"
 
   return (
     <>
