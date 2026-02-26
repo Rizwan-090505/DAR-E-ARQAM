@@ -1,8 +1,9 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { supabase } from "./supabaseClient"; // Adjust path if needed
+import { supabase } from "./supabaseClient";
 
 export const generateCollectionReportBlob = async (startDate, endDate) => {
+
   // --- 1. Fetch data from Supabase using Pagination ---
   let allReceipts = [];
   let fetchMore = true;
@@ -58,7 +59,7 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   const endStr = new Date(endDate).toLocaleDateString();
   const dateRangeString = startStr === endStr ? startStr : `${startStr} to ${endStr}`;
 
-  // --- 3. Grouping Logic (Direct from raw Supabase data) ---
+  // --- 3. Grouping Logic (keyed by studentId + date + mode) ---
   const groupedMap = new Map();
 
   allReceipts.forEach((rcpt) => {
@@ -74,7 +75,8 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
     const amount = Number(rcpt.amount) || 0;
     const mode = rcpt.payment_method || "Cash";
 
-    const key = `${studentId}_${receiptDate}`;
+    // Key includes mode so different payment modes are never merged
+    const key = `${studentId}_${receiptDate}_${mode}`;
 
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
@@ -83,13 +85,12 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
         className: studentClass,
         descriptions: new Set([description]),
         amount: amount,
-        modes: new Set([mode])
+        mode: mode
       });
     } else {
       const existing = groupedMap.get(key);
       existing.amount += amount;
       existing.descriptions.add(description);
-      existing.modes.add(mode);
     }
   });
 
@@ -143,14 +144,14 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
       group.className,
       Array.from(group.descriptions).join(", "),
       group.amount.toLocaleString(),
-      Array.from(group.modes).join(", ").toUpperCase()
+      group.mode.toUpperCase()
     ]);
   });
 
   // --- Per-mode subtotals ---
   const modeTotals = {};
   sortedGroupedData.forEach((group) => {
-    const modeKey = Array.from(group.modes).map(m => m.toUpperCase()).sort().join(" + ");
+    const modeKey = group.mode.toUpperCase();
     modeTotals[modeKey] = (modeTotals[modeKey] || 0) + group.amount;
   });
 
