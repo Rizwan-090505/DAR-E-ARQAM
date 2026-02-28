@@ -32,81 +32,100 @@ async function generatePDF({ studentsResults, subjects, subjectAverages, classes
   const className = classes.find(c => String(c.id) === String(selectedClass))?.name || 'Class';
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-  // ── Page dimensions & safe zones ─────────────────────────────────────────
-  const PW = 297, PH = 210;           // A4 landscape
-  const HEADER_H  = 22;               // top header band height
-  const FOOTER_H  = 10;               // bottom footer band height
-  const MARGIN    = 10;               // left/right page margin
-  const CONTENT_TOP    = HEADER_H + 3;           // first safe content Y
-  const CONTENT_BOTTOM = PH - FOOTER_H - 2;      // last safe content Y
-  const CONTENT_H      = CONTENT_BOTTOM - CONTENT_TOP;
+  const PW = 297, PH = 210;
+  const HEADER_H  = 22;
+  const FOOTER_H  = 10;
+  const MARGIN    = 10;
+  const CONTENT_TOP    = HEADER_H + 3;
+  const CONTENT_BOTTOM = PH - FOOTER_H - 2;
   const CONTENT_W      = PW - MARGIN * 2;
 
-  // ── Colour palette ────────────────────────────────────────────────────────
+  // ── Colour palette (for data pages) ──────────────────────────────────────
   const C = {
-    // Page chrome
     pageBg:   [245, 247, 250],
     hdrBg:    [10,  15,  30],
-    hdrLine:  [79,  70,  229],   // indigo-600
+    hdrLine:  [79,  70,  229],
     ftrBg:    [10,  15,  30],
     accent:   [79,  70,  229],
-    accentLt: [199, 210, 254],   // indigo-200
-    // Rows
+    accentLt: [199, 210, 254],
     rowA:     [249, 250, 252],
     rowB:     [255, 255, 255],
-    // Grade fills
     gFill: { 'A+': [209,250,229], A: [219,234,254], B: [254,243,199], C: [255,251,235], D: [255,237,213], E: [254,215,170], F: [254,202,202] },
-    // Grade text
     gText: { 'A+': [4,120,87],   A: [29,78,216],   B: [146,64,14],  C: [161,98,7],   D: [154,52,18],  E: [194,65,12],  F: [185,28,28]  },
-    // Neutrals
     white:  [255,255,255],
     black:  [0,  0,  0],
     ink:    [17, 24, 39],
     mid:    [75, 85, 99],
     muted:  [156,163,175],
     border: [229,231,235],
-    // medals
     gold:   [253,211,77],
     silver: [209,213,219],
     bronze: [253,186,116],
-    // stats
     emerald:[16, 185,129],
     red:    [239,68, 68],
     indigo: [99, 102,241],
     sky:    [14, 165,233],
   };
 
-  // ── Low-level drawing helpers ─────────────────────────────────────────────
+  // ── B&W palette (stats/analytics page only) ───────────────────────────────
+  // White background, black borders and text, distinct grayscale fills for bars
+  const BW = {
+    white:   [255, 255, 255],
+    black:   [0,   0,   0  ],
+    ink:     [0,   0,   0  ],
+    mid:     [80,  80,  80 ],
+    muted:   [130, 130, 130],
+    light:   [180, 180, 180],
+    // Grade bar fills: dark (A+) → light (F) so bars differ clearly when printed
+    barFill: {
+      'A+': [20,  20,  20 ],
+      A:    [60,  60,  60 ],
+      B:    [95,  95,  95 ],
+      C:    [130, 130, 130],
+      D:    [160, 160, 160],
+      E:    [190, 190, 190],
+      F:    [215, 215, 215],
+    },
+    trackBg: [240, 240, 240],
+    trackBd: [180, 180, 180],
+    // Grade badge fills for Top Performers (alternating light rows)
+    rowBg: [
+      [210, 210, 210],  // 1st – darkest
+      [228, 228, 228],  // 2nd
+      [240, 240, 240],  // 3rd
+      [248, 248, 248],  // 4th
+      [252, 252, 252],  // 5th
+    ],
+    // Pass/Fail pie: light gray = pass, dark gray = fail
+    passFill: [220, 220, 220],
+    failFill: [80,  80,  80 ],
+  };
+
+  // ── Drawing primitives ────────────────────────────────────────────────────
   const sf = c => doc.setFillColor  (c[0], c[1], c[2]);
   const sd = c => doc.setDrawColor  (c[0], c[1], c[2]);
   const st = c => doc.setTextColor  (c[0], c[1], c[2]);
 
-  const fillR  = (x,y,w,h,c)          => { sf(c); doc.rect(x,y,w,h,'F'); };
-  const bdR    = (x,y,w,h,fc,sc)      => { sf(fc); sd(sc); doc.rect(x,y,w,h,'FD'); };
-  const strokeR= (x,y,w,h,c)          => { sd(c); doc.rect(x,y,w,h,'S'); };
+  const fillR   = (x,y,w,h,c)     => { sf(c); doc.rect(x,y,w,h,'F'); };
+  const bdR     = (x,y,w,h,fc,sc) => { sf(fc); sd(sc); doc.rect(x,y,w,h,'FD'); };
+  const strokeR = (x,y,w,h,c)     => { sd(c); doc.rect(x,y,w,h,'S'); };
 
-  // Draw a table cell: optional fill → border → text
   const cell = (x, y, w, h, txt, opts = {}) => {
-    const {
-      fill = null, tc = C.ink, fs = 6.5, align = 'center',
-      bold = false, bc = C.border, pad = 1.5,
-    } = opts;
-    if (fill) fillR(x, y, w, h, fill);
-    strokeR(x, y, w, h, bc);
-    doc.setFontSize(fs);
-    doc.setFont('helvetica', bold ? 'bold' : 'normal');
-    st(tc);
-    const ty = y + h / 2 + fs * 0.175;
+    const { fill=null, tc=C.ink, fs=6.5, align='center', bold=false, bc=C.border, pad=1.5 } = opts;
+    if (fill) fillR(x,y,w,h,fill);
+    strokeR(x,y,w,h,bc);
+    doc.setFontSize(fs); doc.setFont('helvetica', bold ? 'bold' : 'normal'); st(tc);
+    const ty = y + h/2 + fs*0.175;
     const s  = String(txt ?? '');
-    if      (align === 'center') doc.text(s, x + w / 2,   ty, { align: 'center' });
-    else if (align === 'right')  doc.text(s, x + w - pad,  ty, { align: 'right'  });
-    else                          doc.text(s, x + pad,       ty);
+    if      (align === 'center') doc.text(s, x+w/2,   ty, { align:'center' });
+    else if (align === 'right')  doc.text(s, x+w-pad,  ty, { align:'right'  });
+    else                          doc.text(s, x+pad,     ty);
   };
 
   const gFill = g => C.gFill[g] || C.rowB;
   const gText = g => C.gText[g] || C.ink;
 
-  // ── TABLE column geometry ─────────────────────────────────────────────────
+  // ── Table geometry ────────────────────────────────────────────────────────
   const NAME_W  = 42;
   const POS_W   = 10;
   const OV_P_W  = 15;
@@ -117,458 +136,435 @@ async function generatePDF({ studentsResults, subjects, subjectAverages, classes
   const PCT_W   = SUB_W * 0.36;
   const GRD_W   = SUB_W * 0.28;
   const TABLE_W = FIXED_W + subjects.length * SUB_W;
-  const TX      = MARGIN + (CONTENT_W - TABLE_W) / 2;  // table start X, centred
+  const TX      = MARGIN + (CONTENT_W - TABLE_W) / 2;
 
   const ROW_H  = 7;
   const HDR1_H = 7;
   const HDR2_H = 5;
 
-  // ── PAGE CHROME ───────────────────────────────────────────────────────────
+  // ── Page chrome (colored, for data pages) ────────────────────────────────
   const paintBg = () => {
     fillR(0, 0, PW, PH, C.pageBg);
-    // Subtle vertical accent stripes
-    fillR(0,       0, 3, PH, C.accent);
-    fillR(PW - 3,  0, 3, PH, C.accent);
+    fillR(0,      0, 3, PH, C.accent);
+    fillR(PW-3,   0, 3, PH, C.accent);
   };
 
   const paintHeader = (title, sub) => {
     fillR(0, 0, PW, HEADER_H, C.hdrBg);
-    fillR(3, 0, PW - 6, HEADER_H, C.hdrBg);      // keep over accent stripes
-    fillR(0, HEADER_H - 1.5, PW, 1.5, C.hdrLine); // bottom rule
-    // Title
-    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); st(C.white);
-    doc.text(title, PW / 2, 9, { align: 'center' });
-    doc.setFontSize(6.5); doc.setFont('helvetica', 'normal'); st(C.muted);
-    doc.text(sub, PW / 2, 16.5, { align: 'center' });
+    fillR(3, 0, PW-6, HEADER_H, C.hdrBg);
+    fillR(0, HEADER_H-1.5, PW, 1.5, C.hdrLine);
+    doc.setFontSize(11); doc.setFont('helvetica','bold'); st(C.white);
+    doc.text(title, PW/2, 9, { align:'center' });
+    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); st(C.muted);
+    doc.text(sub, PW/2, 16.5, { align:'center' });
   };
 
   const paintFooter = (pg, total) => {
-    fillR(0, PH - FOOTER_H, PW, FOOTER_H, C.ftrBg);
-    fillR(0, PH - FOOTER_H, PW, 1, C.hdrLine);
-    doc.setFontSize(5.5); doc.setFont('helvetica', 'normal'); st(C.muted);
+    fillR(0, PH-FOOTER_H, PW, FOOTER_H, C.ftrBg);
+    fillR(0, PH-FOOTER_H, PW, 1, C.hdrLine);
+    doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(C.muted);
     doc.text(
       `Generated: ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}`,
-      MARGIN + 3, PH - 3.5,
+      MARGIN+3, PH-3.5,
     );
-    doc.text(`Page ${pg} of ${total}`, PW - MARGIN - 3, PH - 3.5, { align: 'right' });
-    doc.text(`${className}  ·  ${startDate} → ${endDate}`, PW / 2, PH - 3.5, { align: 'center' });
+    doc.text(`Page ${pg} of ${total}`, PW-MARGIN-3, PH-3.5, { align:'right' });
+    doc.text(`${className}  ·  ${startDate} → ${endDate}`, PW/2, PH-3.5, { align:'center' });
   };
 
-  // ── TABLE HEADER (returns Y after headers) ────────────────────────────────
+  // ── Table header ─────────────────────────────────────────────────────────
   const drawTableHeaders = (startY) => {
     let x = TX;
     const y1 = startY, y2 = startY + HDR1_H;
 
-    // ── Row 1 label blocks ─────────────────────────────────────────────────
     bdR(x, y1, NAME_W, HDR1_H, C.hdrBg, C.hdrBg);
     doc.setFontSize(7); doc.setFont('helvetica','bold'); st(C.white);
-    doc.text('STUDENT', x + NAME_W / 2, y1 + HDR1_H / 2 + 1.2, { align:'center' });
+    doc.text('STUDENT', x+NAME_W/2, y1+HDR1_H/2+1.2, { align:'center' });
     x += NAME_W;
 
     bdR(x, y1, POS_W, HDR1_H, C.hdrBg, C.hdrBg);
     doc.setFontSize(6); st(C.muted);
-    doc.text('POS', x + POS_W / 2, y1 + HDR1_H / 2 + 1.2, { align:'center' });
+    doc.text('POS', x+POS_W/2, y1+HDR1_H/2+1.2, { align:'center' });
     x += POS_W;
 
     subjects.forEach(sub => {
       const lbl = sub.length > 11 ? sub.slice(0,10)+'…' : sub;
       bdR(x, y1, SUB_W, HDR1_H, [20,27,48], [30,41,59]);
       doc.setFontSize(6); doc.setFont('helvetica','bold'); st(C.accentLt);
-      doc.text(lbl, x + SUB_W / 2, y1 + HDR1_H / 2 + 1.2, { align:'center' });
+      doc.text(lbl, x+SUB_W/2, y1+HDR1_H/2+1.2, { align:'center' });
       x += SUB_W;
     });
 
-    // Overall spanning cell
-    bdR(x, y1, OV_P_W + OV_G_W, HDR1_H, C.accent, C.accent);
+    bdR(x, y1, OV_P_W+OV_G_W, HDR1_H, C.accent, C.accent);
     doc.setFontSize(7); doc.setFont('helvetica','bold'); st(C.white);
-    doc.text('OVERALL', x + (OV_P_W + OV_G_W) / 2, y1 + HDR1_H / 2 + 1.2, { align:'center' });
+    doc.text('OVERALL', x+(OV_P_W+OV_G_W)/2, y1+HDR1_H/2+1.2, { align:'center' });
 
-    // ── Row 2 sub-labels ───────────────────────────────────────────────────
     x = TX + NAME_W + POS_W;
     subjects.forEach(() => {
       cell(x,           y2, MRK_W, HDR2_H, 'Mrk', { fill:[18,25,45], tc:C.muted, fs:5,   bc:[15,23,42] });
-      cell(x + MRK_W,   y2, PCT_W, HDR2_H, '%',   { fill:[18,25,45], tc:C.muted, fs:5,   bc:[15,23,42] });
-      cell(x+MRK_W+PCT_W, y2, GRD_W, HDR2_H, 'Grd',{ fill:[18,25,45], tc:C.muted, fs:5, bc:[15,23,42] });
+      cell(x+MRK_W,     y2, PCT_W, HDR2_H, '%',   { fill:[18,25,45], tc:C.muted, fs:5,   bc:[15,23,42] });
+      cell(x+MRK_W+PCT_W, y2, GRD_W, HDR2_H, 'Grd', { fill:[18,25,45], tc:C.muted, fs:5, bc:[15,23,42] });
       x += SUB_W;
     });
-    cell(x,           y2, OV_P_W, HDR2_H, '%',   { fill:[67,56,202], tc:C.white, fs:5.5 });
-    cell(x + OV_P_W,  y2, OV_G_W, HDR2_H, 'Grd', { fill:[67,56,202], tc:C.white, fs:5.5 });
+    cell(x,         y2, OV_P_W, HDR2_H, '%',   { fill:[67,56,202], tc:C.white, fs:5.5 });
+    cell(x+OV_P_W,  y2, OV_G_W, HDR2_H, 'Grd', { fill:[67,56,202], tc:C.white, fs:5.5 });
 
     return y2 + HDR2_H;
   };
 
-  // ── SINGLE DATA ROW ───────────────────────────────────────────────────────
+  // ── Data row ──────────────────────────────────────────────────────────────
   const drawRow = (student, y, isOdd) => {
     const mm  = new Map(student.marksData.map(m => [m.subject, m]));
     const bg  = isOdd ? C.rowA : C.rowB;
     const ovG = student.overallGrade;
     let x = TX;
 
-    // Name
     fillR(x, y, NAME_W, ROW_H, bg);
     strokeR(x, y, NAME_W, ROW_H, C.border);
     doc.setFontSize(6.5); doc.setFont('helvetica','bold'); st(C.ink);
     const nm = student.studentName.length > 23 ? student.studentName.slice(0,22)+'…' : student.studentName;
-    doc.text(nm, x + 2, y + ROW_H/2 - 0.6);
+    doc.text(nm, x+2, y+ROW_H/2-0.6);
     doc.setFontSize(5.2); doc.setFont('helvetica','normal'); st(C.muted);
-    doc.text('ID: '+student.dasNumber, x + 2, y + ROW_H/2 + 2.8);
+    doc.text('ID: '+student.dasNumber, x+2, y+ROW_H/2+2.8);
     x += NAME_W;
 
-    // Position
     const pFill = student.position===1 ? C.gold : student.position===2 ? C.silver : student.position===3 ? C.bronze : bg;
     bdR(x, y, POS_W, ROW_H, pFill, C.border);
     doc.setFontSize(7.5); doc.setFont('helvetica','bold');
     st(student.position <= 3 ? C.black : C.muted);
-    doc.text(String(student.position), x + POS_W/2, y + ROW_H/2 + 1.4, { align:'center' });
+    doc.text(String(student.position), x+POS_W/2, y+ROW_H/2+1.4, { align:'center' });
     x += POS_W;
 
-    // Subject columns
     subjects.forEach(sub => {
       const m   = mm.get(sub);
-      const pct = (m?.total_marks > 0) ? (m.obtained_marks / m.total_marks) * 100 : undefined;
+      const pct = (m?.total_marks > 0) ? (m.obtained_marks/m.total_marks)*100 : undefined;
       const g   = pct !== undefined ? gradeFromPercent(pct) : '-';
       const gf  = pct !== undefined ? gFill(g) : bg;
       const gt  = pct !== undefined ? gText(g) : C.muted;
 
-      // Marks & % on row background
-      cell(x,           y, MRK_W, ROW_H, m?.obtained_marks ?? '—', { fill:bg, tc:C.mid, fs:6.2 });
-      cell(x + MRK_W,   y, PCT_W, ROW_H, pct !== undefined ? pct.toFixed(0)+'%':'—', { fill:bg, tc:C.muted, fs:5.8 });
+      cell(x,         y, MRK_W, ROW_H, m?.obtained_marks ?? '—', { fill:bg, tc:C.mid,   fs:6.2 });
+      cell(x+MRK_W,   y, PCT_W, ROW_H, pct !== undefined ? pct.toFixed(0)+'%':'—', { fill:bg, tc:C.muted, fs:5.8 });
 
-      // Grade badge — inner fill with 1px inset padding
-      fillR(x + MRK_W + PCT_W, y, GRD_W, ROW_H, bg);
-      strokeR(x + MRK_W + PCT_W, y, GRD_W, ROW_H, C.border);
-      fillR(x + MRK_W + PCT_W + 0.6, y + 0.8, GRD_W - 1.2, ROW_H - 1.6, gf);
+      fillR(x+MRK_W+PCT_W, y, GRD_W, ROW_H, bg);
+      strokeR(x+MRK_W+PCT_W, y, GRD_W, ROW_H, C.border);
+      fillR(x+MRK_W+PCT_W+0.6, y+0.8, GRD_W-1.2, ROW_H-1.6, gf);
       doc.setFontSize(6.8); doc.setFont('helvetica','bold'); st(gt);
-      doc.text(g, x + MRK_W + PCT_W + GRD_W/2, y + ROW_H/2 + 1.3, { align:'center' });
+      doc.text(g, x+MRK_W+PCT_W+GRD_W/2, y+ROW_H/2+1.3, { align:'center' });
       x += SUB_W;
     });
 
-    // Overall — full badge
-    const ovF = gFill(ovG);
-    const ovT = gText(ovG);
+    const ovF = gFill(ovG), ovT = gText(ovG);
     fillR(x, y, OV_P_W, ROW_H, bg);
     strokeR(x, y, OV_P_W, ROW_H, ovT);
-    fillR(x + 0.5, y + 0.7, OV_P_W - 1, ROW_H - 1.4, ovF);
+    fillR(x+0.5, y+0.7, OV_P_W-1, ROW_H-1.4, ovF);
     doc.setFontSize(6.8); doc.setFont('helvetica','bold'); st(ovT);
-    doc.text(student.overallPercent.toFixed(1)+'%', x + OV_P_W/2, y + ROW_H/2 + 1.3, { align:'center' });
+    doc.text(student.overallPercent.toFixed(1)+'%', x+OV_P_W/2, y+ROW_H/2+1.3, { align:'center' });
     x += OV_P_W;
 
     fillR(x, y, OV_G_W, ROW_H, bg);
     strokeR(x, y, OV_G_W, ROW_H, ovT);
-    fillR(x + 0.5, y + 0.7, OV_G_W - 1, ROW_H - 1.4, ovF);
+    fillR(x+0.5, y+0.7, OV_G_W-1, ROW_H-1.4, ovF);
     doc.setFontSize(7.5); doc.setFont('helvetica','bold'); st(ovT);
-    doc.text(ovG, x + OV_G_W/2, y + ROW_H/2 + 1.4, { align:'center' });
+    doc.text(ovG, x+OV_G_W/2, y+ROW_H/2+1.4, { align:'center' });
   };
 
-  // ── AVERAGE FOOTER ROW ────────────────────────────────────────────────────
+  // ── Average footer row ────────────────────────────────────────────────────
   const drawAvgRow = (y) => {
     let x = TX;
-    bdR(x, y, NAME_W + POS_W, ROW_H, C.hdrBg, C.hdrBg);
+    bdR(x, y, NAME_W+POS_W, ROW_H, C.hdrBg, C.hdrBg);
     doc.setFontSize(6); doc.setFont('helvetica','bold'); st(C.accentLt);
-    doc.text('CLASS AVERAGE', x + (NAME_W + POS_W)/2, y + ROW_H/2 + 1.2, { align:'center' });
+    doc.text('CLASS AVERAGE', x+(NAME_W+POS_W)/2, y+ROW_H/2+1.2, { align:'center' });
     x += NAME_W + POS_W;
 
     subjects.forEach(sub => {
       const avg = parseFloat(subjectAverages[sub] || 0);
       const g   = gradeFromPercent(avg);
       bdR(x, y, SUB_W, ROW_H, [18,25,45], [30,41,59]);
-      fillR(x + 0.5, y + 0.7, SUB_W - 1, ROW_H - 1.4, gFill(g));
+      fillR(x+0.5, y+0.7, SUB_W-1, ROW_H-1.4, gFill(g));
       doc.setFontSize(6.5); doc.setFont('helvetica','bold'); st(gText(g));
-      doc.text(avg.toFixed(1)+'%', x + SUB_W/2, y + ROW_H/2 + 1.2, { align:'center' });
+      doc.text(avg.toFixed(1)+'%', x+SUB_W/2, y+ROW_H/2+1.2, { align:'center' });
       x += SUB_W;
     });
-    bdR(x, y, OV_P_W + OV_G_W, ROW_H, [18,25,45], [30,41,59]);
+    bdR(x, y, OV_P_W+OV_G_W, ROW_H, [18,25,45], [30,41,59]);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STATS PAGE — completely self-contained, no overlap possible
-  // Layout: strict grid of panels, each with its own bounding box
+  // STATS PAGE — B&W PRINT-FRIENDLY
+  // White background, black borders, strictly grayscale fills
   // ─────────────────────────────────────────────────────────────────────────
   const drawStatsPage = () => {
     doc.addPage();
-    paintBg();
-    paintHeader(
-      `ANALYTICS & STATISTICS  —  ${className.toUpperCase()}`,
-      `Period: ${startDate}  →  ${endDate}  ·  ${studentsResults.length} students`
-    );
+
+    // White page background
+    fillR(0, 0, PW, PH, BW.white);
+
+    // ── Header (black on white) ──────────────────────────────────────────────
+    fillR(0, 0, PW, HEADER_H, BW.black);
+    fillR(0, HEADER_H-1.5, PW, 1.5, BW.mid);
+    doc.setFontSize(11); doc.setFont('helvetica','bold'); st(BW.white);
+    doc.text(`ANALYTICS & STATISTICS  —  ${className.toUpperCase()}`, PW/2, 9, { align:'center' });
+    doc.setFontSize(6.5); doc.setFont('helvetica','normal'); st(BW.light);
+    doc.text(`Period: ${startDate}  →  ${endDate}  ·  ${studentsResults.length} students`, PW/2, 16.5, { align:'center' });
 
     const allGrades = ['A+','A','B','C','D','E','F'];
     const gCounts   = {};
     allGrades.forEach(g => { gCounts[g] = 0; });
     studentsResults.forEach(s => { if (gCounts[s.overallGrade] !== undefined) gCounts[s.overallGrade]++; });
 
-    const total      = studentsResults.length;
-    const passCount  = studentsResults.filter(s => s.overallGrade !== 'F').length;
-    const failCount  = gCounts['F'];
-    const distCount  = (gCounts['A+']||0) + (gCounts['A']||0);
-    const passRate   = total > 0 ? ((passCount / total) * 100).toFixed(1) : '0.0';
+    const total     = studentsResults.length;
+    const passCount = studentsResults.filter(s => s.overallGrade !== 'F').length;
+    const failCount = gCounts['F'];
+    const distCount = (gCounts['A+']||0) + (gCounts['A']||0);
+    const passRate  = total > 0 ? ((passCount/total)*100).toFixed(1) : '0.0';
 
-    // ── Define grid panels (safe, non-overlapping) ──────────────────────────
-    // Full layout from CONTENT_TOP to CONTENT_BOTTOM
-    // Row 1: KPI bar  (height 22)
-    // Row 2: [Grade Dist panel | Subject Avg panel]   (height ~72)
-    // Row 3: [Top Performers panel | Pie + Summary panel]  (fills rest)
+    const R1_Y = CONTENT_TOP;        const R1_H = 22;
+    const R2_Y = R1_Y + R1_H + 4;   const R2_H = 72;
+    const R3_Y = R2_Y + R2_H + 4;   const R3_H = CONTENT_BOTTOM - R3_Y;
 
-    const R1_Y = CONTENT_TOP;       const R1_H = 22;
-    const R2_Y = R1_Y + R1_H + 4;  const R2_H = 72;
-    const R3_Y = R2_Y + R2_H + 4;  const R3_H = CONTENT_BOTTOM - R3_Y;
+    const MID_X = MARGIN + CONTENT_W/2 + 2;
+    const L_W   = CONTENT_W/2 - 2;
+    const R_W   = CONTENT_W/2 - 2;
 
-    const MID_X = MARGIN + CONTENT_W / 2 + 2;  // right-column start
-    const L_W   = CONTENT_W / 2 - 2;
-    const R_W   = CONTENT_W / 2 - 2;
-
-    // ── Helpers for panel drawing ──────────────────────────────────────────
-    // Draw a card panel with dark background, accent top border
-    const panel = (x, y, w, h, accentColor = C.accent) => {
-      fillR(x, y, w, h, [22,30,50]);
-      strokeR(x, y, w, h, [40,55,85]);
-      fillR(x, y, w, 2.5, accentColor);   // top accent bar
+    // B&W panel: white fill, black border, black top bar
+    const bwPanel = (x, y, w, h) => {
+      fillR(x, y, w, h, BW.white);
+      strokeR(x, y, w, h, BW.black);
+      fillR(x, y, w, 2.5, BW.black);
     };
 
-    // Section title inside panel (y is absolute)
-    const panelTitle = (x, y, txt, col = C.white) => {
-      doc.setFontSize(7.5); doc.setFont('helvetica','bold'); st(col);
+    // Panel section title with underline
+    const bwTitle = (x, y, txt) => {
+      doc.setFontSize(7.5); doc.setFont('helvetica','bold'); st(BW.black);
       doc.text(txt, x, y);
-      fillR(x, y + 1.5, 28, 0.6, col);   // underline
+      fillR(x, y+1.5, 32, 0.5, BW.black);
     };
 
-    // ── ROW 1: KPI cards ────────────────────────────────────────────────────
+    // ── ROW 1: KPI Cards ─────────────────────────────────────────────────────
     const KPIs = [
-      { label:'Total Students', val: total,     color: C.indigo  },
-      { label:'Passed',         val: passCount, color: C.emerald },
-      { label:'Failed',         val: failCount, color: C.red     },
-      { label:'Distinction',    val: distCount, color: C.gold    },
-      { label:'Pass Rate',      val: passRate+'%', color: C.sky  },
+      { label:'Total Students', val: total           },
+      { label:'Passed',         val: passCount       },
+      { label:'Failed',         val: failCount       },
+      { label:'Distinction',    val: distCount       },
+      { label:'Pass Rate',      val: passRate + '%'  },
     ];
-    const KPI_W = (CONTENT_W - (KPIs.length - 1) * 3) / KPIs.length;
+    const KPI_W = (CONTENT_W - (KPIs.length-1)*3) / KPIs.length;
+    // Stepped fill shades so KPI cards differ visually when B&W printed
+    const KPI_FILLS = [[240,240,240],[225,225,225],[210,210,210],[195,195,195],[180,180,180]];
 
-    KPIs.forEach(({ label, val, color }, i) => {
-      const kx = MARGIN + i * (KPI_W + 3);
-      const ky = R1_Y;
-      fillR(kx, ky, KPI_W, R1_H, [22,30,50]);
-      strokeR(kx, ky, KPI_W, R1_H, [40,55,85]);
-      fillR(kx, ky, KPI_W, 2.5, color);   // accent top
+    KPIs.forEach(({ label, val }, i) => {
+      const kx = MARGIN + i*(KPI_W+3), ky = R1_Y;
+      fillR(kx, ky, KPI_W, R1_H, KPI_FILLS[i]);
+      strokeR(kx, ky, KPI_W, R1_H, BW.black);
+      fillR(kx, ky, KPI_W, 2.5, BW.black);   // black top accent
 
-      doc.setFontSize(13); doc.setFont('helvetica','bold'); st(color);
-      doc.text(String(val), kx + KPI_W/2, ky + 14, { align:'center' });
-      doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(C.muted);
-      doc.text(label, kx + KPI_W/2, ky + 19.5, { align:'center' });
+      doc.setFontSize(13); doc.setFont('helvetica','bold'); st(BW.black);
+      doc.text(String(val), kx+KPI_W/2, ky+14, { align:'center' });
+      doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(BW.mid);
+      doc.text(label, kx+KPI_W/2, ky+19.5, { align:'center' });
     });
 
-    // ── ROW 2 LEFT: Grade Distribution ──────────────────────────────────────
+    // ── ROW 2 LEFT: Grade Distribution ───────────────────────────────────────
     {
-      const px = MARGIN, py = R2_Y, pw = L_W, ph = R2_H;
-      panel(px, py, pw, ph, C.accent);
+      const px=MARGIN, py=R2_Y, pw=L_W, ph=R2_H;
+      bwPanel(px, py, pw, ph);
+      bwTitle(px+4, py+9, 'OVERALL GRADE DISTRIBUTION');
 
-      panelTitle(px + 4, py + 8, 'OVERALL GRADE DISTRIBUTION', C.accentLt);
-
-      const BAR_MAX = pw - 54;
-      const BAR_H   = 7.5;
-      const GAP     = 2.5;
-      let   by      = py + 14;
-
-      const gradeBarColors = {
-        'A+': C.emerald, A: C.indigo, B: [245,158,11],
-        C: [234,179,8], D: [249,115,22], E: [239,68,68], F: C.red,
-      };
+      const BAR_MAX = pw-54, BAR_H=7.5, GAP=2.5;
+      let by = py+14;
 
       allGrades.forEach(g => {
         const count = gCounts[g];
-        const pct   = total > 0 ? (count / total) * 100 : 0;
-        const bw    = (pct / 100) * BAR_MAX;
-        const col   = gradeBarColors[g];
+        const pct   = total > 0 ? (count/total)*100 : 0;
+        const bw    = (pct/100)*BAR_MAX;
 
-        // Grade label badge
-        fillR(px + 4, by, 11, BAR_H, gFill(g));
-        strokeR(px + 4, by, 11, BAR_H, gText(g));
-        doc.setFontSize(6.5); doc.setFont('helvetica','bold'); st(gText(g));
-        doc.text(g, px + 4 + 5.5, by + BAR_H/2 + 1.2, { align:'center' });
+        // Grade badge — outlined in black, white fill with bold label
+        fillR(px+4, by, 11, BAR_H, BW.white);
+        strokeR(px+4, by, 11, BAR_H, BW.black);
+        doc.setFontSize(6.5); doc.setFont('helvetica','bold'); st(BW.black);
+        doc.text(g, px+4+5.5, by+BAR_H/2+1.2, { align:'center' });
 
         // Track
-        fillR(px + 18, by, BAR_MAX, BAR_H, [15,22,40]);
-        if (bw > 0) {
-          fillR(px + 18, by, bw, BAR_H, col);
-          // Highlight shimmer on top
-          fillR(px + 18, by, bw, 1.8, col.map(v => Math.min(255, v + 50)));
-        }
-        strokeR(px + 18, by, BAR_MAX, BAR_H, [30,41,70]);
+        fillR(px+18, by, BAR_MAX, BAR_H, BW.trackBg);
+        strokeR(px+18, by, BAR_MAX, BAR_H, BW.trackBd);
+        // Filled bar — each grade gets a unique gray shade
+        if (bw > 0) fillR(px+18, by, bw, BAR_H, BW.barFill[g]);
 
-        // Count & pct label
-        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(C.muted);
-        doc.text(`${count} (${pct.toFixed(1)}%)`, px + 18 + BAR_MAX + 3, by + BAR_H/2 + 1.2);
+        // Count + pct
+        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(BW.mid);
+        doc.text(`${count} (${pct.toFixed(1)}%)`, px+18+BAR_MAX+3, by+BAR_H/2+1.2);
 
-        by += BAR_H + GAP;
+        by += BAR_H+GAP;
       });
     }
 
-    // ── ROW 2 RIGHT: Subject Averages ────────────────────────────────────────
+    // ── ROW 2 RIGHT: Subject Averages ─────────────────────────────────────────
     {
-      const px = MID_X, py = R2_Y, pw = R_W, ph = R2_H;
-      panel(px, py, pw, ph, C.sky);
+      const px=MID_X, py=R2_Y, pw=R_W, ph=R2_H;
+      bwPanel(px, py, pw, ph);
+      bwTitle(px+4, py+9, 'SUBJECT-WISE AVERAGES');
 
-      panelTitle(px + 4, py + 8, 'SUBJECT-WISE AVERAGES', [186,230,253]);
-
-      const BAR_MAX = pw - 56;
-      const BAR_H   = 7.5;
-      const GAP     = 2.5;
-      let   by      = py + 14;
+      const BAR_MAX=pw-58, BAR_H=7.5, GAP=2.5;
+      let by = py+14;
 
       subjects.forEach(sub => {
-        if (by + BAR_H > py + ph - 2) return; // safety: don't overflow panel
+        if (by+BAR_H > py+ph-2) return;
+        const avg  = parseFloat(subjectAverages[sub] || 0);
+        const g    = gradeFromPercent(avg);
+        const bwBar= (avg/100)*BAR_MAX;
+        const lbl  = sub.length > 15 ? sub.slice(0,14)+'…' : sub;
 
-        const avg = parseFloat(subjectAverages[sub] || 0);
-        const g   = gradeFromPercent(avg);
-        const col = gText(g);
-        const bw  = (avg / 100) * BAR_MAX;
-        const lbl = sub.length > 15 ? sub.slice(0,14)+'…' : sub;
+        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(BW.ink);
+        doc.text(lbl, px+4, by+BAR_H/2+1.2);
 
-        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(C.muted);
-        doc.text(lbl, px + 4, by + BAR_H/2 + 1.2);
+        fillR(px+38, by, BAR_MAX, BAR_H, BW.trackBg);
+        strokeR(px+38, by, BAR_MAX, BAR_H, BW.trackBd);
+        if (bwBar > 0) fillR(px+38, by, bwBar, BAR_H, BW.barFill[g]);
 
-        fillR(px + 36, by, BAR_MAX, BAR_H, [15,22,40]);
-        if (bw > 0) {
-          fillR(px + 36, by, bw, BAR_H, gFill(g));
-          fillR(px + 36, by, bw, 1.8, gFill(g).map(v => Math.min(255, v + 30)));
-        }
-        strokeR(px + 36, by, BAR_MAX, BAR_H, [30,41,70]);
+        // End badge: outlined, shows pct + grade letter
+        const bx2 = px+38+BAR_MAX+2;
+        fillR(bx2, by, 16, BAR_H, BW.white);
+        strokeR(bx2, by, 16, BAR_H, BW.black);
+        doc.setFontSize(5.5); doc.setFont('helvetica','bold'); st(BW.black);
+        doc.text(`${avg.toFixed(0)}% ${g}`, bx2+8, by+BAR_H/2+1.2, { align:'center' });
 
-        // Grade badge at end
-        const bx2 = px + 36 + BAR_MAX + 2;
-        fillR(bx2, by, 12, BAR_H, gFill(g));
-        strokeR(bx2, by, 12, BAR_H, col);
-        doc.setFontSize(5.8); doc.setFont('helvetica','bold'); st(col);
-        doc.text(`${avg.toFixed(0)}%`, bx2 + 6, by + BAR_H/2 + 1.2, { align:'center' });
-
-        by += BAR_H + GAP;
+        by += BAR_H+GAP;
       });
     }
 
     // ── ROW 3 LEFT: Top Performers ───────────────────────────────────────────
     {
-      const px = MARGIN, py = R3_Y, pw = L_W, ph = R3_H;
-      panel(px, py, pw, ph, C.gold);
-      panelTitle(px + 4, py + 8, 'TOP PERFORMERS', C.gold);
+      const px=MARGIN, py=R3_Y, pw=L_W, ph=R3_H;
+      bwPanel(px, py, pw, ph);
+      bwTitle(px+4, py+9, 'TOP PERFORMERS');
 
-      const top  = studentsResults.slice(0, Math.min(5, Math.floor((ph - 14) / 14)));
-      const meds = [C.gold, C.silver, C.bronze, [200,200,200],[200,200,200]];
+      const maxRows = Math.min(5, Math.floor((ph-14)/14));
+      const top  = studentsResults.slice(0, maxRows);
       const lbls = ['1st','2nd','3rd','4th','5th'];
-      let   cy   = py + 13;
+      let cy = py+13;
 
       top.forEach((s, i) => {
         const ch = 12;
-        fillR(px + 4, cy, pw - 8, ch, [15,22,40]);
-        strokeR(px + 4, cy, pw - 8, ch, [40,55,85]);
-        // Medal stripe
-        fillR(px + 4, cy, 3.5, ch, meds[i]);
+        // Stepped grays: 1st darkest → 5th lightest
+        const rowBg = BW.rowBg[i] || [252,252,252];
+        fillR(px+4, cy, pw-8, ch, rowBg);
+        strokeR(px+4, cy, pw-8, ch, BW.black);
+        // Solid black left accent stripe
+        fillR(px+4, cy, 3.5, ch, BW.black);
 
-        doc.setFontSize(5.5); doc.setFont('helvetica','bold'); st(meds[i]);
-        doc.text(lbls[i], px + 9, cy + 4.5);
+        // Position label in white on black stripe
+        doc.setFontSize(5); doc.setFont('helvetica','bold'); st(BW.white);
+        doc.text(lbls[i], px+5.5, cy+7);
 
-        doc.setFontSize(6.8); doc.setFont('helvetica','bold'); st(C.white);
-        const nm = s.studentName.length > 28 ? s.studentName.slice(0,27)+'…' : s.studentName;
-        doc.text(nm, px + 9, cy + 9.5);
+        // Student name
+        doc.setFontSize(6.8); doc.setFont('helvetica','bold'); st(BW.black);
+        const nm = s.studentName.length > 26 ? s.studentName.slice(0,25)+'…' : s.studentName;
+        doc.text(nm, px+10, cy+9.5);
 
-        // Pct badge (right)
-        const bg = gFill(s.overallGrade);
-        const tc = gText(s.overallGrade);
-        fillR(px + pw - 32, cy + 1, 24, ch - 2, bg);
-        doc.setFontSize(8); doc.setFont('helvetica','bold'); st(tc);
-        doc.text(s.overallPercent.toFixed(1)+'%', px + pw - 20, cy + 7.5, { align:'center' });
+        // Score badge — outlined box
+        const bx = px+pw-34;
+        fillR(bx, cy+1, 26, ch-2, BW.white);
+        strokeR(bx, cy+1, 26, ch-2, BW.black);
+        doc.setFontSize(8); doc.setFont('helvetica','bold'); st(BW.black);
+        doc.text(s.overallPercent.toFixed(1)+'%', bx+13, cy+6, { align:'center' });
+        doc.setFontSize(5); doc.setFont('helvetica','normal'); st(BW.mid);
+        doc.text(`Grade: ${s.overallGrade}`, bx+13, cy+10, { align:'center' });
 
-        cy += ch + 2;
+        cy += ch+2;
       });
     }
 
-    // ── ROW 3 RIGHT: Pass/Fail pie + summary stats ───────────────────────────
+    // ── ROW 3 RIGHT: Pass/Fail donut + stat rows ──────────────────────────────
     {
-      const px = MID_X, py = R3_Y, pw = R_W, ph = R3_H;
-      panel(px, py, pw, ph, C.emerald);
+      const px=MID_X, py=R3_Y, pw=R_W, ph=R3_H;
+      bwPanel(px, py, pw, ph);
 
-      // ── Left half of this panel: Pie chart ──────────────────────────────
-      const PIE_W = pw * 0.45;
-      panelTitle(px + 4, py + 8, 'PASS / FAIL', [167,243,208]);
+      const PIE_W = pw*0.44;
+      bwTitle(px+4, py+9, 'PASS / FAIL SUMMARY');
 
-      const cx   = px + PIE_W / 2;
-      const cy   = py + ph / 2 + 2;
-      const rad  = Math.min(PIE_W / 2 - 6, ph / 2 - 10);
-      const pass = total > 0 ? passCount / total : 0;
+      const cx_  = px + PIE_W/2;
+      const cy_  = py + ph/2 + 2;
+      const rad  = Math.min(PIE_W/2-6, ph/2-10);
+      const pass = total > 0 ? passCount/total : 0;
 
       if (total > 0 && rad > 0) {
-        // Draw full emerald circle first, then overlay red fail wedge
-        doc.setFillColor(C.emerald[0], C.emerald[1], C.emerald[2]);
-        doc.circle(cx, cy, rad, 'F');
+        // Draw full circle in fail gray
+        sf(BW.failFill); doc.circle(cx_, cy_, rad, 'F');
 
-        // Draw pass arc as polygon approximation
+        // Overlay pass sector in light gray (triangle-fan)
         if (pass > 0.005 && pass < 0.995) {
-          // Draw fail arc as a filled polygon (center + arc points)
-          const STEPS    = 60;
-          const startAng = -Math.PI / 2 + pass * 2 * Math.PI; // fail starts where pass ends
-          const sweep    = (1 - pass) * 2 * Math.PI;
-          // Build triangle-fan points for fail segment
-          const pts = [];
-          for (let i = 0; i <= STEPS; i++) {
-            const a = startAng + (i / STEPS) * sweep;
-            pts.push([cx + rad * Math.cos(a), cy + rad * Math.sin(a)]);
+          const STEPS = 60;
+          const startAng = -Math.PI/2;
+          const sweep    = pass*2*Math.PI;
+          sf(BW.passFill);
+          for (let i = 0; i < STEPS; i++) {
+            const a1 = startAng + (i/STEPS)*sweep;
+            const a2 = startAng + ((i+1)/STEPS)*sweep;
+            doc.triangle(cx_, cy_, cx_+rad*Math.cos(a1), cy_+rad*Math.sin(a1),
+                                   cx_+rad*Math.cos(a2), cy_+rad*Math.sin(a2), 'F');
           }
-          // Draw fail wedge using lines from center — jsPDF triangle approach
-          doc.setFillColor(C.red[0], C.red[1], C.red[2]);
-          for (let i = 0; i < pts.length - 1; i++) {
-            // Each small triangle: center, pts[i], pts[i+1]
-            doc.triangle(cx, cy, pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], 'F');
-          }
-        } else if (pass <= 0.005) {
-          // 100% fail — already drawn as full red circle above, skip emerald
-          doc.setFillColor(C.red[0], C.red[1], C.red[2]);
-          doc.circle(cx, cy, rad, 'F');
+        } else if (pass >= 0.995) {
+          sf(BW.passFill); doc.circle(cx_, cy_, rad, 'F');
         }
 
         // Donut hole
-        doc.setFillColor(22, 30, 50);
-        doc.circle(cx, cy, rad * 0.52, 'F');
+        sf(BW.white); doc.circle(cx_, cy_, rad*0.52, 'F');
+        // Ring border
+        sd(BW.black); doc.circle(cx_, cy_, rad, 'S');
 
-        // Centre label
-        doc.setFontSize(8.5); doc.setFont('helvetica','bold'); st(C.white);
-        doc.text(passRate+'%', cx, cy + 1.5, { align:'center' });
-        doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(C.muted);
-        doc.text('pass rate', cx, cy + 6, { align:'center' });
+        // Centre labels
+        doc.setFontSize(8.5); doc.setFont('helvetica','bold'); st(BW.black);
+        doc.text(passRate+'%', cx_, cy_+1.5, { align:'center' });
+        doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(BW.mid);
+        doc.text('pass rate', cx_, cy_+6, { align:'center' });
 
-        // Legend below pie
-        const LEG_Y = cy + rad + 5;
-        fillR(cx - 14, LEG_Y, 7, 4, C.emerald);
-        doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(C.muted);
-        doc.text('Pass', cx - 6, LEG_Y + 3.2);
-        fillR(cx + 4, LEG_Y, 7, 4, C.red);
-        doc.text('Fail', cx + 12, LEG_Y + 3.2);
+        // Legend swatches
+        const LEG_Y = cy_ + rad + 5;
+        fillR(cx_-14, LEG_Y, 7, 4, BW.passFill);
+        strokeR(cx_-14, LEG_Y, 7, 4, BW.black);
+        doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(BW.ink);
+        doc.text('Pass', cx_-6, LEG_Y+3.2);
+
+        fillR(cx_+4, LEG_Y, 7, 4, BW.failFill);
+        strokeR(cx_+4, LEG_Y, 7, 4, BW.black);
+        doc.text('Fail', cx_+12, LEG_Y+3.2);
       }
 
-      // ── Right half: summary stat rows ────────────────────────────────────
-      const SX = px + PIE_W + 4;
-      const SW = pw - PIE_W - 8;
-
+      // Stat rows (alternating white / light-gray)
+      const SX = px + PIE_W + 4, SW = pw - PIE_W - 8;
       const stats = [
-        { label:'Total Students', val: total,           color: C.indigo },
-        { label:'Pass  (≥ 33%)',  val: passCount,       color: C.emerald},
-        { label:'Fail  (< 33%)',  val: failCount,       color: C.red    },
-        { label:'Distinction',    val: distCount,       color: C.gold   },
-        { label:'Pass Rate',      val: passRate + '%',  color: C.sky    },
+        { label:'Total Students', val: total          },
+        { label:'Pass  (≥ 33%)',  val: passCount      },
+        { label:'Fail  (< 33%)',  val: failCount      },
+        { label:'Distinction',    val: distCount      },
+        { label:'Pass Rate',      val: passRate + '%' },
       ];
-
       let sy = py + 10;
-      const STAT_ROW_H = (ph - 14) / stats.length;
+      const STAT_ROW_H = (ph-14) / stats.length;
 
-      stats.forEach(({ label, val, color }) => {
-        fillR(SX, sy, SW, STAT_ROW_H - 1, [15,22,40]);
-        strokeR(SX, sy, SW, STAT_ROW_H - 1, [30,41,70]);
-        fillR(SX, sy, 2.5, STAT_ROW_H - 1, color);  // left accent
+      stats.forEach(({ label, val }, i) => {
+        const rowBg = i % 2 === 0 ? [240,240,240] : BW.white;
+        fillR(SX, sy, SW, STAT_ROW_H-1, rowBg);
+        strokeR(SX, sy, SW, STAT_ROW_H-1, BW.black);
+        fillR(SX, sy, 2.5, STAT_ROW_H-1, BW.black);  // black left stripe
 
-        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(C.muted);
-        doc.text(label, SX + 5, sy + (STAT_ROW_H - 1) / 2 + 1);
-        doc.setFontSize(9); doc.setFont('helvetica','bold'); st(color);
-        doc.text(String(val), SX + SW - 3, sy + (STAT_ROW_H - 1) / 2 + 1.5, { align:'right' });
+        doc.setFontSize(5.8); doc.setFont('helvetica','normal'); st(BW.mid);
+        doc.text(label, SX+5, sy+(STAT_ROW_H-1)/2+1);
+        doc.setFontSize(9); doc.setFont('helvetica','bold'); st(BW.black);
+        doc.text(String(val), SX+SW-3, sy+(STAT_ROW_H-1)/2+1.5, { align:'right' });
 
         sy += STAT_ROW_H;
       });
     }
+
+    // ── B&W Footer ─────────────────────────────────────────────────────────
+    fillR(0, PH-FOOTER_H, PW, FOOTER_H, BW.black);
+    fillR(0, PH-FOOTER_H, PW, 1, BW.mid);
+    doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(BW.light);
+    doc.text(
+      `Generated: ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}`,
+      MARGIN+3, PH-3.5,
+    );
+    doc.text(`${className}  ·  ${startDate} → ${endDate}`, PW/2, PH-3.5, { align:'center' });
+    // Page number will be stamped in the footer-repaint loop below
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -581,18 +577,14 @@ async function generatePDF({ studentsResults, subjects, subjectAverages, classes
     `Period: ${startDate}  →  ${endDate}  ·  ${studentsResults.length} students`
   );
 
-  // Safe area for table
   const TABLE_SAFE_TOP    = CONTENT_TOP + 1;
   const TABLE_SAFE_BOTTOM = CONTENT_BOTTOM - 1;
-
   let y = drawTableHeaders(TABLE_SAFE_TOP);
 
   studentsResults.forEach((student, idx) => {
-    // Check if we need a new page BEFORE drawing the row
     if (y + ROW_H > TABLE_SAFE_BOTTOM - ROW_H) {
-      // Draw avg row, then footer, then new page
       drawAvgRow(y);
-      paintFooter(pageIdx, '?');  // placeholder, fixed at end
+      paintFooter(pageIdx, '?');
       pageIdx++;
       doc.addPage();
       paintBg();
@@ -606,18 +598,30 @@ async function generatePDF({ studentsResults, subjects, subjectAverages, classes
     y += ROW_H;
   });
 
-  // Avg row after last student
   if (y + ROW_H <= TABLE_SAFE_BOTTOM) drawAvgRow(y);
   paintFooter(pageIdx, '?');
 
-  // Stats page
   drawStatsPage();
 
-  // Fix all page numbers now we know total
+  // Repaint all page numbers now we know the total
   const totalPages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
-    paintFooter(p, totalPages);
+    if (p < totalPages) {
+      // Colored data pages — repaint full footer
+      paintFooter(p, totalPages);
+    } else {
+      // B&W stats page — repaint just the footer with page number
+      fillR(0, PH-FOOTER_H, PW, FOOTER_H, BW.black);
+      fillR(0, PH-FOOTER_H, PW, 1, BW.mid);
+      doc.setFontSize(5.5); doc.setFont('helvetica','normal'); st(BW.light);
+      doc.text(
+        `Generated: ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}`,
+        MARGIN+3, PH-3.5,
+      );
+      doc.text(`Page ${p} of ${totalPages}`, PW-MARGIN-3, PH-3.5, { align:'right' });
+      doc.text(`${className}  ·  ${startDate} → ${endDate}`, PW/2, PH-3.5, { align:'center' });
+    }
   }
 
   doc.save(`Result_${className}_${startDate}_${endDate}.pdf`);
@@ -644,7 +648,6 @@ export default function ClassResultPage() {
     supabase.from('classes').select('id, name').then(({ data }) => setClasses(data || []));
   }, []);
 
-  // ── Single bulk query ─────────────────────────────────────────────────────
   const fetchClassResults = async () => {
     if (!selectedClass || !startDate || !endDate) return;
     setLoading(true);
@@ -669,14 +672,13 @@ export default function ClassResultPage() {
 
     if (me) { console.error(me); setLoading(false); return; }
 
-    // Group by student → subject
     const byStudent = {};
     const allSubs   = new Set();
     (marks || []).forEach(m => {
       const sub = m.tests?.test_name || 'Unknown';
       allSubs.add(sub);
-      if (!byStudent[m.studentid])         byStudent[m.studentid] = {};
-      if (!byStudent[m.studentid][sub])    byStudent[m.studentid][sub] = { obtained_marks: 0, total_marks: 0 };
+      if (!byStudent[m.studentid])      byStudent[m.studentid] = {};
+      if (!byStudent[m.studentid][sub]) byStudent[m.studentid][sub] = { obtained_marks: 0, total_marks: 0 };
       byStudent[m.studentid][sub].obtained_marks += m.obtained_marks;
       byStudent[m.studentid][sub].total_marks    += m.total_marks;
     });
@@ -684,17 +686,16 @@ export default function ClassResultPage() {
     const results = students
       .filter(s => byStudent[s.studentid])
       .map(s => {
-        const md      = Object.entries(byStudent[s.studentid]).map(([subject, d]) => ({ subject, ...d }));
-        const totO    = md.reduce((a, m) => a + m.obtained_marks, 0);
-        const totT    = md.reduce((a, m) => a + m.total_marks, 0);
-        const pct     = totT > 0 ? (totO / totT) * 100 : 0;
+        const md  = Object.entries(byStudent[s.studentid]).map(([subject, d]) => ({ subject, ...d }));
+        const totO = md.reduce((a, m) => a + m.obtained_marks, 0);
+        const totT = md.reduce((a, m) => a + m.total_marks, 0);
+        const pct  = totT > 0 ? (totO/totT)*100 : 0;
         return { studentName: s.name, fatherName: s.fathername, mobilenumber: s.mobilenumber,
                  dasNumber: s.studentid, marksData: md, overallPercent: pct, overallGrade: gradeFromPercent(pct) };
       })
       .sort((a, b) => b.overallPercent - a.overallPercent)
-      .map((s, i) => ({ ...s, position: i + 1 }));
+      .map((s, i) => ({ ...s, position: i+1 }));
 
-    // Subject averages
     const subTot = {};
     results.forEach(s => s.marksData.forEach(m => {
       if (!subTot[m.subject]) subTot[m.subject] = { o: 0, t: 0 };
@@ -702,9 +703,8 @@ export default function ClassResultPage() {
       subTot[m.subject].t += m.total_marks;
     }));
     const avgs = {};
-    for (const k in subTot) avgs[k] = subTot[k].t > 0 ? ((subTot[k].o / subTot[k].t) * 100).toFixed(2) : 0;
+    for (const k in subTot) avgs[k] = subTot[k].t > 0 ? ((subTot[k].o/subTot[k].t)*100).toFixed(2) : 0;
 
-    // Grade counts
     const gc = { 'A+':0, A:0, B:0, C:0, D:0, E:0, F:0 };
     results.forEach(s => { if (gc[s.overallGrade] !== undefined) gc[s.overallGrade]++; });
 
@@ -739,7 +739,7 @@ export default function ClassResultPage() {
       let row  = `"${s.studentName}","${s.dasNumber}",${s.position}`;
       subjects.forEach(sub => {
         const m = mm.get(sub);
-        const p = m?.total_marks > 0 ? (m.obtained_marks / m.total_marks)*100 : undefined;
+        const p = m?.total_marks > 0 ? (m.obtained_marks/m.total_marks)*100 : undefined;
         row += `,"${m?.obtained_marks??'-'}","${p !== undefined ? p.toFixed(1)+'%':'-'}","${p !== undefined ? gradeFromPercent(p):'-'}"`;
       });
       row += `,"${s.overallPercent.toFixed(2)}%","${s.overallGrade}"`;
@@ -773,7 +773,6 @@ export default function ClassResultPage() {
         <Navbar />
         <main className="container mx-auto p-4 md:p-6 max-w-7xl">
 
-          {/* Page title */}
           <div className="flex flex-col mb-8 gap-1">
             <h1 className="text-4xl font-bold flex items-center gap-3">
               <School className="w-10 h-10 text-indigo-400" />
@@ -782,7 +781,6 @@ export default function ClassResultPage() {
             <p className="text-slate-400 text-lg font-light">Generate comprehensive grade reports and analytics.</p>
           </div>
 
-          {/* Controls */}
           <div className="bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl mb-10 ring-1 ring-white/5">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="space-y-2">
@@ -828,8 +826,6 @@ export default function ClassResultPage() {
 
           {generated && studentsResults.length > 0 && (
             <div className="space-y-8">
-
-              {/* Summary bar */}
               <div className="bg-slate-900/40 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-lg space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
@@ -880,7 +876,6 @@ export default function ClassResultPage() {
                 )}
               </div>
 
-              {/* Mobile cards */}
               <div className="md:hidden space-y-4">
                 <p className="text-xs uppercase tracking-widest text-slate-400 text-center">Tap for details</p>
                 {studentsResults.map(student => {
@@ -938,7 +933,6 @@ export default function ClassResultPage() {
                 })}
               </div>
 
-              {/* Desktop table */}
               <div className="hidden md:block relative">
                 <div className="absolute -inset-[1px] bg-gradient-to-r from-slate-500/20 via-indigo-500/20 to-slate-500/20 rounded-3xl blur-sm opacity-50 pointer-events-none" />
                 <div className="bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative z-10">

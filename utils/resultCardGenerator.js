@@ -23,6 +23,7 @@ const getGrade = (percent) => {
   if (percent >= 70) return "B";
   if (percent >= 60) return "C";
   if (percent >= 50) return "D";
+  if (percent > 33) return "E";
   return "F";
 };
 
