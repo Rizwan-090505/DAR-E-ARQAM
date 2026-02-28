@@ -57,10 +57,21 @@ export default function Dashboard() {
   const [deleteClassId, setDeleteClassId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // ADDED: State to hold the user's role
+  const [userRole, setUserRole] = useState<string | null>(null)
+
   const router = useRouter()
   const { toast } = useToast()
 
-  useEffect(() => { fetchClasses() }, [])
+  // ADDED: Check local storage for user role on mount
+  useEffect(() => { 
+    fetchClasses();
+    const storedRole = localStorage.getItem('UserRole');
+    setUserRole(storedRole);
+  }, [])
+
+  // ADDED: Helper boolean to check permissions
+  const canEditOrDelete = userRole === 'admin' || userRole === 'superadmin';
 
   const fetchClasses = async () => {
     setIsLoading(true)
@@ -116,6 +127,9 @@ export default function Dashboard() {
 
   // --- ACTIONS (Create, Update, Delete) ---
   const createClass = async () => {
+    // ADDED: Optional role check for creation too, if you want only admins to create
+    if (!canEditOrDelete) return toast({ variant: "destructive", title: "Unauthorized", description: "Only admins can create classes." });
+
     if (!newClassName.trim()) return;
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return toast({ variant: "destructive", title: "Login required" })
@@ -133,6 +147,9 @@ export default function Dashboard() {
   }
 
   const updateClass = async () => {
+    // ADDED: Guard clause to prevent unauthorized execution
+    if (!canEditOrDelete) return toast({ variant: "destructive", title: "Unauthorized" });
+
     if (!editingClass) return
     const { error } = await supabase.from('classes').update({ name: newClassName, description: newClassDescription }).eq('id', editingClass.id)
     if (error) return toast({ variant: "destructive", title: "Error", description: "Update failed" })
@@ -143,6 +160,9 @@ export default function Dashboard() {
   }
 
   const deleteClass = async () => {
+    // ADDED: Guard clause to prevent unauthorized execution
+    if (!canEditOrDelete) return toast({ variant: "destructive", title: "Unauthorized" });
+
     if (!deleteClassId) return
     const { error } = await supabase.from('classes').delete().eq('id', deleteClassId)
     if (error) toast({ variant: "destructive", title: "Error", description: "Deletion failed" })
@@ -171,21 +191,24 @@ export default function Dashboard() {
             <p className="text-slate-500 dark:text-slate-400 font-medium">Overview of academic sessions.</p>
           </div>
 
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 dark:shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all hover:scale-105 font-bold">
-                <Plus className="w-5 h-5 mr-2" /> New Class
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-white dark:bg-slate-900/95 backdrop-blur-2xl border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] shadow-2xl">
-              <DialogHeader><DialogTitle className="text-2xl font-bold">New Class</DialogTitle></DialogHeader>
-              <div className="space-y-5 py-6">
-                <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-                <Input placeholder="Brief Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
-                <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white" onClick={createClass}>Create Class</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          {/* ADDED: Conditionally hide the Create button if they aren't admin/superadmin */}
+          {canEditOrDelete && (
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20 dark:shadow-[0_4px_20px_rgba(37,99,235,0.4)] transition-all hover:scale-105 font-bold">
+                  <Plus className="w-5 h-5 mr-2" /> New Class
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-white dark:bg-slate-900/95 backdrop-blur-2xl border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] shadow-2xl">
+                <DialogHeader><DialogTitle className="text-2xl font-bold">New Class</DialogTitle></DialogHeader>
+                <div className="space-y-5 py-6">
+                  <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+                  <Input placeholder="Brief Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="bg-slate-50 dark:bg-black/40 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white rounded-2xl h-14 px-5 text-lg font-medium focus:ring-blue-500/50" />
+                  <Button className="w-full rounded-2xl h-14 text-lg font-bold bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white" onClick={createClass}>Create Class</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* PREMIUM CARD GRID */}
@@ -199,11 +222,6 @@ export default function Dashboard() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.4, type: "spring", bounce: 0.3, delay: index * 0.05 }}
               >
-                {/* FIXED HERE:
-                   Added `dark:bg-transparent`. 
-                   This forces the solid white background to disappear in dark mode, 
-                   allowing the glass gradient to take full effect.
-                */}
                 <div 
                     onClick={() => router.push(`/class/${cls.id}`)}
                     className="group relative h-full flex flex-col justify-between p-5 cursor-pointer
@@ -274,28 +292,35 @@ export default function Dashboard() {
 
                   {/* Bottom Section: Actions */}
                   <div className="flex items-center justify-between z-10">
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-blue-600 dark:hover:bg-blue-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
-                            onClick={() => {
-                                setEditingClass(cls); setNewClassName(cls.name); setNewClassDescription(cls.description);
-                                setIsEditDialogOpen(true);
-                            }}
-                        >
-                            <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-rose-600 dark:hover:bg-rose-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
-                            onClick={() => {
-                                setDeleteClassId(cls.id); setIsDeleteDialogOpen(true);
-                            }}
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </Button>
+                    {/* ADDED: Conditionally render the Edit/Delete button group */}
+                    <div className="flex gap-2 min-w-[80px]" onClick={(e) => e.stopPropagation()}>
+                      {canEditOrDelete && (
+                        <>
+                          <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-blue-600 dark:hover:bg-blue-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingClass(cls); setNewClassName(cls.name); setNewClassDescription(cls.description);
+                                  setIsEditDialogOpen(true);
+                              }}
+                          >
+                              <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-9 w-9 rounded-full bg-slate-100 dark:bg-black/40 hover:bg-rose-600 dark:hover:bg-rose-600/80 text-slate-600 dark:text-slate-300 hover:text-white border border-slate-200 dark:border-white/10 transition-all"
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteClassId(cls.id); setIsDeleteDialogOpen(true);
+                              }}
+                          >
+                              <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
 
                     {/* Enter Button */}
@@ -342,5 +367,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-

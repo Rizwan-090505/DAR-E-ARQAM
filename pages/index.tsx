@@ -99,7 +99,8 @@ const DashboardHome = () => {
   // Page A State
   const { theme, setTheme, mounted } = useTheme();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userEmail, setUserEmail] = useState<string>(""); // Added to store email
+  const [userEmail, setUserEmail] = useState<string>(""); 
+  const [userRole, setUserRole] = useState<string | null>(null); // NEW: Track UserRole
   const router = useRouter();
     
   // Page B State (Class Logic)
@@ -118,17 +119,19 @@ const DashboardHome = () => {
 
   // ----- Effects -----
   useEffect(() => {
+    // NEW: Fetch UserRole from localStorage safely on mount
+    if (typeof window !== "undefined") {
+      setUserRole(localStorage.getItem("UserRole"));
+    }
     checkSession();
     fetchClasses();
   }, []);
 
   const checkSession = async () => {
-    // This call reads the local storage token automatically
     const { data } = await supabase.auth.getUser();
     
     if (data.user) {
       setIsLoggedIn(true);
-      // Requirement A: Get email from the authenticated user
       setUserEmail(data.user.email || "");
     } else {
       setIsLoggedIn(false);
@@ -177,14 +180,13 @@ const DashboardHome = () => {
   const handleSignOut = async () => {
     setIsLoggedIn(false);
     setUserEmail("");
+    setUserRole(null);
     
     if (typeof window !== "undefined") {
-      // Requirement B: Clear the specific access token provided
       localStorage.removeItem("sb-tjdepqtouvbwqrakarkh-auth-token");
-      
-      // Clear generic keys as fallback
       localStorage.removeItem("sb-access-token");
       localStorage.removeItem("sb-refresh-token");
+      localStorage.removeItem("UserRole"); // Optional: clear role on logout
     }
     
     await supabase.auth.signOut();
@@ -223,13 +225,16 @@ const DashboardHome = () => {
     setDeleteClassId(null); setIsDeleteDialogOpen(false);
   };
 
+  // NEW: Helper boolean for permissions
+  const canEditOrDelete = userRole === "admin" || userRole === "superadmin";
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-500 font-sans">
-       
+        
       {/* --- TOP NAVIGATION BAR --- */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-slate-950/70 border-b border-gray-200/50 dark:border-gray-800/50">
         <div className="container mx-auto px-4 h-16 flex justify-between items-center">
-           
+            
           <Link href="/" className="flex items-center gap-3 group relative select-none">
             <div className="relative bg-gradient-to-br from-indigo-600 to-violet-600 text-white w-9 h-9 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30 transform group-hover:scale-105 transition-transform duration-300">
               <span className="font-black text-lg">D</span>
@@ -276,7 +281,7 @@ const DashboardHome = () => {
 
       {/* --- MAIN CONTENT --- */}
       <main className="container mx-auto px-4 py-6 md:py-10 space-y-8 md:space-y-10">
-       
+        
         {/* 1. Hero / Welcome Section */}
         <div className="flex flex-col items-center justify-center text-center">
           <div className="relative mb-6">
@@ -295,7 +300,6 @@ const DashboardHome = () => {
           </div>
 
           <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white mb-1">
-            {/* Requirement A: Welcome based on user.email */}
             {isLoggedIn ? (
                 <div className="flex flex-col gap-1">
                     <span>Welcome Back</span>
@@ -311,7 +315,7 @@ const DashboardHome = () => {
           </h1>
         </div>
 
-        {/* 2. AI NOTICE BAR (New Branding) */}
+        {/* 2. AI NOTICE BAR */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-xl shadow-indigo-500/20 p-1">
             <div className="absolute top-0 right-0 p-4 opacity-10">
                 <Bot size={120} />
@@ -340,7 +344,7 @@ const DashboardHome = () => {
             </div>
         </div>
 
-        {/* 3. Portal Apps Grid (Optimized: Smaller Bars on Mobile) */}
+        {/* 3. Portal Apps Grid */}
         <div>
             <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-800 pb-3">
                <h2 className="text-sm md:text-base font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -349,7 +353,6 @@ const DashboardHome = () => {
                </h2>
             </div>
 
-            {/* CHANGED: grid-cols-3 on mobile instead of 2 for denser view */}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 md:gap-4">
               {NAV_LINKS.map((link) => {
                 const Icon = link.icon;
@@ -367,7 +370,6 @@ const DashboardHome = () => {
                     `}
                   >
                     <div className="flex items-start justify-between mb-2 md:mb-3">
-                      {/* CHANGED: Smaller icons/boxes on mobile */}
                       <div className={`w-8 h-8 md:w-9 md:h-9 rounded-lg md:rounded-xl flex items-center justify-center ${link.bg} ${link.color}`}>
                         <Icon size={16} className="md:w-[18px] md:h-[18px]" />
                       </div>
@@ -375,7 +377,6 @@ const DashboardHome = () => {
                         <ChevronRight size={14} />
                       </div>
                     </div>
-                    {/* CHANGED: Smaller text on mobile */}
                     <h3 className="text-xs md:text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
                       {link.label}
                     </h3>
@@ -385,7 +386,7 @@ const DashboardHome = () => {
             </div>
         </div>
 
-        {/* 4. Academic Classes (Optimized: Smaller Cards on Mobile) */}
+        {/* 4. Academic Classes */}
         <div>
              {/* Section Header */}
             <div className="flex flex-col md:flex-row justify-between items-end gap-4 md:gap-6 mb-6 border-b border-gray-200 dark:border-gray-800 pb-4">
@@ -396,24 +397,26 @@ const DashboardHome = () => {
                  </h2>
                </div>
 
-               <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                 <DialogTrigger asChild>
-                   <Button className="rounded-full px-4 h-8 md:px-5 md:h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 font-bold text-xs">
-                     <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Class
-                   </Button>
-                 </DialogTrigger>
-                 <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-[2rem]">
-                   <DialogHeader><DialogTitle>New Class</DialogTitle></DialogHeader>
-                   <div className="space-y-4 py-4">
-                     <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="rounded-xl h-12 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
-                     <Input placeholder="Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="rounded-xl h-12 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
-                     <Button className="w-full rounded-xl h-12 bg-blue-600 hover:bg-blue-700 text-white" onClick={createClass}>Create Class</Button>
-                   </div>
-                 </DialogContent>
-               </Dialog>
+               {/* Optional: You can also wrap the Create Dialog around {canEditOrDelete && (...)} if you want to block creation entirely */}
+               {canEditOrDelete && (
+                 <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                   <DialogTrigger asChild>
+                     <Button className="rounded-full px-4 h-8 md:px-5 md:h-9 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-105 font-bold text-xs">
+                       <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Class
+                     </Button>
+                   </DialogTrigger>
+                   <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-[2rem]">
+                     <DialogHeader><DialogTitle>New Class</DialogTitle></DialogHeader>
+                     <div className="space-y-4 py-4">
+                       <Input placeholder="Class Name (e.g., Grade 10A)" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} className="rounded-xl h-12 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
+                       <Input placeholder="Description" value={newClassDescription} onChange={(e) => setNewClassDescription(e.target.value)} className="rounded-xl h-12 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800" />
+                       <Button className="w-full rounded-xl h-12 bg-blue-600 hover:bg-blue-700 text-white" onClick={createClass}>Create Class</Button>
+                     </div>
+                   </DialogContent>
+                 </Dialog>
+               )}
             </div>
 
-            {/* CHANGED: grid-cols-2 on mobile (was 1), reduced padding */}
             <motion.div layout className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
               <AnimatePresence mode='popLayout'>
                 {classes.map((cls, index) => (
@@ -443,7 +446,6 @@ const DashboardHome = () => {
                            <div className={`w-1.5 h-1.5 md:w-2 md:h-2 rounded-full mt-1.5 md:mt-2 shrink-0 ${cls.attendanceMarkedToday ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]'}`} />
                         </div>
                         
-                        {/* Description hidden on very small screens, or line clamped */}
                         <p className="text-[10px] md:text-sm text-slate-500 dark:text-slate-400 font-medium mb-4 line-clamp-2 md:line-clamp-2">
                           {cls.description || "No description."}
                         </p>
@@ -456,14 +458,19 @@ const DashboardHome = () => {
 
                             <div className="flex items-center justify-between border-t border-slate-100 dark:border-white/10 pt-3 md:pt-4">
                                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-blue-100 dark:hover:bg-blue-500/20 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
-                                    onClick={() => { setEditingClass(cls); setNewClassName(cls.name); setNewClassDescription(cls.description); setIsEditDialogOpen(true); }}>
-                                    <Edit size={12} className="md:w-[14px] md:h-[14px]" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                                    onClick={() => { setDeleteClassId(cls.id); setIsDeleteDialogOpen(true); }}>
-                                    <Trash2 size={12} className="md:w-[14px] md:h-[14px]" />
-                                  </Button>
+                                 {/* NEW: Hide Edit and Delete buttons if not an admin */}
+                                 {canEditOrDelete && (
+                                   <>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-blue-100 dark:hover:bg-blue-500/20 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                                       onClick={() => { setEditingClass(cls); setNewClassName(cls.name); setNewClassDescription(cls.description); setIsEditDialogOpen(true); }}>
+                                       <Edit size={12} className="md:w-[14px] md:h-[14px]" />
+                                     </Button>
+                                     <Button variant="ghost" size="icon" className="h-6 w-6 md:h-8 md:w-8 rounded-full hover:bg-rose-100 dark:hover:bg-rose-500/20 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                                       onClick={() => { setDeleteClassId(cls.id); setIsDeleteDialogOpen(true); }}>
+                                       <Trash2 size={12} className="md:w-[14px] md:h-[14px]" />
+                                     </Button>
+                                   </>
+                                 )}
                                </div>
                                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 group-hover:bg-blue-600 group-hover:text-white transition-all">
                                  <ArrowRight size={12} className="md:w-[14px] md:h-[14px]" />
@@ -489,7 +496,7 @@ const DashboardHome = () => {
       </main>
 
       {/* --- MODALS --- */}
-       
+        
       {/* Edit Modal */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-[2rem]">
