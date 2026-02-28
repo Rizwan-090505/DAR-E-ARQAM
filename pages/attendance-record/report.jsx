@@ -107,9 +107,10 @@ export default function AttendanceReportPage() {
         if (!map.has(row.studentid)) {
           map.set(row.studentid, {
             studentid: row.studentid,
-            name: row.students?.name || "Unknown",
-            fathername: row.students?.fathername || "-",
-            mobilenumber: row.students?.mobilenumber || "",
+            // Fixed: Updated mapping to use active_students instead of students
+            name: row.active_students?.name || "Unknown",
+            fathername: row.active_students?.fathername || "-",
+            mobilenumber: row.active_students?.mobilenumber || "",
             present: 0,
             absent: 0,
             percentage: 0,
@@ -193,10 +194,6 @@ export default function AttendanceReportPage() {
     window.print();
   };
 
-  // --- UPDATED CONDITIONAL FORMATTING LOGIC ---
-  // Using Emerald (Green), Amber (Yellow), and Rose (Red) for better modern UI contrast
-  // Light Mode: Pastel BG + Dark Text
-  // Dark Mode: Translucent Neon BG + Bright Text + Subtle Border
   const getPercentageColor = (pct) => {
     if (pct >= 90) {
       return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30";
