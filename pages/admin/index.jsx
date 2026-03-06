@@ -51,12 +51,12 @@ export default function AdminDashboard() {
       // 1. Total number of students
       // Using { count: 'exact', head: true } bypasses the 1000 row download limit, returning just the count integer
       const { count: totalStudents } = await supabase
-        .from('students')
+        .from('active_students')
         .select('*', { count: 'exact', head: true })
 
       // 2. Admissions in the last 30 days (joining_date)
       const { count: newAdmissions } = await supabase
-        .from('students')
+        .from('active_students')
         .select('*', { count: 'exact', head: true })
         .gte('joining_date', thirtyDaysAgoStr)
 
