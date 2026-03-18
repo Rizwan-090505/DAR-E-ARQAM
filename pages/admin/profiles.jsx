@@ -1,0 +1,524 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "../../utils/supabaseClient"
+import Navbar from "../../components/Navbar"
+import Loader from "../../components/Loader"
+import { Button } from "../../components/ui/button"
+import { Input } from "../../components/ui/input"
+import {
+  Plus, Edit, Trash2, Filter, Search, Shield, ShieldAlert,
+  CheckCircle2, XCircle, UserX, UserCheck, EyeOff, Eye,
+  Mail, Phone, Ban, UserCog
+} from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { useToast } from "../../hooks/use-toast"
+
+export default function ProfilesPage() {
+  const { toast } = useToast()
+  const router = useRouter()
+
+  const [profiles, setProfiles] = useState([])
+  const [allProfiles, setAllProfiles] = useState([])
+  
+  // Filters
+  const [filterRoles, setFilterRoles] = useState([])
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showBlocked, setShowBlocked] = useState(false) // toggle for is_active = false
+
+  // Bulk Actions
+  const [selectedProfiles, setSelectedProfiles] = useState([])
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [targetRole, setTargetRole] = useState("")
+  const [bulkRoleLoading, setBulkRoleLoading] = useState(false)
+
+  // Loading States
+  const [loading, setLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(null)
+
+  // Edit Modal State
+  const [editingProfile, setEditingProfile] = useState(null)
+  const [editForm, setEditForm] = useState({ name: "", mobilenumber: "", role: "" })
+  const [saveLoading, setSaveLoading] = useState(false)
+
+  const roles = ["teacher", "admin", "superadmin"]
+
+  useEffect(() => {
+    fetchProfiles()
+  }, [])
+
+  const fetchProfiles = async () => {
+    setLoading(true)
+    const { data, error } = await supabase.from("profiles").select("*").order('name', { ascending: true })
+    if (error) {
+      toast({ title: "Failed to fetch profiles", variant: "destructive" })
+    } else {
+      setAllProfiles(data || [])
+    }
+    setLoading(false)
+  }
+
+  // Filtering Logic
+  useEffect(() => {
+    let filtered = [...allProfiles]
+
+    // Active vs Blocked
+    if (showBlocked) {
+      filtered = filtered.filter(p => p.is_active === false)
+    } else {
+      filtered = filtered.filter(p => p.is_active !== false)
+    }
+
+    // Role Filter
+    if (filterRoles.length > 0) {
+      filtered = filtered.filter(p => filterRoles.includes(p.role))
+    }
+
+    // Search Query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      filtered = filtered.filter(p => 
+        (p.name && p.name.toLowerCase().includes(q)) || 
+        (p.email && p.email.toLowerCase().includes(q)) ||
+        (p.mobilenumber && String(p.mobilenumber).includes(q))
+      )
+    }
+
+    setProfiles(filtered)
+  }, [filterRoles, searchQuery, allProfiles, showBlocked])
+
+  // Single Actions
+  const handleToggleActive = async (id, currentStatus) => {
+    const newStatus = !currentStatus
+    const actionWord = newStatus ? "Unblock" : "Block"
+    if (!window.confirm(`Are you sure you want to ${actionWord.toLowerCase()} this user?`)) return
+    
+    setActionLoading(id)
+    const { error } = await supabase.from("profiles").update({ is_active: newStatus }).eq("id", id)
+    
+    if (error) {
+      toast({ title: `Failed to ${actionWord.toLowerCase()} user`, variant: "destructive" })
+    } else {
+      setAllProfiles(prev => prev.map(p => p.id === id ? { ...p, is_active: newStatus } : p))
+      toast({ title: `User ${newStatus ? 'reactivated ✅' : 'blocked 🚫'}` })
+    }
+    setActionLoading(null)
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure? This will permanently delete the profile.")) return
+    setActionLoading(id)
+    const { error } = await supabase.from("profiles").delete().eq("id", id)
+    if (error) {
+      toast({ title: "Failed to delete profile", variant: "destructive" })
+    } else {
+      setAllProfiles(prev => prev.filter(p => p.id !== id))
+      toast({ title: "Profile deleted 🗑️" })
+    }
+    setActionLoading(null)
+  }
+
+  // Edit Modal Handlers
+  const openEditModal = (profile) => {
+    setEditingProfile(profile.id)
+    setEditForm({ name: profile.name || "", mobilenumber: profile.mobilenumber || "", role: profile.role || "teacher" })
+  }
+
+  const handleSaveProfile = async () => {
+    setSaveLoading(true)
+    const { error } = await supabase
+      .from("profiles")
+      .update(editForm)
+      .eq("id", editingProfile)
+
+    if (error) {
+      toast({ title: "Failed to update profile", variant: "destructive" })
+    } else {
+      setAllProfiles(prev => prev.map(p => p.id === editingProfile ? { ...p, ...editForm } : p))
+      toast({ title: "Profile updated successfully ✨" })
+      setEditingProfile(null)
+    }
+    setSaveLoading(false)
+  }
+
+  // Bulk Actions
+  const handleBulkStatus = async (status) => {
+    if (selectedProfiles.length === 0) return
+    setBulkLoading(true)
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: status })
+        .in("id", selectedProfiles)
+      if (error) throw error
+      
+      setAllProfiles(prev => prev.map(p =>
+        selectedProfiles.includes(p.id) ? { ...p, is_active: status } : p
+      ))
+      toast({ title: `${selectedProfiles.length} users ${status ? "unblocked ✅" : "blocked 🚫"}` })
+      setSelectedProfiles([])
+    } catch (error) {
+      toast({ title: "Bulk update failed", variant: "destructive" })
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  const handleBulkRoleUpdate = async () => {
+    if (!targetRole || selectedProfiles.length === 0) return
+    setBulkRoleLoading(true)
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ role: targetRole })
+        .in("id", selectedProfiles)
+      if (error) throw error
+      
+      setAllProfiles(prev => prev.map(p =>
+        selectedProfiles.includes(p.id) ? { ...p, role: targetRole } : p
+      ))
+      toast({ title: `Assigned ${targetRole} role to ${selectedProfiles.length} users 🛡️` })
+      setSelectedProfiles([])
+      setTargetRole("")
+    } catch (error) {
+      toast({ title: "Role update failed", variant: "destructive" })
+    } finally {
+      setBulkRoleLoading(false)
+    }
+  }
+
+  const toggleRoleFilter = (role) => {
+    setFilterRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
+  }
+
+  const getRoleBadge = (role) => {
+    switch(role) {
+      case 'superadmin': return <span className="px-2 py-1 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded text-xs font-bold uppercase flex items-center gap-1 w-max"><ShieldAlert className="w-3 h-3"/> Super Admin</span>
+      case 'admin': return <span className="px-2 py-1 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded text-xs font-bold uppercase flex items-center gap-1 w-max"><Shield className="w-3 h-3"/> Admin</span>
+      default: return <span className="px-2 py-1 bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-slate-300 rounded text-xs font-bold uppercase flex items-center gap-1 w-max"><UserCog className="w-3 h-3"/> Teacher</span>
+    }
+  }
+
+  const blockedCount = allProfiles.filter(p => p.is_active === false).length
+
+  return (
+    <>
+      <Navbar />
+
+      <div className="min-h-screen transition-colors duration-300 bg-gradient-to-b from-gray-50 to-gray-200 dark:from-[#0b1220] dark:to-[#05070c] text-gray-900 dark:text-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+          {/* --- HEADER ROW --- */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Staff Profiles</h1>
+              <p className="text-gray-500 dark:text-slate-400 mt-1">
+                Manage roles, access, and contact details.
+                {showBlocked && (
+                  <span className="ml-2 text-red-500 dark:text-red-400 font-medium">Viewing blocked users</span>
+                )}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <div className="relative flex-grow sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-slate-500" />
+                <Input
+                  placeholder="Search name, email, or phone..."
+                  className="pl-10 h-10 rounded-lg bg-white border-gray-200 text-gray-900 dark:bg-white/10 dark:border-white/10 dark:text-slate-100 dark:placeholder:text-slate-400"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {/* Toggle Blocked/Active view */}
+              <Button
+                onClick={() => {
+                  setShowBlocked(prev => !prev)
+                  setSelectedProfiles([])
+                }}
+                variant="outline"
+                className={`h-10 px-4 rounded-lg border transition-all gap-2 ${
+                  showBlocked
+                    ? "bg-red-50 border-red-300 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300 dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                }`}
+              >
+                {showBlocked ? (
+                  <><Eye className="w-4 h-4" /> Active Staff</>
+                ) : (
+                  <>
+                    <Ban className="w-4 h-4" /> Blocked
+                    {blockedCount > 0 && (
+                      <span className="ml-1 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                        {blockedCount}
+                      </span>
+                    )}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* --- FILTERS --- */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="flex items-center gap-2 text-gray-500 dark:text-slate-400 mr-2 shrink-0">
+                <Filter className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Role</span>
+              </div>
+
+              <button
+                onClick={() => setFilterRoles([])}
+                className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                  filterRoles.length === 0
+                    ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600 dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                }`}
+              >
+                All Roles
+              </button>
+
+              {roles.map(role => {
+                const isActive = filterRoles.includes(role)
+                return (
+                  <button
+                    key={role}
+                    onClick={() => toggleRoleFilter(role)}
+                    className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all border capitalize ${
+                      isActive
+                        ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600 dark:bg-white/5 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {role}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* --- BULK ACTION BAR --- */}
+          <AnimatePresence>
+            {selectedProfiles.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -10, height: 0 }}
+                className="mb-4 overflow-hidden"
+              >
+                <div className="bg-blue-50/80 backdrop-blur-md border border-blue-200 dark:bg-blue-900/30 dark:border-blue-800/50 rounded-lg p-3 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-md">
+                      {selectedProfiles.length} Selected
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 w-full md:w-auto md:flex-1 md:justify-end">
+                    
+                    {/* Bulk Block/Unblock */}
+                    <div className="flex items-center gap-2">
+                      {bulkLoading ? <Loader small /> : (
+                        <>
+                          {showBlocked ? (
+                            <Button size="sm" onClick={() => handleBulkStatus(true)} className="bg-green-600 hover:bg-green-700 text-white border-none h-8">
+                              <UserCheck className="w-3 h-3 mr-1.5" /> Unblock Users
+                            </Button>
+                          ) : (
+                            <Button size="sm" onClick={() => handleBulkStatus(false)} className="bg-red-600 hover:bg-red-700 text-white border-none h-8">
+                              <Ban className="w-3 h-3 mr-1.5" /> Block Users
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Bulk Role Update */}
+                    {!showBlocked && (
+                      <div className="flex items-center gap-2 md:pl-4 md:border-l md:border-blue-200 dark:md:border-blue-800/60">
+                        <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                        <select
+                          value={targetRole}
+                          onChange={(e) => setTargetRole(e.target.value)}
+                          className="h-8 text-black bg-white text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-white/20 dark:bg-white/5 dark:text-blue-200 capitalize"
+                        >
+                          <option value="">Change role...</option>
+                          {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+
+                        {targetRole && (
+                          <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}>
+                            <Button size="sm" onClick={handleBulkRoleUpdate} disabled={bulkRoleLoading} className="bg-blue-600 hover:bg-blue-700 text-white h-8">
+                              {bulkRoleLoading ? <Loader small /> : "Apply"}
+                            </Button>
+                          </motion.div>
+                        )}
+                      </div>
+                    )}
+
+                    <Button size="sm" variant="ghost" onClick={() => { setSelectedProfiles([]); setTargetRole(""); }} className="text-gray-600 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200 h-8 ml-auto md:ml-0">
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* --- TABLE CONTAINER --- */}
+          <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 backdrop-blur-xl shadow-sm dark:shadow-xl">
+            {loading ? (
+              <div className="p-12 flex justify-center"><Loader /></div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[900px]">
+                  <thead className="text-xs uppercase font-semibold bg-gray-50 text-gray-500 border-b border-gray-200 dark:bg-white/5 dark:text-slate-400 dark:border-white/10">
+                    <tr>
+                      <th className="py-4 pl-6 w-10">
+                        <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer dark:border-white/20 dark:bg-white/10 dark:checked:bg-blue-600"
+                          onChange={e => setSelectedProfiles(e.target.checked ? profiles.map(p => p.id) : [])}
+                          checked={profiles.length > 0 && selectedProfiles.length === profiles.length}
+                        />
+                      </th>
+                      <th className="py-4 px-3">Name</th>
+                      <th className="py-4 px-3">Contact</th>
+                      <th className="py-4 px-3">Role</th>
+                      <th className="py-4 px-3">Status</th>
+                      <th className="py-4 pr-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-white/5">
+                    {profiles.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-gray-500 dark:text-slate-500 italic">
+                          {showBlocked ? "No blocked users found." : "No profiles match your filters."}
+                        </td>
+                      </tr>
+                    ) : (
+                      profiles.map(p => (
+                        <tr key={p.id} className={`group transition-colors ${
+                          selectedProfiles.includes(p.id) ? "bg-blue-50 dark:bg-blue-900/20" : 
+                          !p.is_active ? "bg-red-50/30 hover:bg-red-50/60 dark:bg-red-900/5 dark:hover:bg-red-900/10" : 
+                          "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                        }`}>
+                          <td className="py-3 pl-6">
+                            <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer dark:border-white/20 dark:bg-white/10 dark:checked:bg-blue-600"
+                              checked={selectedProfiles.includes(p.id)}
+                              onChange={e => setSelectedProfiles(prev => e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id))}
+                            />
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-gray-900 dark:text-slate-200">
+                              {p.name || <span className="text-gray-400 italic">Unnamed</span>}
+                            </div>
+                            <div className="text-xs text-gray-400 dark:text-slate-500 font-mono mt-0.5 truncate w-32 md:w-auto" title={p.id}>
+                              ID: {p.id.split('-')[0]}...
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center text-gray-600 dark:text-slate-400 text-sm mb-1">
+                              <Mail className="w-3 h-3 mr-1.5 shrink-0" /> {p.email}
+                            </div>
+                            <div className="flex items-center text-gray-500 dark:text-slate-500 text-xs font-mono">
+                              <Phone className="w-3 h-3 mr-1.5 shrink-0" /> {p.mobilenumber || "-"}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            {getRoleBadge(p.role)}
+                          </td>
+                          <td className="py-3 px-3">
+                            {p.is_active ? (
+                              <span className="flex items-center text-green-600 dark:text-green-400 text-xs font-medium">
+                                <CheckCircle2 className="w-4 h-4 mr-1" /> Active
+                              </span>
+                            ) : (
+                              <span className="flex items-center text-red-500 dark:text-red-400 text-xs font-medium">
+                                <Ban className="w-4 h-4 mr-1" /> Blocked
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-6 text-right">
+                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button size="sm" variant="ghost" className="h-8 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30" onClick={() => openEditModal(p)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" className={`h-8 px-2 ${p.is_active ? "text-orange-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/30" : "text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/30"}`} onClick={() => handleToggleActive(p.id, p.is_active)} disabled={actionLoading === p.id}>
+                                {actionLoading === p.id ? <Loader small /> : p.is_active ? <Ban className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-8 px-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30" onClick={() => handleDelete(p.id)} disabled={actionLoading === p.id}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* --- QUICK EDIT MODAL --- */}
+      <AnimatePresence>
+        {editingProfile && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white dark:bg-[#0b1220] rounded-xl shadow-2xl border border-gray-200 dark:border-white/10 w-full max-w-md overflow-hidden"
+            >
+              <div className="p-5 border-b border-gray-100 dark:border-white/10 flex justify-between items-center">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Profile</h3>
+                <button onClick={() => setEditingProfile(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Full Name</label>
+                  <Input 
+                    value={editForm.name} 
+                    onChange={e => setEditForm({...editForm, name: e.target.value})}
+                    placeholder="E.g. Jane Doe"
+                    className="dark:bg-white/5 dark:border-white/10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Mobile Number</label>
+                  <Input 
+                    value={editForm.mobilenumber} 
+                    onChange={e => setEditForm({...editForm, mobilenumber: e.target.value})}
+                    placeholder="0300-0000000"
+                    className="dark:bg-white/5 dark:border-white/10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1">Role</label>
+                  <select 
+                    value={editForm.role} 
+                    onChange={e => setEditForm({...editForm, role: e.target.value})}
+                    className="w-full h-10 px-3 rounded-md border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-[#0b1220] dark:border-white/10 dark:text-white capitalize"
+                  >
+                    {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="p-5 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/10 flex justify-end gap-3">
+                <Button variant="outline" onClick={() => setEditingProfile(null)} className="dark:bg-transparent dark:border-white/20 dark:text-white">Cancel</Button>
+                <Button onClick={handleSaveProfile} disabled={saveLoading} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[100px]">
+                  {saveLoading ? <Loader small /> : "Save Changes"}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}

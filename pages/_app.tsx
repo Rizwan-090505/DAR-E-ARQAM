@@ -7,7 +7,7 @@ import { supabase } from '../utils/supabaseClient'
 import { useRouter } from 'next/router'
 import Loader from '../components/Loader'
 
-// 1. Define Public Routes (Speed Optimization)
+// Public routes (no auth required)
 const OPEN_ROUTES = [
   '/login',
   '/admission',
@@ -21,30 +21,70 @@ const OPEN_ROUTES = [
 const useAuth = () => {
   const [user, setUser] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isActive, setIsActive] = useState<boolean | null>(null)
 
   useEffect(() => {
     let mounted = true
 
+    // 🔥 Minimal DB check (fast)
+    const checkUserStatus = async (userId: string) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('id', userId)
+        .single()
+
+      if (error || !data) return false
+      return data.is_active
+    }
+
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      
-      if (mounted) {
-        if (session?.user) {
+
+      if (!mounted) return
+
+      if (session?.user) {
+        const active = await checkUserStatus(session.user.id)
+
+        if (!active) {
+          await supabase.auth.signOut()
+          setUser(null)
+          setIsActive(false)
+        } else {
           setUser(session.user)
+          setIsActive(true)
         }
-        setLoading(false)
       }
+
+      setLoading(false)
     }
 
     initializeAuth()
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (mounted) {
-          const currentUser = session?.user ?? null
+        if (!mounted) return
+
+        const currentUser = session?.user ?? null
+
+        if (currentUser) {
+          const active = await checkUserStatus(currentUser.id)
+
+          if (!active) {
+            await supabase.auth.signOut()
+            setUser(null)
+            setIsActive(false)
+            return
+          }
+
           setUser(currentUser)
-          setLoading(false)
+          setIsActive(true)
+        } else {
+          setUser(null)
+          setIsActive(null)
         }
+
+        setLoading(false)
       }
     )
 
@@ -54,59 +94,60 @@ const useAuth = () => {
     }
   }, [])
 
-  return { user, loading }
+  return { user, loading, isActive }
 }
 
 function MyApp({ Component, pageProps }: AppProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, isActive } = useAuth()
   const router = useRouter()
-  
-  // Check if current page is public
-  const isPublicRoute = OPEN_ROUTES.some(route => router.pathname.startsWith(route))
 
-  // 2. Fast Synchronous Role Check via LocalStorage
-  // We check typeof window to prevent Server-Side Rendering (SSR) hydration errors
-  const isClient = typeof window !== 'undefined';
-  const userRole = isClient ? localStorage.getItem('UserRole') : null;
-  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const isPublicRoute = OPEN_ROUTES.some(route =>
+    router.pathname.startsWith(route)
+  )
+
+  // Client-only role check
+  const isClient = typeof window !== 'undefined'
+  const userRole = isClient ? localStorage.getItem('UserRole') : null
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin'
 
   useEffect(() => {
-    // Wait for auth to finish loading before deciding to redirect
     if (loading) return
 
-    // SECURITY: If not logged in & not on a public route -> Go to Login
+    // 🚨 Inactive user → force logout + redirect
+    if (isActive === false) {
+      router.replace('/login')
+      return
+    }
+
+    // Not logged in → redirect
     if (!user && !isPublicRoute) {
       router.replace('/login')
       return
     }
 
-    // ROLE-BASED REDIRECTS
     if (user) {
-      // Rule A: Revoke access to /admin pages for non-admins
+      // Block non-admins from admin routes
       if (router.pathname.startsWith('/admin') && !isAdmin) {
-        router.replace('/') // Kick them back to the standard root/dashboard
+        router.replace('/')
         return
       }
 
-      // Rule B: Redirect admins/superadmins from the root '/' to '/admin'
+      // Redirect admins to /admin
       if (router.pathname === '/' && isAdmin) {
         router.replace('/admin')
         return
       }
     }
 
-  }, [user, loading, router, isPublicRoute, isAdmin])
+  }, [user, loading, isPublicRoute, isAdmin, router, isActive])
 
-  // --- RENDERING LOGIC ---
+  // Prevent flashing unauthorized UI
+  const isRedirecting =
+    (!loading && !user && !isPublicRoute) ||
+    (user && router.pathname.startsWith('/admin') && !isAdmin) ||
+    (user && router.pathname === '/' && isAdmin) ||
+    (isActive === false)
 
-  // Determine if a client-side redirect is about to happen. 
-  // This prevents the app from briefly rendering unauthorized components (speed optimization).
-  const isRedirecting = 
-    (!loading && !user && !isPublicRoute) || 
-    (user && router.pathname.startsWith('/admin') && !isAdmin) || 
-    (user && router.pathname === '/' && isAdmin);
-
-  // A. If waiting for Auth on a protected route, OR if we are actively redirecting, show Loader.
   if ((loading && !isPublicRoute) || isRedirecting) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -115,7 +156,6 @@ function MyApp({ Component, pageProps }: AppProps) {
     )
   }
 
-  // B. Render the Application
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Component {...pageProps} />

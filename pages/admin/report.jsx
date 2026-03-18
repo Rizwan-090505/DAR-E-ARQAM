@@ -9,7 +9,8 @@ import { Input } from "../../components/ui/input"
 import { Label } from "../../components/ui/label"
 import { 
   ArrowLeft, Calendar, FileText, 
-  Download, FileBarChart, Users 
+  Download, FileBarChart, Users,
+  PieChart, ClipboardList, ArrowRight
 } from "lucide-react"
 import { useToast } from "../../hooks/use-toast"
 import { generateCollectionReportBlob } from "../../utils/collectionReport" 
@@ -20,7 +21,7 @@ export default function ReportsPage() {
   
   // --- States ---
   const [loading, setLoading] = useState(false)
-  const [reportType, setReportType] = useState("collection") // "collection" | "defaulter"
+  const [reportType, setReportType] = useState("collection") // "collection" | "defaulter" | "feesummary" | "studentslist"
   
   // Date Range State
   const [dateRange, setDateRange] = useState({
@@ -32,29 +33,37 @@ export default function ReportsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // IF DEFAULTER LIST: Navigate to /admin/defaulters with URL params (dates only)
+    // IF FEE SUMMARY: Simple redirect
+    if (reportType === "feesummary") {
+      router.push(`/admin/feesummary`)
+      return;
+    }
+
+    // IF STUDENTS LIST: Simple redirect
+    if (reportType === "studentslist") {
+      router.push(`/admin/studentslist`)
+      return;
+    }
+
+    // IF DEFAULTER LIST: Navigate to /admin/defaulters with URL params
     if (reportType === "defaulter") {
       const params = new URLSearchParams({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
       })
       router.push(`/admin/defaulters?${params.toString()}`)
-      return; // Stop execution here for defaulters
+      return;
     }
 
     // IF COLLECTION REPORT: Generate PDF blob
     setLoading(true)
     try {
-      // 1. Await the blob generation from our utility function
       const pdfBlob = await generateCollectionReportBlob(dateRange.startDate, dateRange.endDate)
-
-      // 2. Create a URL and open it in a new tab for preview/printing
       const blobUrl = URL.createObjectURL(pdfBlob)
       window.open(blobUrl, "_blank")
       
       toast({ title: "Report generated successfully! 📄" })
 
-      // Cleanup memory after a short delay
       setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
 
     } catch (error) {
@@ -74,11 +83,48 @@ export default function ReportsPage() {
   const glassInputClass = "flex h-10 w-full rounded-md border px-3 py-2 text-sm bg-white/50 dark:bg-white/5 border-white/20 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 placeholder:text-gray-500/70"
 
   // --- Dynamic Content based on Report Type ---
-  const isDefaulter = reportType === "defaulter"
-  const title = isDefaulter ? "Defaulter List" : "Collection Report"
-  const description = isDefaulter 
-    ? "View list of students with pending fees for a specific date range."
-    : "Generate financial collection reports by date range."
+  let title, description, BgIcon, themeColor, buttonText;
+  const requiresDates = reportType === "collection" || reportType === "defaulter";
+
+  switch (reportType) {
+    case "defaulter":
+      title = "Defaulter List";
+      description = "View list of students with pending fees for a specific date range.";
+      BgIcon = Users;
+      themeColor = "red";
+      buttonText = "View Defaulters";
+      break;
+    case "feesummary":
+      title = "Fee Summary & Average";
+      description = "View an overview of all fee summaries and average fee statistics.";
+      BgIcon = PieChart;
+      themeColor = "green";
+      buttonText = "Go to Fee Summary";
+      break;
+    case "studentslist":
+      title = "Students List / Award Sheet";
+      description = "View the complete list of students and generate award sheets.";
+      BgIcon = ClipboardList;
+      themeColor = "purple";
+      buttonText = "Go to Students List";
+      break;
+    case "collection":
+    default:
+      title = "Collection Report";
+      description = "Generate a PDF report of all fee collections within a specific date range.";
+      BgIcon = FileBarChart;
+      themeColor = "blue";
+      buttonText = "Generate Report";
+      break;
+  }
+
+  // Helper for dynamic theme coloring
+  const getThemeClasses = () => {
+    if (themeColor === "red") return 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 hover:shadow-red-500/30';
+    if (themeColor === "green") return 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 hover:shadow-emerald-500/30';
+    if (themeColor === "purple") return 'bg-gradient-to-r from-purple-600 to-fuchsia-600 hover:from-purple-700 hover:to-fuchsia-700 hover:shadow-purple-500/30';
+    return 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-blue-500/30'; // blue default
+  }
 
   return (
     <>
@@ -103,20 +149,16 @@ export default function ReportsPage() {
 
           {/* REPORT CARD */}
           <div className={`${glassCardClass} flex flex-col`}>
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none transition-all">
-              {isDefaulter ? (
-                <Users className="w-24 h-24 text-red-500" />
-              ) : (
-                <FileBarChart className="w-24 h-24 text-blue-500" />
-              )}
+            <div className={`absolute top-0 right-0 p-4 opacity-10 pointer-events-none transition-all`}>
+              <BgIcon className={`w-24 h-24 text-${themeColor}-500`} />
             </div>
             
             <h2 className="text-xl font-bold flex items-center gap-2 mb-2 text-gray-800 dark:text-white relative z-10 transition-all">
-              <FileText className={`w-6 h-6 ${isDefaulter ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`} /> 
+              <FileText className={`w-6 h-6 text-${themeColor}-600 dark:text-${themeColor}-400`} /> 
               Generate {title}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 relative z-10">
-              {isDefaulter ? "Select a date range to fetch the defaulters." : "Generate a PDF report of all fee collections within a specific date range."}
+              {description}
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5 flex-1 flex flex-col relative z-10">
@@ -131,50 +173,54 @@ export default function ReportsPage() {
                 >
                   <option value="collection" className="text-black dark:text-white dark:bg-slate-800">Collection Report</option>
                   <option value="defaulter" className="text-black dark:text-white dark:bg-slate-800">Defaulter List</option>
+                  <option value="feesummary" className="text-black dark:text-white dark:bg-slate-800">Fee Summary & Average</option>
+                  <option value="studentslist" className="text-black dark:text-white dark:bg-slate-800">Students List / Award Sheet</option>
                 </select>
               </div>
 
-              {/* Date Range Selectors */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="ml-1 text-gray-700 dark:text-gray-300">Start Date</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                    <Input 
-                      type="date" 
-                      required
-                      className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
-                      value={dateRange.startDate} 
-                      onChange={e => setDateRange({...dateRange, startDate: e.target.value})} 
-                    />
+              {/* Date Range Selectors (Only show if report type requires it) */}
+              {requiresDates && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1.5">
+                    <Label className="ml-1 text-gray-700 dark:text-gray-300">Start Date</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input 
+                        type="date" 
+                        required={requiresDates}
+                        className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
+                        value={dateRange.startDate} 
+                        onChange={e => setDateRange({...dateRange, startDate: e.target.value})} 
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-1.5">
-                  <Label className="ml-1 text-gray-700 dark:text-gray-300">End Date</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                    <Input 
-                      type="date" 
-                      required
-                      className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
-                      value={dateRange.endDate} 
-                      onChange={e => setDateRange({...dateRange, endDate: e.target.value})} 
-                    />
+                  <div className="space-y-1.5">
+                    <Label className="ml-1 text-gray-700 dark:text-gray-300">End Date</Label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Input 
+                        type="date" 
+                        required={requiresDates}
+                        className={`pl-9 ${glassInputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
+                        value={dateRange.endDate} 
+                        onChange={e => setDateRange({...dateRange, endDate: e.target.value})} 
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-auto pt-6">
                 <Button 
                   type="submit" 
                   disabled={loading}
-                  className={`w-full ${isDefaulter ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 hover:shadow-red-500/30' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:shadow-blue-500/30'} dark:bg-white/5 text-white shadow-lg transition-all rounded-lg h-12 border-0`}
+                  className={`w-full ${getThemeClasses()} dark:bg-white/5 text-white shadow-lg transition-all rounded-lg h-12 border-0`}
                 >
                   {loading ? <Loader small /> : (
                     <>
-                      <Download className="w-5 h-5 mr-2" /> 
-                      {isDefaulter ? "View Defaulters" : "Generate Report"}
+                      {!requiresDates ? <ArrowRight className="w-5 h-5 mr-2" /> : <Download className="w-5 h-5 mr-2" />} 
+                      {buttonText}
                     </>
                   )}
                 </Button>
