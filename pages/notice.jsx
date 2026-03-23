@@ -362,7 +362,8 @@ export default function BulkMessagePage() {
           sent: false,
           class_id: student?.class_id,
           text: customizedMessage.trim(),
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          type:"notice"
         };
       });
 
