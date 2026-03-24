@@ -101,54 +101,64 @@ function MyApp({ Component, pageProps }: AppProps) {
   const { user, loading, isActive } = useAuth()
   const router = useRouter()
 
+  // Safely handle client-side localStorage to prevent Next.js Hydration errors
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [roleLoaded, setRoleLoaded] = useState(false)
+
+  useEffect(() => {
+    setUserRole(localStorage.getItem('UserRole'))
+    setRoleLoaded(true)
+  }, [])
+
   const isPublicRoute = OPEN_ROUTES.some(route =>
     router.pathname.startsWith(route)
   )
 
-  // Client-only role check
-  const isClient = typeof window !== 'undefined'
-  const userRole = isClient ? localStorage.getItem('UserRole') : null
   const isAdmin = userRole === 'admin' || userRole === 'superadmin'
+  // Combine Supabase loading with our local role loading
+  const isAppLoading = loading || !roleLoaded
 
   useEffect(() => {
-    if (loading) return
+    if (isAppLoading) return
+
+    const currentPath = router.pathname
 
     // 🚨 Inactive user → force logout + redirect
     if (isActive === false) {
-      router.replace('/login')
+      if (currentPath !== '/login') router.replace('/login')
       return
     }
 
     // Not logged in → redirect
     if (!user && !isPublicRoute) {
-      router.replace('/login')
+      if (currentPath !== '/login') router.replace('/login')
       return
     }
 
     if (user) {
       // Block non-admins from admin routes
-      if (router.pathname.startsWith('/admin') && !isAdmin) {
-        router.replace('/')
+      if (currentPath.startsWith('/admin') && !isAdmin) {
+        if (currentPath !== '/') router.replace('/')
         return
       }
 
       // Redirect admins to /admin
-      if (router.pathname === '/' && isAdmin) {
-        router.replace('/admin')
+      if (currentPath === '/' && isAdmin) {
+        if (currentPath !== '/admin') router.replace('/admin')
         return
       }
     }
 
-  }, [user, loading, isPublicRoute, isAdmin, router, isActive])
+  }, [user, isAppLoading, isPublicRoute, isAdmin, router.pathname, isActive])
 
   // Prevent flashing unauthorized UI
   const isRedirecting =
-    (!loading && !user && !isPublicRoute) ||
+    (!isAppLoading && !user && !isPublicRoute && router.pathname !== '/login') ||
     (user && router.pathname.startsWith('/admin') && !isAdmin) ||
     (user && router.pathname === '/' && isAdmin) ||
-    (isActive === false)
+    (isActive === false && router.pathname !== '/login')
 
-  if ((loading && !isPublicRoute) || isRedirecting) {
+  if ((isAppLoading && !isPublicRoute) || isRedirecting) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader />
