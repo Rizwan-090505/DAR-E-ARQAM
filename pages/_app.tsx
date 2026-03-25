@@ -7,7 +7,6 @@ import { supabase } from '../utils/supabaseClient'
 import { useRouter } from 'next/router'
 import Loader from '../components/Loader'
 
-// Public routes (no auth required)
 const OPEN_ROUTES = [
   '/login',
   '/admission',
@@ -19,152 +18,127 @@ const OPEN_ROUTES = [
 ]
 
 const useAuth = () => {
-  const [user, setUser] = useState<any | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isActive, setIsActive] = useState<boolean | null>(null)
+  // Combine states to prevent multiple re-renders
+  const [authState, setAuthState] = useState({
+    user: null as any | null,
+    isActive: null as boolean | null,
+    loading: true
+  })
 
   useEffect(() => {
     let mounted = true
 
-    // 🔥 Minimal DB check (fast)
     const checkUserStatus = async (userId: string) => {
       const { data, error } = await supabase
         .from('profiles')
         .select('is_active')
         .eq('id', userId)
         .single()
-
-      if (error || !data) return false
-      return data.is_active
+      return !error && data ? data.is_active : false
     }
 
-    const initializeAuth = async () => {
+    const initAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
 
-      if (!mounted) return
-
-      if (session?.user) {
-        const active = await checkUserStatus(session.user.id)
-
-        if (!active) {
-          await supabase.auth.signOut()
-          setUser(null)
-          setIsActive(false)
-        } else {
-          setUser(session.user)
-          setIsActive(true)
-        }
+      if (!session?.user) {
+        if (mounted) setAuthState({ user: null, isActive: null, loading: false })
+        return
       }
 
-      setLoading(false)
+      const active = await checkUserStatus(session.user.id)
+
+      if (!active) {
+        await supabase.auth.signOut()
+        if (mounted) setAuthState({ user: null, isActive: false, loading: false })
+      } else {
+        if (mounted) setAuthState({ user: session.user, isActive: true, loading: false })
+      }
     }
 
-    initializeAuth()
+    // Run once on mount
+    initAuth()
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (!mounted) return
+    // Listen for future changes (login/logout), but ignore background token refreshes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return
 
         const currentUser = session?.user ?? null
 
         if (currentUser) {
           const active = await checkUserStatus(currentUser.id)
-
           if (!active) {
             await supabase.auth.signOut()
-            setUser(null)
-            setIsActive(false)
+            setAuthState({ user: null, isActive: false, loading: false })
             return
           }
-
-          setUser(currentUser)
-          setIsActive(true)
+          setAuthState({ user: currentUser, isActive: true, loading: false })
         } else {
-          setUser(null)
-          setIsActive(null)
+          setAuthState({ user: null, isActive: null, loading: false })
         }
-
-        setLoading(false)
       }
     )
 
     return () => {
       mounted = false
-      listener?.subscription?.unsubscribe()
+      subscription.unsubscribe()
     }
   }, [])
 
-  return { user, loading, isActive }
+  return authState
 }
 
 function MyApp({ Component, pageProps }: AppProps) {
   const { user, loading, isActive } = useAuth()
   const router = useRouter()
 
-  // Safely handle client-side localStorage to prevent Next.js Hydration errors
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [roleLoaded, setRoleLoaded] = useState(false)
-
-  useEffect(() => {
-    setUserRole(localStorage.getItem('UserRole'))
-    setRoleLoaded(true)
-  }, [])
-
-  const isPublicRoute = OPEN_ROUTES.some(route =>
-    router.pathname.startsWith(route)
-  )
-
+  // Read localStorage synchronously. Since we don't render this directly 
+  // into the DOM (only use it for routing), it won't cause Next.js hydration errors.
+  const isClient = typeof window !== 'undefined'
+  const userRole = isClient ? localStorage.getItem('UserRole') : null
   const isAdmin = userRole === 'admin' || userRole === 'superadmin'
-  // Combine Supabase loading with our local role loading
-  const isAppLoading = loading || !roleLoaded
+
+  const isPublicRoute = OPEN_ROUTES.some(route => router.pathname.startsWith(route))
 
   useEffect(() => {
-    if (isAppLoading) return
+    if (loading) return
 
     const currentPath = router.pathname
 
-    // 🚨 Inactive user → force logout + redirect
-    if (isActive === false) {
-      if (currentPath !== '/login') router.replace('/login')
+    // 1. Inactive user -> force logout + redirect
+    if (isActive === false && currentPath !== '/login') {
+      router.replace('/login')
       return
     }
 
-    // Not logged in → redirect
-    if (!user && !isPublicRoute) {
-      if (currentPath !== '/login') router.replace('/login')
+    // 2. Not logged in -> redirect to login (if not on public route)
+    if (!user && !isPublicRoute && currentPath !== '/login') {
+      router.replace('/login')
       return
     }
 
+    // 3. Logged in routing logic
     if (user) {
-      // Block non-admins from admin routes
       if (currentPath.startsWith('/admin') && !isAdmin) {
-        if (currentPath !== '/') router.replace('/')
-        return
-      }
-
-      // Redirect admins to /admin
-      if (currentPath === '/' && isAdmin) {
-        if (currentPath !== '/admin') router.replace('/admin')
-        return
+        router.replace('/') // Kick non-admins out of admin areas
+      } else if (currentPath === '/' && isAdmin) {
+        router.replace('/admin') // Route admins to their dashboard
       }
     }
+  }, [user, loading, isActive, isPublicRoute, isAdmin, router.pathname])
 
-  }, [user, isAppLoading, isPublicRoute, isAdmin, router.pathname, isActive])
-
-  // Prevent flashing unauthorized UI
-  const isRedirecting =
-    (!isAppLoading && !user && !isPublicRoute && router.pathname !== '/login') ||
-    (user && router.pathname.startsWith('/admin') && !isAdmin) ||
-    (user && router.pathname === '/' && isAdmin) ||
-    (isActive === false && router.pathname !== '/login')
-
-  if ((isAppLoading && !isPublicRoute) || isRedirecting) {
+  // Prevent UI flash while loading protected routes OR while the router is transitioning
+  if (loading && !isPublicRoute) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader />
       </div>
     )
   }
+
+  // Hide the page if we are about to redirect a user away
+  if (!loading && !user && !isPublicRoute && router.pathname !== '/login') return null
+  if (!loading && user && router.pathname.startsWith('/admin') && !isAdmin) return null
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
