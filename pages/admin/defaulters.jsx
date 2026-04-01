@@ -109,9 +109,6 @@ function DefaulterListContent() {
         return
       }
 
-      const currentMonth = new Date().getMonth()
-      const currentYear = new Date().getFullYear()
-
       // 2. Fetch Invoices (Chunked by Student IDs & Paginated)
       const chunkSize = 150
       let allInvoices = []
@@ -131,7 +128,7 @@ function DefaulterListContent() {
               fee_payments ( invoice_detail_id, amount, paid_at )
             `)
             .in("student_id", chunk)
-            .gte("invoice_date", startDate)
+            .gte("invoice_date", startDate) // Invoices selected only within date range
             .lte("invoice_date", endDate)
             .in("status", ["unpaid", "partial"])
             .range(fromInvoices, fromInvoices + limit - 1)
@@ -163,15 +160,12 @@ function DefaulterListContent() {
         let annualCharges = 0
         let stationeryCharges = 0
         let arrears = 0
-        let amountReceivedThisMonth = 0
+        let totalReceivedAmount = 0
 
-        // Track payments made THIS calendar month across ALL unpaid invoices
+        // Track ALL payments across these specific invoices, completely date independent
         studentInvoices.forEach(inv => {
           inv.fee_payments?.forEach(p => {
-            const payDate = p.paid_at ? new Date(p.paid_at) : new Date(inv.invoice_date); 
-            if (payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear) {
-              amountReceivedThisMonth += (p.amount || 0)
-            }
+             totalReceivedAmount += (p.amount || 0)
           })
         })
 
@@ -235,7 +229,7 @@ function DefaulterListContent() {
             stationeryCharges,
             arrears,
             totalPending,
-            amountReceivedThisMonth
+            totalReceivedAmount
           })
         }
       })
@@ -335,7 +329,6 @@ function DefaulterListContent() {
         <Navbar />
       </div>
       
-      {/* Updated Background matching previous page */}
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718] p-4 md:p-8 transition-colors duration-500 pb-20 print:bg-white print:p-0 print:m-0">
         <div className="max-w-7xl mx-auto space-y-6 print:max-w-full print:space-y-0">
           
@@ -504,7 +497,7 @@ function DefaulterListContent() {
                                  <th className="p-4 font-bold tracking-wider text-right text-orange-700 dark:text-orange-400 print:text-black">Stationery</th>
                                  <th className="p-4 font-bold tracking-wider text-right">Arrears</th>
                                  <th className="p-4 font-bold tracking-wider text-right text-red-600 dark:text-red-400 print:text-black">Total Pending</th>
-                                 <th className="p-4 font-bold tracking-wider text-right text-emerald-600 dark:text-emerald-500 print:text-black">Rec. This Mth</th>
+                                 <th className="p-4 font-bold tracking-wider text-right text-emerald-600 dark:text-emerald-500 print:text-black">Total Received</th>
                              </tr>
                          </thead>
                          <tbody className="divide-y divide-white/10 dark:divide-white/5 print:divide-gray-300">
@@ -552,7 +545,7 @@ function DefaulterListContent() {
                                      </td>
                                      <td className="p-4 text-right">
                                          <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 print:text-black">
-                                            {student.amountReceivedThisMonth > 0 ? student.amountReceivedThisMonth.toLocaleString() : "-"}
+                                            {student.totalReceivedAmount > 0 ? student.totalReceivedAmount.toLocaleString() : "-"}
                                          </div>
                                      </td>
                                  </tr>
@@ -581,7 +574,7 @@ function DefaulterListContent() {
                                  {defaulters.reduce((acc, curr) => acc + curr.totalPending, 0).toLocaleString()}
                                </td>
                                <td className="p-4 text-right font-mono text-emerald-600 dark:text-emerald-500 print:text-black">
-                                 {defaulters.reduce((acc, curr) => acc + curr.amountReceivedThisMonth, 0).toLocaleString()}
+                                 {defaulters.reduce((acc, curr) => acc + curr.totalReceivedAmount, 0).toLocaleString()}
                                </td>
                              </tr>
                          </tbody>
@@ -597,7 +590,7 @@ function DefaulterListContent() {
 
 export default function DefaultersPage() {
   return (
-    <Suspense fallback={<div className="h-screen bg-gradient-to-br flex items-center justify-center from-indigo-100 via-purple-50 to-pink-100 dark:from-[#0b1220] dark:via-[#1a1c2e] dark:to-[#0f0718]"><Loader /></div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader /></div>}>
       <DefaulterListContent />
     </Suspense>
   )
