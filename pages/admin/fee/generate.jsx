@@ -104,7 +104,7 @@ function GenerateInvoicesContent() {
       const invoicedStudentIds = new Set(existingInvoices.map(inv => inv.student_id))
       const eligibleStudents = allStudents.filter(s => !invoicedStudentIds.has(s.studentid))
       
-      // 2. Fetch Arrears for Eligible Students
+      // 2. Fetch Arrears for Eligible Students (ONLY LAST INVOICE)
       const eligibleIds = eligibleStudents.map(s => s.studentid);
       let arrearsMap = {};
 
@@ -113,15 +113,23 @@ function GenerateInvoicesContent() {
             .from("fee_invoices")
             .select(`
               student_id,
+              invoice_date,
               fee_invoice_details ( id, amount ),
               fee_payments ( invoice_detail_id, amount )
             `)
             .in("student_id", eligibleIds)
             .lt("invoice_date", startOfMonth)
-            .in("status", ["unpaid", "partial"]);
+            .in("status", ["unpaid", "partial"])
+            .order("invoice_date", { ascending: false }); // Sort newest to oldest
           
           if (oldInvoices) {
+              const processedStudents = new Set();
+
               oldInvoices.forEach(inv => {
+                  // Only process the FIRST (most recent) invoice we encounter for each student
+                  if (processedStudents.has(inv.student_id)) return;
+                  processedStudents.add(inv.student_id);
+
                   let carryOver = 0;
                   inv.fee_invoice_details.forEach(detail => {
                       const paid = inv.fee_payments
@@ -129,7 +137,7 @@ function GenerateInvoicesContent() {
                           .reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
                       carryOver += (detail.amount - paid);
                   });
-                  arrearsMap[inv.student_id] = (arrearsMap[inv.student_id] || 0) + carryOver;
+                  arrearsMap[inv.student_id] = carryOver;
               });
           }
       }
@@ -209,7 +217,7 @@ function GenerateInvoicesContent() {
 
       for (const student of selectedStudentsList) {
         
-        // 1. FETCH OLD INVOICES & DETAILS
+        // 1. FETCH OLD INVOICE & DETAILS (ONLY LAST INVOICE)
         const { data: oldInvoices } = await supabase
           .from("fee_invoices")
           .select(`
@@ -220,6 +228,8 @@ function GenerateInvoicesContent() {
           .eq("student_id", student.studentid)
           .lt("invoice_date", startOfCurrentMonth)
           .in("status", ["unpaid", "partial"]) 
+          .order("invoice_date", { ascending: false }) // Sort newest to oldest
+          .limit(1) // Only fetch the last one!
 
         let carriedOverDetails = []
         let totalCarryOverAmount = 0
