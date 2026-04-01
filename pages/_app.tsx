@@ -17,8 +17,10 @@ const OPEN_ROUTES = [
   '/res1'
 ]
 
+// Cache duration: 24 hours in milliseconds
+const CACHE_TTL = 24 * 60 * 60 * 1000 
+
 const useAuth = () => {
-  // Combine states to prevent multiple re-renders
   const [authState, setAuthState] = useState({
     user: null as any | null,
     isActive: null as boolean | null,
@@ -29,12 +31,38 @@ const useAuth = () => {
     let mounted = true
 
     const checkUserStatus = async (userId: string) => {
+      const cacheKey = `user_active_${userId}`
+      const cachedData = localStorage.getItem(cacheKey)
+
+      if (cachedData) {
+        try {
+          const { isActive, timestamp } = JSON.parse(cachedData)
+          // If the cache is less than 24 hours old, return it instantly
+          if (Date.now() - timestamp < CACHE_TTL) {
+            return isActive
+          }
+        } catch (e) {
+          // Ignore parse errors and fall through to database check
+          console.error("Cache parse error", e)
+        }
+      }
+
+      // Cache is missing or expired -> Query the database
       const { data, error } = await supabase
         .from('profiles')
         .select('is_active')
         .eq('id', userId)
         .single()
-      return !error && data ? data.is_active : false
+
+      const isActive = !error && data ? data.is_active : false
+
+      // Save the fresh result to localStorage with a timestamp
+      localStorage.setItem(cacheKey, JSON.stringify({
+        isActive,
+        timestamp: Date.now()
+      }))
+
+      return isActive
     }
 
     const initAuth = async () => {
@@ -49,6 +77,7 @@ const useAuth = () => {
 
       if (!active) {
         await supabase.auth.signOut()
+        localStorage.removeItem(`user_active_${session.user.id}`) // Clear cache on failure
         if (mounted) setAuthState({ user: null, isActive: false, loading: false })
       } else {
         if (mounted) setAuthState({ user: session.user, isActive: true, loading: false })
@@ -69,6 +98,7 @@ const useAuth = () => {
           const active = await checkUserStatus(currentUser.id)
           if (!active) {
             await supabase.auth.signOut()
+            localStorage.removeItem(`user_active_${currentUser.id}`)
             setAuthState({ user: null, isActive: false, loading: false })
             return
           }
@@ -136,7 +166,6 @@ function MyApp({ Component, pageProps }: AppProps) {
     )
   }
 
-  // Hide the page if we are about to redirect a user away
   if (!loading && !user && !isPublicRoute && router.pathname !== '/login') return null
   if (!loading && user && router.pathname.startsWith('/admin') && !isAdmin) return null
 
