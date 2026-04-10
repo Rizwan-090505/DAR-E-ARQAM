@@ -3,7 +3,6 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "./supabaseClient";
 
 export const generateCollectionReportBlob = async (startDate, endDate) => {
-
   // --- 1. Fetch data from Supabase using Pagination ---
   let allReceipts = [];
   let fetchMore = true;
@@ -59,8 +58,11 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   const endStr = new Date(endDate).toLocaleDateString();
   const dateRangeString = startStr === endStr ? startStr : `${startStr} to ${endStr}`;
 
-  // --- 3. Grouping Logic (keyed by studentId + date + mode) ---
+  // --- 3. Grouping Logic & Totals Setup ---
   const groupedMap = new Map();
+  const feeTypeTotals = {}; // Tracks fee type totals
+  const modeTotals = {};    // Tracks mode totals
+  let totalAmount = 0;
 
   allReceipts.forEach((rcpt) => {
     const studentName = rcpt.fee_invoices?.students?.name || "Unknown";
@@ -74,6 +76,11 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
     const description = rcpt.fee_invoice_details?.fee_type || "General Payment";
     const amount = Number(rcpt.amount) || 0;
     const mode = rcpt.payment_method || "Cash";
+
+    // Track Fee Type Totals (Excluding 'payment mode adjustment' case-insensitively)
+    if (description.toLowerCase() !== "payment mode adjustment") {
+      feeTypeTotals[description] = (feeTypeTotals[description] || 0) + amount;
+    }
 
     // Key includes mode so different payment modes are never merged
     const key = `${studentId}_${receiptDate}_${mode}`;
@@ -101,7 +108,7 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   const margin = 40;
 
   // Header Section
-  doc.setTextColor(0, 0, 0);
+  doc.setTextColor(43, 55, 66); // Dark sleek color
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("DAR-E-ARQAM SCHOOL", margin, 45);
@@ -109,14 +116,14 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   doc.setFontSize(10);
   doc.text("FEE COLLECTION REPORT", pageWidth - margin, 45, { align: "right" });
 
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(1.5);
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(1);
   doc.line(margin, 55, pageWidth - margin, 55);
 
   // Meta Information
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
+  doc.setTextColor(100, 100, 100);
 
   doc.text(`DATE RANGE: ${dateRangeString.toUpperCase()}`, margin, 70);
 
@@ -125,10 +132,9 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
   });
   doc.text(`GENERATED: ${generatedTime.toUpperCase()}`, pageWidth - margin, 70, { align: "right" });
 
-  // --- 5. Table Construction ---
+  // --- 5. Main Table Construction ---
   const tableColumns = ["DATE", "STUDENT NAME", "CLASS", "DESCRIPTION", "AMOUNT (PKR)", "MODE"];
   const tableRows = [];
-  let totalAmount = 0;
 
   // Sort chronologically, then alphabetically by name
   const sortedGroupedData = Array.from(groupedMap.values()).sort((a, b) => {
@@ -137,6 +143,10 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
 
   sortedGroupedData.forEach((group) => {
     totalAmount += group.amount;
+    
+    // Accumulate mode totals here
+    const modeKey = group.mode.toUpperCase();
+    modeTotals[modeKey] = (modeTotals[modeKey] || 0) + group.amount;
 
     tableRows.push([
       group.date,
@@ -148,84 +158,49 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
     ]);
   });
 
-  // --- Per-mode subtotals ---
-  const modeTotals = {};
-  sortedGroupedData.forEach((group) => {
-    const modeKey = group.mode.toUpperCase();
-    modeTotals[modeKey] = (modeTotals[modeKey] || 0) + group.amount;
-  });
-
-  const modeFootRows = Object.entries(modeTotals).map(([mode, sum]) => [
-    {
-      content: mode,
-      colSpan: 4,
-      styles: { halign: "right", fontStyle: "normal", fontSize: 8, textColor: 60 }
-    },
-    {
-      content: sum.toLocaleString(),
-      styles: { fontStyle: "normal", halign: "right", fontSize: 8, textColor: 60 }
-    },
-    ""
-  ]);
-
-  const tableFoot = [
-    ...modeFootRows,
-    [
-      {
-        content: "TOTAL COLLECTION",
-        colSpan: 4,
-        styles: { halign: "right", fontStyle: "bold" }
-      },
-      {
-        content: totalAmount.toLocaleString(),
-        styles: { fontStyle: "bold", halign: "right" }
-      },
-      ""
-    ]
-  ];
-
-  // --- 6. Render Table ---
+  // Render Main Data Table
   autoTable(doc, {
     startY: 85,
     head: [tableColumns],
     body: tableRows,
-    foot: tableFoot,
-    theme: "plain",
+    foot: [[
+      { content: "GRAND TOTAL", colSpan: 4, styles: { halign: "right", fontStyle: "bold" } },
+      { content: totalAmount.toLocaleString(), styles: { fontStyle: "bold", halign: "right" } },
+      ""
+    ]],
+    showFoot: "lastPage",
+    theme: "striped",
     margin: { left: margin, right: margin, bottom: 50 },
     headStyles: {
-      fillColor: false,
-      textColor: 0,
+      fillColor: [43, 55, 66], // Modern dark slate
+      textColor: 255,
       fontStyle: "bold",
       fontSize: 8,
-      cellPadding: { top: 6, bottom: 6, left: 4, right: 4 },
-      lineColor: 0,
-      lineWidth: { top: 1, bottom: 1 },
+      cellPadding: 6,
     },
     bodyStyles: {
       fontSize: 8,
-      textColor: 20,
-      cellPadding: { top: 4, bottom: 4, left: 4, right: 4 },
+      textColor: 40,
+      cellPadding: 5,
     },
     footStyles: {
-      fillColor: false,
-      textColor: 0,
+      fillColor: [236, 240, 241], // Light grey for grand total
+      textColor: [43, 55, 66],
       fontStyle: "bold",
       fontSize: 9,
-      cellPadding: { top: 6, bottom: 6, left: 4, right: 4 },
-      lineColor: 0,
-      lineWidth: { top: 1, bottom: 2 },
+      cellPadding: 6,
     },
     columnStyles: {
       0: { cellWidth: 55 },
       1: { cellWidth: 100 },
       2: { cellWidth: 60 },
       3: { cellWidth: "auto" },
-      4: { halign: "right", cellWidth: 80, fontStyle: "bold", textColor: 0 },
+      4: { halign: "right", cellWidth: 80, fontStyle: "bold", textColor: 20 },
       5: { halign: "center", cellWidth: 50 },
     },
     didDrawPage: function (data) {
       doc.setFontSize(8);
-      doc.setTextColor(120, 120, 120);
+      doc.setTextColor(150, 150, 150);
       doc.text(
         `PAGE ${data.pageNumber} OF ${doc.internal.getNumberOfPages()}`,
         pageWidth / 2,
@@ -233,6 +208,69 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
         { align: "center" }
       );
     }
+  });
+
+  // --- 6. Render Separate Summary Tables (Side by Side) ---
+  let finalY = doc.lastAutoTable.finalY;
+  let summaryY = finalY + 30;
+
+  // Check if there's enough space for the summary tables, otherwise push to next page
+  if (summaryY > pageHeight - 120) {
+    doc.addPage();
+    summaryY = 50;
+  }
+
+  // Section Titles
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(43, 55, 66);
+  doc.text("SUMMARY BY FEE TYPE", margin, summaryY);
+  doc.text("SUMMARY BY PAYMENT MODE", margin + 260, summaryY);
+
+  // Fee Type Summary Table
+  const feeTypeBody = Object.entries(feeTypeTotals).map(([type, sum]) => [
+    type.toUpperCase(), 
+    sum.toLocaleString()
+  ]);
+
+  autoTable(doc, {
+    startY: summaryY + 10,
+    head: [["FEE TYPE", "AMOUNT (PKR)"]],
+    body: feeTypeBody,
+    theme: "grid",
+    tableWidth: 230,
+    margin: { left: margin },
+    headStyles: { 
+      fillColor: [245, 245, 245], 
+      textColor: [43, 55, 66], 
+      fontStyle: "bold", 
+      fontSize: 8 
+    },
+    bodyStyles: { fontSize: 8, textColor: 50 },
+    columnStyles: { 1: { halign: "right", fontStyle: "bold" } }
+  });
+
+  // Payment Mode Summary Table (Rendered next to Fee Type table)
+  const modeBody = Object.entries(modeTotals).map(([mode, sum]) => [
+    mode.toUpperCase(), 
+    sum.toLocaleString()
+  ]);
+
+  autoTable(doc, {
+    startY: summaryY + 10,
+    head: [["PAYMENT MODE", "AMOUNT (PKR)"]],
+    body: modeBody,
+    theme: "grid",
+    tableWidth: 190,
+    margin: { left: margin + 260 },
+    headStyles: { 
+      fillColor: [245, 245, 245], 
+      textColor: [43, 55, 66], 
+      fontStyle: "bold", 
+      fontSize: 8 
+    },
+    bodyStyles: { fontSize: 8, textColor: 50 },
+    columnStyles: { 1: { halign: "right", fontStyle: "bold" } }
   });
 
   return doc.output("blob");
