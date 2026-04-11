@@ -73,19 +73,16 @@ export default function ProfilesPage() {
   useEffect(() => {
     let filtered = [...allProfiles]
 
-    // Active vs Blocked
     if (showBlocked) {
       filtered = filtered.filter(p => p.is_active === false)
     } else {
       filtered = filtered.filter(p => p.is_active !== false)
     }
 
-    // Role Filter
     if (filterRoles.length > 0) {
       filtered = filtered.filter(p => filterRoles.includes(p.role))
     }
 
-    // Search Query
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       filtered = filtered.filter(p => 
@@ -140,12 +137,13 @@ export default function ProfilesPage() {
     })
     
     setModalLoading(true)
-    // If the user is a teacher, fetch their currently assigned classes
+    
+    // Fetch currently assigned classes using new schema fields
     if (profile.role === 'teacher') {
       const { data, error } = await supabase
         .from("teacher_class")
-        .select("class")
-        .eq("teacher_profile", profile.id)
+        .select("class") 
+        .eq("teacher_profile", profile.id) 
         
       if (!error && data) {
         setEditForm(prev => ({
@@ -160,51 +158,71 @@ export default function ProfilesPage() {
   const handleSaveProfile = async () => {
     setSaveLoading(true)
     
-    // 1. Update the base profile data
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ name: editForm.name, mobilenumber: editForm.mobilenumber, role: editForm.role })
-      .eq("id", editingProfile)
+    try {
+      // 1. Update the base profile data
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ name: editForm.name, mobilenumber: editForm.mobilenumber, role: editForm.role })
+        .eq("id", editingProfile)
 
-    if (profileError) {
-      toast({ title: "Failed to update profile", variant: "destructive" })
-      setSaveLoading(false)
-      return
-    }
+      if (profileError) throw profileError
 
-    // 2. Handle Many-to-Many Classes relation
-    if (editForm.role === 'teacher') {
-      // Clear existing classes for this teacher
-      await supabase.from("teacher_class").delete().eq("teacher_profile", editingProfile)
-      
-      // Insert selected classes
-      if (editForm.selectedClasses.length > 0) {
-        const classInserts = editForm.selectedClasses.map(classId => ({
-          teacher_profile: editingProfile,
-          class: classId
-        }))
+      // 2. Handle Many-to-Many Classes relation
+      if (editForm.role === 'teacher') {
         
-        const { error: classError } = await supabase.from("teacher_class").insert(classInserts)
-        if (classError) {
-          toast({ title: "Profile updated, but failed to assign some classes.", variant: "destructive" })
-        }
-      }
-    } else {
-      // Optional: If they are no longer a teacher, remove their class assignments to keep DB clean
-      await supabase.from("teacher_class").delete().eq("teacher_profile", editingProfile)
-    }
+        // Step A: ALWAYS clear existing relations first
+        const { error: deleteError } = await supabase
+          .from("teacher_class")
+          .delete()
+          .eq("teacher_profile", editingProfile)
+          
+        if (deleteError) throw deleteError
 
-    // 3. Update local state
-    setAllProfiles(prev => prev.map(p => p.id === editingProfile ? { 
-      ...p, 
-      name: editForm.name, 
-      mobilenumber: editForm.mobilenumber, 
-      role: editForm.role 
-    } : p))
-    
-    toast({ title: "Profile updated successfully ✨" })
-    setEditingProfile(null)
-    setSaveLoading(false)
+        // Step B: Insert the new selected classes (if any are checked)
+        if (editForm.selectedClasses.length > 0) {
+          const classInserts = editForm.selectedClasses.map(classId => ({
+            teacher_profile: editingProfile,
+            class: classId
+          }))
+          
+          const { error: insertError } = await supabase
+            .from("teacher_class")
+            .insert(classInserts)
+            
+          if (insertError) throw insertError
+        }
+        
+      } else {
+        // If they are no longer a teacher, wipe their teaching classes to keep DB clean
+        const { error: cleanupError } = await supabase
+          .from("teacher_class")
+          .delete()
+          .eq("teacher_profile", editingProfile)
+          
+        if (cleanupError) throw cleanupError
+      }
+
+      // 3. Update local state
+      setAllProfiles(prev => prev.map(p => p.id === editingProfile ? { 
+        ...p, 
+        name: editForm.name, 
+        mobilenumber: editForm.mobilenumber, 
+        role: editForm.role 
+      } : p))
+      
+      toast({ title: "Profile and classes updated successfully ✨" })
+      setEditingProfile(null)
+
+    } catch (error) {
+      console.error("Save Error:", error)
+      toast({ 
+        title: "Failed to save changes", 
+        description: error.message || "A database error occurred.", 
+        variant: "destructive" 
+      })
+    } finally {
+      setSaveLoading(false)
+    }
   }
 
   const handleClassToggle = (classId) => {
@@ -309,7 +327,6 @@ export default function ProfilesPage() {
                 />
               </div>
 
-              {/* Toggle Blocked/Active view */}
               <Button
                 onClick={() => {
                   setShowBlocked(prev => !prev)
@@ -393,8 +410,6 @@ export default function ProfilesPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-4 w-full md:w-auto md:flex-1 md:justify-end">
-                    
-                    {/* Bulk Block/Unblock */}
                     <div className="flex items-center gap-2">
                       {bulkLoading ? <Loader small /> : (
                         <>
@@ -411,7 +426,6 @@ export default function ProfilesPage() {
                       )}
                     </div>
 
-                    {/* Bulk Role Update */}
                     {!showBlocked && (
                       <div className="flex items-center gap-2 md:pl-4 md:border-l md:border-blue-200 dark:md:border-blue-800/60">
                         <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -450,7 +464,7 @@ export default function ProfilesPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left min-w-[900px]">
-                  <thead className="text-xs uppercase font-semibold bg-gray-50 text-gray-500 border-b border-gray-200 dark:bg-slate-800/20 dark:text-slate-400 dark:border-slate-800">
+                  <thead className="text-xs uppercase font-semibold bg-gray-50 text-gray-500 border-b border-gray-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-800">
                     <tr>
                       <th className="py-4 pl-6 w-10">
                         <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer dark:border-slate-600 dark:bg-slate-700 dark:checked:bg-blue-600"
@@ -593,7 +607,7 @@ export default function ProfilesPage() {
                       </select>
                     </div>
 
-                    {/* Classes Selection - Only show if role is teacher */}
+                    {/* Classes Selection */}
                     <AnimatePresence>
                       {editForm.role === 'teacher' && (
                         <motion.div 

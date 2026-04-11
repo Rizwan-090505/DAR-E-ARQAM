@@ -77,8 +77,8 @@ export const generateCollectionReportBlob = async (startDate, endDate) => {
     const amount = Number(rcpt.amount) || 0;
     const mode = rcpt.payment_method || "Cash";
 
-    // Track Fee Type Totals (Excluding 'payment mode adjustment' case-insensitively)
-    if (description.toLowerCase() !== "payment mode adjustment") {
+    // Track Fee Type Totals (Excluding 'payment mode adjustment' case-insensitively and when payment mode is 'adjustment')
+    if (description.toLowerCase() !== "payment mode adjustment" && mode.toLowerCase() !== "adjustment") {
       feeTypeTotals[description] = (feeTypeTotals[description] || 0) + amount;
     }
 
