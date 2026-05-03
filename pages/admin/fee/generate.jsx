@@ -73,6 +73,7 @@ function GenerateInvoicesContent() {
   }
 
   // --- CORE LOGIC: Fetch Students & Arrears ---
+  // --- CORE LOGIC: Fetch Students & Arrears ---
   const fetchEligibleStudents = async (classId, dateStr) => {
     setFetchingStudents(true)
     setSelectedStudentIds(new Set()) 
@@ -104,40 +105,63 @@ function GenerateInvoicesContent() {
       const invoicedStudentIds = new Set(existingInvoices.map(inv => inv.student_id))
       const eligibleStudents = allStudents.filter(s => !invoicedStudentIds.has(s.studentid))
       
-      // 2. Fetch Arrears for Eligible Students (ONLY LAST INVOICE)
+      // 2. Fetch Arrears for Eligible Students 
       const eligibleIds = eligibleStudents.map(s => s.studentid);
       let arrearsMap = {};
 
       if (eligibleIds.length > 0) {
-          const { data: oldInvoices } = await supabase
+          // STEP 1: Fetch ALL old invoices (not just unpaid) to find the TRUE latest invoice
+          const { data: allOldInvoices } = await supabase
             .from("fee_invoices")
-            .select(`
-              student_id,
-              invoice_date,
-              fee_invoice_details ( id, amount ),
-              fee_payments ( invoice_detail_id, amount )
-            `)
+            .select("id, student_id, invoice_date, total_amount, status")
             .in("student_id", eligibleIds)
             .lt("invoice_date", startOfMonth)
-            .in("status", ["unpaid", "partial"])
-            .order("invoice_date", { ascending: false }); // Sort newest to oldest
+            .neq("status", "expired");
           
-          if (oldInvoices) {
-              const processedStudents = new Set();
+          if (allOldInvoices && allOldInvoices.length > 0) {
+              // STEP 2: Find the single latest invoice per student
+              const latestInvoicesMap = {};
+              allOldInvoices.forEach(inv => {
+                  const currentLatest = latestInvoicesMap[inv.student_id];
+                  if (!currentLatest || new Date(inv.invoice_date) > new Date(currentLatest.invoice_date)) {
+                      latestInvoicesMap[inv.student_id] = inv;
+                  }
+              });
 
-              oldInvoices.forEach(inv => {
-                  // Only process the FIRST (most recent) invoice we encounter for each student
-                  if (processedStudents.has(inv.student_id)) return;
-                  processedStudents.add(inv.student_id);
+              // STEP 3: Fetch payments explicitly in a separate query to bypass relationship bugs
+              const latestInvoiceIds = Object.values(latestInvoicesMap).map(inv => inv.id);
+              const { data: allPayments } = await supabase
+                .from("fee_payments")
+                .select("invoice_id, amount")
+                .in("invoice_id", latestInvoiceIds);
 
-                  let carryOver = 0;
-                  inv.fee_invoice_details.forEach(detail => {
-                      const paid = inv.fee_payments
-                          ?.filter(p => p.invoice_detail_id === detail.id)
-                          .reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-                      carryOver += (detail.amount - paid);
+              // Group payments by invoice_id
+              const paymentsByInvoice = {};
+              if (allPayments) {
+                  allPayments.forEach(p => {
+                      if (!paymentsByInvoice[p.invoice_id]) paymentsByInvoice[p.invoice_id] = 0;
+                      paymentsByInvoice[p.invoice_id] += Number(p.amount) || 0;
                   });
-                  arrearsMap[inv.student_id] = carryOver;
+              }
+
+              // STEP 4: Compute true arrears
+              Object.values(latestInvoicesMap).forEach(latestInv => {
+                  let carryOver = 0;
+                  
+                  // ONLY calculate if the newest invoice isn't paid
+                  if (latestInv.status === "unpaid" || latestInv.status === "partial") {
+                      const totalPaid = paymentsByInvoice[latestInv.id] || 0;
+                      carryOver = Number(latestInv.total_amount || 0) - totalPaid;
+                      if (carryOver < 0) carryOver = 0; 
+                  }
+                  
+                  arrearsMap[latestInv.student_id] = carryOver;
+
+                  if (carryOver > 0) {
+                      console.log(
+                          `🛠️ [DEBUG] Student: ${latestInv.student_id} | Latest Invoice: ${latestInv.invoice_date} | Status: ${latestInv.status} | Total: ${latestInv.total_amount} | Paid: ${paymentsByInvoice[latestInv.id] || 0} | Arrears: ${carryOver}`
+                      );
+                  }
               });
           }
       }
@@ -157,7 +181,6 @@ function GenerateInvoicesContent() {
       setFetchingStudents(false)
     }
   }
-
   // --- Selection & Input Logic ---
   const handleClassChange = (e) => {
     const cid = e.target.value
@@ -195,7 +218,6 @@ function GenerateInvoicesContent() {
     const val = studentFees[studentId]?.[field]
     return val !== undefined && val !== "" ? Number(val) : Number(globalFallback) || 0
   }
-
   // --- Generator Logic ---
   const handleGenerate = async () => {
     if (selectedStudentIds.size === 0) {
@@ -207,8 +229,6 @@ function GenerateInvoicesContent() {
     let successCount = 0
     let failCount = 0
     let expiredCount = 0
-    
-    // Array to hold IDs for batch updating 'Clear' status later
     let successfullyInvoicedIds = [] 
 
     try {
@@ -217,44 +237,49 @@ function GenerateInvoicesContent() {
 
       for (const student of selectedStudentsList) {
         
-        // 1. FETCH OLD INVOICE & DETAILS (ONLY LAST INVOICE)
-        const { data: oldInvoices } = await supabase
+        // 1. FETCH ALL OLD INVOICES (to find true latest & to expire old ones)
+        const { data: allOldInvoices } = await supabase
           .from("fee_invoices")
-          .select(`
-            id, invoice_date, status, total_amount,
-            fee_invoice_details ( id, fee_type, description, amount ),
-            fee_payments ( invoice_detail_id, amount )
-          `)
+          .select("id, invoice_date, status, total_amount")
           .eq("student_id", student.studentid)
           .lt("invoice_date", startOfCurrentMonth)
-          .in("status", ["unpaid", "partial"]) 
-          .order("invoice_date", { ascending: false }) // Sort newest to oldest
-          .limit(1) // Only fetch the last one!
+          .neq("status", "expired")
+          .order("invoice_date", { ascending: false });
 
         let carriedOverDetails = []
         let totalCarryOverAmount = 0
         let oldInvoiceIdsToExpire = []
 
-        if (oldInvoices && oldInvoices.length > 0) {
-            oldInvoices.forEach(oldInv => {
-                oldInvoiceIdsToExpire.push(oldInv.id)
-                oldInv.fee_invoice_details.forEach(detail => {
-                    const paidForItem = oldInv.fee_payments
-                        ?.filter(p => p.invoice_detail_id === detail.id)
-                        .reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-                    
-                    const remainingForItem = detail.amount - paidForItem;
+        if (allOldInvoices && allOldInvoices.length > 0) {
+            // Because of order by DESC, index 0 is the newest invoice
+            const latestInv = allOldInvoices[0];
 
-                    if (remainingForItem > 0) {
-                        totalCarryOverAmount += remainingForItem;
-                        carriedOverDetails.push({
-                            fee_type: detail.fee_type, 
-                            description: `${detail.description} (Arrears: ${new Date(oldInv.invoice_date).toLocaleDateString()})`,
-                            amount: remainingForItem
-                        })
-                    }
-                })
-            })
+            // Only forward balance if the latest active invoice is unpaid/partial
+            if (latestInv.status === "unpaid" || latestInv.status === "partial") {
+                
+                // Fetch payments separately
+                const { data: payments } = await supabase
+                  .from("fee_payments")
+                  .select("amount")
+                  .eq("invoice_id", latestInv.id);
+
+                const totalPaid = payments?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
+                const remaining = Number(latestInv.total_amount || 0) - totalPaid;
+
+                if (remaining > 0) {
+                    totalCarryOverAmount += remaining;
+                    carriedOverDetails.push({
+                        fee_type: "Arrears", 
+                        description: `Previous Balance (${new Date(latestInv.invoice_date).toLocaleDateString()})`,
+                        amount: remaining
+                    });
+                }
+            }
+
+            // Clean up database: Expire all old unpaid/partial ones so they don't clog future queries
+            oldInvoiceIdsToExpire = allOldInvoices
+                .filter(inv => inv.status === "unpaid" || inv.status === "partial")
+                .map(inv => inv.id);
         }
 
         // 2. Calculate New Totals
@@ -313,7 +338,7 @@ function GenerateInvoicesContent() {
             if (!expireError) expiredCount += oldInvoiceIdsToExpire.length
         }
 
-        // 6. Messaging Integration (Standardized Template)
+        // 6. Messaging Integration
         if (sendMessage) {
             let finalMessage = `*Fee Invoice Alert* \n\nDear *${student.name}*,\nYour fee invoice for *${config.feeLabel}* has been generated.\n\n*Fee Breakdown:*\nTuition Fee: Rs. ${monthlyFee}`;
             if (annual > 0) finalMessage += `\nAnnual Charges: Rs. ${annual}`;
@@ -323,7 +348,6 @@ function GenerateInvoicesContent() {
             
             finalMessage += `\n\n *Total Due:* Rs. ${grandTotal}\n📅 *Due Date:* ${config.dueDate}\n\nPlease clear the dues before the deadline. Thank you! `;
 
-            // Updated per new schema
             await supabase.from("messages").insert({
                student_id: student.studentid,
                class_id: student.class_id,
@@ -343,10 +367,6 @@ function GenerateInvoicesContent() {
             .from("students")
             .update({ Clear: false })
             .in("studentid", successfullyInvoicedIds)
-
-        if (clearUpdateError) {
-             console.error("Failed to update Clear status:", clearUpdateError)
-        }
       }
 
       toast({ 
@@ -364,7 +384,6 @@ function GenerateInvoicesContent() {
       setSubmitting(false)
     }
   }
-
   // --- Styles ---
   const glassCardClass = "relative overflow-hidden rounded-xl border border-white/20 bg-black/40 backdrop-blur-xl shadow-sm p-4"
   const inputClass = "h-9 bg-white dark:bg-white/5 border-white/20 focus:border-blue-500/50 text-black dark:text-white"
