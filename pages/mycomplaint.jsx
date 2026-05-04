@@ -342,10 +342,19 @@ export default function MyComplaints() {
                         {c.complaint_text}
                       </p>
 
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-white/5">
+                      <div className="flex flex-col gap-2 pt-4 border-t border-gray-100 dark:border-white/5">
+                        {/* Student Detail */}
                         <div className="flex items-center text-sm font-medium text-gray-700 dark:text-white">
                           <User className="w-4 h-4 mr-2 text-gray-400" />
+                          <span className="text-gray-500 dark:text-gray-400 mr-1 font-normal">Student:</span> 
                           {c.students?.name ?? "Unknown Student"}
+                        </div>
+                        
+                        {/* Against User Detail */}
+                        <div className="flex items-center text-sm font-medium text-gray-700 dark:text-white">
+                          <ShieldAlert className="w-4 h-4 mr-2 text-amber-500" />
+                          <span className="text-gray-500 dark:text-gray-400 mr-1 font-normal">Against:</span> 
+                          {c.against_user?.email ?? "N/A"}
                         </div>
                       </div>
                     </CardContent>
