@@ -106,7 +106,7 @@ export default function ComplaintsAdmin() {
     const fetchData = async () => {
       const { data: clsData } = await supabase.from("classes").select("id, name");
       if (clsData) setClasses(clsData);
-      const { data: usersData } = await supabase.from("profiles").select("id, email");
+      const { data: usersData } = await supabase.from("profiles").select("id, email").eq("is_active",true);
       if (usersData) setUsers(usersData);
       fetchComplaints();
     };
