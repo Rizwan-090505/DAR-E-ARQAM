@@ -157,8 +157,7 @@ export default function DasPage() {
                     
                     <div className="p-6 space-y-5">
                       <p className="text-slate-700 text-sm leading-relaxed">
-                        You currently have pending dues. Please obtain clearance from the <strong className="text-slate-900 font-semibold bg-slate-100 px-1.5 py-0.5 rounded">Accounts Office</strong> to view your complete examination schedule.
-                      </p>
+                        You currently have pending dues. Please obtain clearance from the <strong className="text-slate-900 font-semibold bg-slate-100 px-1.5 py-0.5 rounded">Accounts Office</strong></p>
                       
                       <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex items-start gap-3">
                         <svg className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
