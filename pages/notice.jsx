@@ -97,7 +97,8 @@ export default function BulkMessagePage() {
   const { student: urlStudentId, class: urlClassId } = router.query;
 
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
+  // MODIFIED: State now holds an array of selected class IDs
+  const [selectedClasses, setSelectedClasses] = useState([]);
     
   const [filterClear, setFilterClear] = useState('all'); 
   const [students, setStudents] = useState([]);
@@ -111,14 +112,15 @@ export default function BulkMessagePage() {
   const [query, setQuery] = useState('');
 
   // Handle URL Params (Set Class) - Only if student ID is NOT present
-  // If student ID is present, we ignore the class selector logic to prevent conflicts
   useEffect(() => {
     if (router.isReady && urlClassId && !urlStudentId) {
-      setSelectedClass(String(urlClassId));
+      // Allow for multiple classes in URL if ever passed as an array
+      const classIds = Array.isArray(urlClassId) ? urlClassId : [urlClassId];
+      setSelectedClasses(classIds.map(String));
     }
   }, [router.isReady, urlClassId, urlStudentId]);
 
-  // Initial fetch for classes list (for the dropdown)
+  // Initial fetch for classes list (for the dropdown/pills)
   useEffect(() => {
     supabase
       .from('classes')
@@ -147,8 +149,6 @@ export default function BulkMessagePage() {
             .from('active_students')
             .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
             .eq('studentid', urlStudentId)
-            // We use .maybeSingle() or just handle the array. 
-            // Since the UI expects an array, we'll keep it as a list of 1.
             .limit(1);
 
           if (error) throw error;
@@ -160,19 +160,17 @@ export default function BulkMessagePage() {
             }));
             
             setStudents(formatted);
-            // Auto-select the student
             setSelectedIds(new Set([formatted[0].studentid]));
-            // Update UI class dropdown to match student (visual only)
-            setSelectedClass(String(formatted[0].class_id));
+            setSelectedClasses([String(formatted[0].class_id)]);
           }
         } 
         
-        // CASE B: Class Selection (Standard Bulk Mode)
-        else if (selectedClass) {
+        // CASE B: Class Selection (Standard Bulk Mode - MULTIPLE CLASSES)
+        else if (selectedClasses.length > 0) {
           const { data, error } = await supabase
             .from('active_students')
             .select('studentid, name, fathername, class_id, mobilenumber, Clear, classes(name)')
-            .eq('class_id', selectedClass)
+            .in('class_id', selectedClasses) // MODIFIED: Uses .in() for multiple IDs
             .order('name', { ascending: true });
 
           if (error) throw error;
@@ -194,15 +192,12 @@ export default function BulkMessagePage() {
 
     fetchStudents();
 
-  }, [selectedClass, urlStudentId, router.isReady]);
+  }, [selectedClasses, urlStudentId, router.isReady]);
 
 
   // Filtering Logic (Search bar / Status)
   const filtered = useMemo(() => {
     let result = students;
-
-    // Even if we fetched a single student via URL, we allow the search bar 
-    // to filter that single result (though likely unnecessary, keeps logic consistent)
     
     if (filterClear === 'true') {
       result = result.filter(s => s.Clear === true);
@@ -403,7 +398,7 @@ export default function BulkMessagePage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Bulk Messaging</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Select students and send personalized broadcasts.
+              Select multiple classes and send personalized broadcasts.
             </p>
           </div>
         </div>
@@ -412,22 +407,50 @@ export default function BulkMessagePage() {
         <div className="bg-white dark:bg-white/5 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-xl p-4 shadow-sm">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             
-            {/* If class param is present, HIDE the selector (Clean UI) */}
+            {/* MODIFIED: Multi-Select Classes UI (Pill Layout) */}
             {(!urlClassId && !urlStudentId) && (
-              <div className="md:col-span-4">
-                <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 block">Select Class</label>
-                <Select value={selectedClass} onValueChange={(val) => setSelectedClass(val)}>
-                  <SelectTrigger className="w-full bg-gray-50 dark:bg-white/5 border-gray-200 dark:border-white/10">
-                    <SelectValue placeholder="Select Class" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="md:col-span-4 flex flex-col">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Select Class(es)</label>
+                  {selectedClasses.length > 0 && (
+                     <button 
+                       onClick={() => setSelectedClasses([])}
+                       className="text-[10px] text-blue-500 hover:text-blue-600 dark:text-blue-400 transition-colors"
+                     >
+                       Clear All
+                     </button>
+                  )}
+                </div>
+                
+                <div className="flex flex-wrap gap-1.5 max-h-[85px] overflow-y-auto p-2 border border-gray-200 dark:border-white/10 rounded-md bg-gray-50 dark:bg-white/5 scrollbar-thin">
+                  {classes.map(c => {
+                    const isSelected = selectedClasses.includes(String(c.id));
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setSelectedClasses(prev => 
+                            prev.includes(String(c.id)) 
+                              ? prev.filter(id => id !== String(c.id)) 
+                              : [...prev, String(c.id)]
+                          );
+                        }}
+                        className={`px-3 py-1 text-xs font-medium rounded-full border transition-all ${
+                          isSelected 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                            : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    )
+                  })}
+                  {classes.length === 0 && <span className="text-xs text-gray-400">Loading classes...</span>}
+                </div>
               </div>
             )}
 
-            {/* If student param is present, HIDE filters (Clean UI - we are focusing on one student) */}
+            {/* If student param is present, HIDE filters */}
             {!urlStudentId && (
               <>
                 <div className={`${urlClassId ? 'md:col-span-4' : 'md:col-span-3'}`}>
@@ -464,7 +487,7 @@ export default function BulkMessagePage() {
                  <span className="font-semibold">Mode:</span> 
                  {urlStudentId 
                     ? <span>Direct Student Messaging (ID: {urlStudentId})</span>
-                    : <span>Single Class Context</span>
+                    : <span>Targeted Class Context</span>
                  }
                </div>
             )}
@@ -521,7 +544,9 @@ export default function BulkMessagePage() {
                 
                 {!loading && filtered.length === 0 && (
                   <div className="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    No students found matching criteria.
+                    {selectedClasses.length === 0 
+                      ? "Select one or more classes to load students." 
+                      : "No students found matching criteria."}
                   </div>
                 )}
 
@@ -553,7 +578,8 @@ export default function BulkMessagePage() {
                               </span>
                             }
                           </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            <span className="truncate bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded-sm">{s.class}</span>
                             <span className="truncate">ID: {s.studentid}</span>
                             <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600 flex-shrink-0"></span>
                             <span className="truncate">{s.fathername}</span>
