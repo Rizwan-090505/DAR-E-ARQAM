@@ -32,7 +32,7 @@ function GenerateInvoicesContent() {
   const [selectedClassId, setSelectedClassId] = useState("")
   const [selectedStudentIds, setSelectedStudentIds] = useState(new Set())
   const [studentFees, setStudentFees] = useState({}) // Stores per-student overrides { [id]: { annual, stationery, custom } }
-    
+
   // Configuration
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split('T')[0])
   const [config, setConfig] = useState({
@@ -73,7 +73,6 @@ function GenerateInvoicesContent() {
   }
 
   // --- CORE LOGIC: Fetch Students & Arrears ---
-  // --- CORE LOGIC: Fetch Students & Arrears ---
   const fetchEligibleStudents = async (classId, dateStr) => {
     setFetchingStudents(true)
     setSelectedStudentIds(new Set()) 
@@ -105,7 +104,7 @@ function GenerateInvoicesContent() {
       const invoicedStudentIds = new Set(existingInvoices.map(inv => inv.student_id))
       const eligibleStudents = allStudents.filter(s => !invoicedStudentIds.has(s.studentid))
       
-      // 2. Fetch Arrears for Eligible Students 
+      // 2. Fetch Arrears for Eligible Students (based ONLY on the single latest prior invoice)
       const eligibleIds = eligibleStudents.map(s => s.studentid);
       let arrearsMap = {};
 
@@ -144,7 +143,7 @@ function GenerateInvoicesContent() {
                   });
               }
 
-              // STEP 4: Compute true arrears
+              // STEP 4: Compute true arrears (only from the single latest invoice)
               Object.values(latestInvoicesMap).forEach(latestInv => {
                   let carryOver = 0;
                   
@@ -237,7 +236,7 @@ function GenerateInvoicesContent() {
 
       for (const student of selectedStudentsList) {
         
-        // 1. FETCH ALL OLD INVOICES (to find true latest & to expire old ones)
+        // 1. FETCH ALL OLD INVOICES (so we can find the true single latest invoice & expire stale ones)
         const { data: allOldInvoices } = await supabase
           .from("fee_invoices")
           .select("id, invoice_date, status, total_amount")
@@ -251,13 +250,14 @@ function GenerateInvoicesContent() {
         let oldInvoiceIdsToExpire = []
 
         if (allOldInvoices && allOldInvoices.length > 0) {
-            // Because of order by DESC, index 0 is the newest invoice
+            // Because of order by DESC, index 0 is the single most recent previous invoice.
+            // Only THIS invoice is ever used to compute carry-over (older ones are never re-examined).
             const latestInv = allOldInvoices[0];
 
             // Only forward balance if the latest active invoice is unpaid/partial
             if (latestInv.status === "unpaid" || latestInv.status === "partial") {
                 
-                // Fetch payments separately
+                // Fetch payments for the latest invoice
                 const { data: payments } = await supabase
                   .from("fee_payments")
                   .select("amount")
@@ -267,12 +267,52 @@ function GenerateInvoicesContent() {
                 const remaining = Number(latestInv.total_amount || 0) - totalPaid;
 
                 if (remaining > 0) {
-                    totalCarryOverAmount += remaining;
-                    carriedOverDetails.push({
-                        fee_type: "Arrears", 
-                        description: `Previous Balance (${new Date(latestInv.invoice_date).toLocaleDateString()})`,
-                        amount: remaining
-                    });
+                    totalCarryOverAmount = remaining;
+
+                    // Fetch the ORIGINAL itemized details of the latest invoice so we can
+                    // preserve their fee_type headers (e.g. "Annual Charges") instead of
+                    // lumping everything into a generic "Arrears" line.
+                    const { data: oldDetails } = await supabase
+                      .from("fee_invoice_details")
+                      .select("fee_type, description, amount")
+                      .eq("invoice_id", latestInv.id)
+
+                    const oldDetailsTotal = (oldDetails || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0)
+
+                    if (oldDetails && oldDetails.length > 0 && oldDetailsTotal > 0) {
+                        // Distribute the remaining unpaid balance proportionally across the
+                        // original line items, preserving each item's original fee_type label.
+                        let allocatedSoFar = 0
+                        oldDetails.forEach((detail, idx) => {
+                            const originalAmount = Number(detail.amount) || 0
+                            if (originalAmount <= 0) return
+
+                            let portion
+                            if (idx === oldDetails.length - 1) {
+                                // Last item absorbs any rounding remainder
+                                portion = remaining - allocatedSoFar
+                            } else {
+                                portion = Math.round((originalAmount / oldDetailsTotal) * remaining)
+                                allocatedSoFar += portion
+                            }
+
+                            if (portion > 0) {
+                                carriedOverDetails.push({
+                                    fee_type: detail.fee_type || "Arrears",
+                                    description: `${detail.description ? detail.description + " " : ""}(Carried from ${new Date(latestInv.invoice_date).toLocaleDateString()})`,
+                                    amount: portion
+                                })
+                            }
+                        })
+                    } else {
+                        // Fallback: no itemized details found for the old invoice, so we
+                        // cannot preserve per-header amounts — carry forward as "Arrears".
+                        carriedOverDetails.push({
+                            fee_type: "Arrears",
+                            description: `Previous Balance (${new Date(latestInv.invoice_date).toLocaleDateString()})`,
+                            amount: remaining
+                        })
+                    }
                 }
             }
 
@@ -311,11 +351,12 @@ function GenerateInvoicesContent() {
 
         // 4. Create Details
         const detailsPayload = []
+        const customLabel = (config.customFeeLabel && config.customFeeLabel.trim()) ? config.customFeeLabel.trim() : "Custom Charges"
         
         if (monthlyFee > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: config.feeLabel || "Tuition Fee", description: "Monthly Tuition Charges", amount: monthlyFee })
         if (annual > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: "Annual Charges", description: "Annual / Paper Funds", amount: annual })
         if (stationery > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: "Stationery", description: "Stationery / Books", amount: stationery })
-        if (customFee > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: config.customFeeLabel || "Other Charges", description: "Custom Charges", amount: customFee })
+        if (customFee > 0) detailsPayload.push({ invoice_id: invData.id, fee_type: customLabel, description: "Custom Charges", amount: customFee })
 
         carriedOverDetails.forEach(item => {
             detailsPayload.push({ ...item, invoice_id: invData.id })
@@ -343,7 +384,7 @@ function GenerateInvoicesContent() {
             let finalMessage = `*Fee Invoice Alert* \n\nDear *${student.name}*,\nYour fee invoice for *${config.feeLabel}* has been generated.\n\n*Fee Breakdown:*\nTuition Fee: Rs. ${monthlyFee}`;
             if (annual > 0) finalMessage += `\nAnnual Charges: Rs. ${annual}`;
             if (stationery > 0) finalMessage += `\nStationery: Rs. ${stationery}`;
-            if (customFee > 0) finalMessage += `\n${config.customFeeLabel || 'Custom Charges'}: Rs. ${customFee}`;
+            if (customFee > 0) finalMessage += `\n${customLabel}: Rs. ${customFee}`;
             if (totalCarryOverAmount > 0) finalMessage += `\nArrears: Rs. ${totalCarryOverAmount}`;
             
             finalMessage += `\n\n *Total Due:* Rs. ${grandTotal}\n📅 *Due Date:* ${config.dueDate}\n\nPlease clear the dues before the deadline. Thank you! `;
